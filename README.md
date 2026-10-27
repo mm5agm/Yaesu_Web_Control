@@ -11,9 +11,9 @@
 
 > **v2.5.3 brings two new ways of working the radio.** Fabio Valente's (CR7CDC) **Experimental UI** is a dark workspace of panels you can drag, dock, tab together and save as named layouts. The **Radio panel** is laid out like the front of a transceiver, with keys, knobs and a main dial that work, both receivers on the FTdx101, and windows for CW, RTTY, memories and the rest. The Classic page is unchanged and is still where YWC opens. RTTY now prints the text as well as drawing the cross, and its **Auto** button works the settings out from the signal; the CW Reader has an **Auto** button that tunes the station in. Everything is written up in the [v2.5.3 notes](#2026-10-16---v253).
 
-**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release), [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release) and [v2.5.4-pre3](#2026-10-26---v254-pre3-pre-release)):
+**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release), [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release), [v2.5.4-pre3](#2026-10-26---v254-pre3-pre-release) and [v2.5.4-pre4](#2026-10-27---v254-pre4-pre-release)):
 
-- **RTTY Contest, a new GUI for RTTY contesting** *(pre2 and pre3, still being tested)*. Only what a contest RTTY operator uses, on one screen: the frequency, band keys for MAIN and SUB, the spectrum over the waterfall, and the RTTY tuner docked at the side with its decoded text. Each part pops out into a window of its own, and named layouts put every window back on its own monitor. Bruce VK2RT asked for it. [§5.24](USER_MANUAL.md#524-rtty-contest).
+- **RTTY Contest, a new GUI for RTTY contesting** *(pre2 to pre4, still being tested)*. Only what a contest RTTY operator uses, on one screen: the frequency, band keys for MAIN and SUB, the spectrum over the waterfall, and the RTTY tuner docked at the side with its decoded text. Each part pops out into a window of its own, and named layouts put every window back on its own monitor. Bruce VK2RT asked for it. [§5.24](USER_MANUAL.md#524-rtty-contest).
 - **The Radio panel's CW window has the memory keyer** (M1 to M5, with SAVE), and **BREAK-IN is a key** that steps OFF → SEMI → FULL. The mouse wheel steps SPEED and PITCH. [§5.23](USER_MANUAL.md#523-radio-panel).
 - **The pop-out spectrum window tunes on a click or the mouse wheel**, with a readout of the frequency under the mouse, and has the panel's SCOPE settings on each pane. [§5.23](USER_MANUAL.md#523-radio-panel).
 - **A corner grip scales the Radio panel** to any size.
@@ -332,6 +332,18 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 **Only the version you are installing is listed here.** Earlier releases are in
 [RELEASE_HISTORY.md](RELEASE_HISTORY.md); their installers are still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
+
+## 2026-10-27 - v2.5.4-pre4 (pre-release)
+
+*Auto centres in DATA-L, as Bruce VK2RT asked after trying pre3. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **Auto centres the signal in DATA-L and DATA-U** when MODE holds the radio there: one press moves the dial so the mark and space sit either side of the middle of the DATA filter, as in RTTY-L. Tested receive-only on an FTdx101MP on DDK9: from 200 Hz off either side, each press landed within 3 Hz.
+- **The DATA passband is drawn where the radio listens.** In DATA-L and DATA-U the shading sits on the radio's DATA SHIFT (1500 Hz by default) from the dial, not just beside it, so the tones fall inside it. The same on the Radio panel.
+- **SPAN** is a list in the spectrum's label, beside the frequency.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from this GUI yet.
 
 ## 2026-10-26 - v2.5.4-pre3 (pre-release)
 
