@@ -551,6 +551,14 @@ namespace Yaesu_Web_Control.Services.Rtty
             // to aim at, and the old target - the dialog's mark - stands. In a
             // DATA mode with no tuner holding it, the dial is the AFSK
             // software's, and is left alone.
+            //
+            // In a DATA mode the tuner holds, the mark goes on the tuner's Mark
+            // instead, the same place a click puts it. There the operator is
+            // matching the Mark of the software they will decode with (MMTTY's
+            // 1415 Hz, Discussion #250, 2026-10-27), and a pair moved to the
+            // passband centre would land somewhere that software is not
+            // listening. The filter is sized round wherever the pair sits, so
+            // nothing is lost by it sitting a little off centre.
             bool prepared = false;
             double? target = wantedMarkHz;
             double? held = await _tunerMode.CentreForAutoAsync(ct);
@@ -558,7 +566,8 @@ namespace Yaesu_Web_Control.Services.Rtty
             if (held is { } centre)
             {
                 prepared = true;
-                target = RttyMarkCentre.MarkForCentredPair(result.MarkHz, result.SpaceHz, centre) ?? target;
+                if (fsk || target is null)
+                    target = RttyMarkCentre.MarkForCentredPair(result.MarkHz, result.SpaceHz, centre) ?? target;
                 _logger.LogInformation(
                     "RTTY Auto: passband centre {Centre:F0} Hz, pair {Mark:F0}/{Space:F0} - mark wanted at {Target:F0} Hz",
                     centre, result.MarkHz, result.SpaceHz, target);
@@ -573,10 +582,23 @@ namespace Yaesu_Web_Control.Services.Rtty
                 maxOffsetHz:    PassbandCapHz());
             if (offset is null)
             {
+                // Close enough to leave the dial, and in a held DATA mode the
+                // operator's Mark is kept rather than replaced by the measurement:
+                // the page writes whatever mark comes back into its Mark box, and
+                // a 1415 set to match MMTTY crept to 1427 that way on the bench
+                // (2026-10-27).
+                if (!fsk && held is not null
+                    && Math.Abs(result.MarkHz - wanted) < RttyMarkCentre.MinOffsetHz)
+                {
+                    result.MeasuredMarkHz = result.MarkHz;
+                    result.MarkHz  = Math.Round(wanted, 1);
+                    result.SpaceHz = Math.Round(
+                        RttyTunerService.TonesFor(result.Mode, wanted, result.ShiftHz, result.Reverse).SpaceHz, 1);
+                }
                 _logger.LogInformation(
                     "RTTY Auto: mark {Measured:F0} Hz against {Wanted:F0} Hz wanted, " +
                     "confidence {Conf:F2}, passband {Cap:F0} Hz - dial left alone",
-                    result.MarkHz, wanted, result.Confidence, PassbandCapHz());
+                    result.MeasuredMarkHz ?? result.MarkHz, wanted, result.Confidence, PassbandCapHz());
                 return prepared;
             }
 
