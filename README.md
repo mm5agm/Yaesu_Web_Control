@@ -335,7 +335,7 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## 2026-10-27 - v2.5.4-pre4 (pre-release)
 
-*The spectrum centres on the DATA passband, and Auto tunes to your Mark in DATA-L, as Bruce VK2RT asked after trying pre3. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+*The spectrum centres on the DATA passband with a fine line at its middle, and Auto tunes to your Mark in DATA-L, as Bruce VK2RT asked after trying pre3. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
 
 **RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
 
