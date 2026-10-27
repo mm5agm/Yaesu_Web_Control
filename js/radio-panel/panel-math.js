@@ -101,19 +101,30 @@ export function meterGeometry(frac, lower = LOWER_SCALES.PO) {
 // Data modes come by the radio's name (DATA-U) or the one the board shows
 // (USB-D); both are upper sideband. The 100 Hz SSB offset is the conventional low edge of a voice filter; it is
 // drawing, not a measurement of any particular radio.
-export function passbandHz(mode, widthHz) {
+// dataCentreHz, when a radio has one, is where its DATA filter is centred
+// from the dial (a Yaesu's DATA SHIFT, 1500 Hz by default): the DATA modes are
+// then drawn around it, not from the 100 Hz edge. Radios without one leave it out.
+export function passbandHz(mode, widthHz, dataCentreHz) {
     const w = Math.max(0, Number(widthHz) || 0);
     const m = String(mode || '').toUpperCase();
     if (!w) return null;
-    if (m === 'USB' || m === 'DATA-U' || m === 'USB-D' || m === 'PSK' || m === 'DATA-USB') return { lo: 100, hi: 100 + w };
-    if (m === 'LSB' || m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB') return { lo: -100 - w, hi: -100 };
+    const c = Number(dataCentreHz) || 0;
+    const upper = m === 'USB' || m === 'DATA-U' || m === 'USB-D' || m === 'PSK' || m === 'DATA-USB';
+    const lower = m === 'LSB' || m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB';
+    if (c > 0 && (m.startsWith('DATA') || m.endsWith('-D'))) {
+        const lo = Math.max(100, c - w / 2), hi = c + w / 2;
+        if (upper) return { lo, hi };
+        if (lower) return { lo: -hi, hi: -lo };
+    }
+    if (upper) return { lo: 100, hi: 100 + w };
+    if (lower) return { lo: -100 - w, hi: -100 };
     return { lo: -w / 2, hi: w / 2 };
 }
 
 // The same passband as percentages of a span centred on the dial, clipped to
 // the screen. Returns null when there is nothing to draw.
-export function passbandPercent(mode, widthHz, spanHz) {
-    const pb = passbandHz(mode, widthHz);
+export function passbandPercent(mode, widthHz, spanHz, dataCentreHz) {
+    const pb = passbandHz(mode, widthHz, dataCentreHz);
     const span = Number(spanHz) || 0;
     if (!pb || span <= 0) return null;
     let left = 50 + pb.lo / span * 100;
