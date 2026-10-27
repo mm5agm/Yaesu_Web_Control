@@ -101,23 +101,37 @@ export function meterGeometry(frac, lower = LOWER_SCALES.PO) {
 // Data modes come by the radio's name (DATA-U) or the one the board shows
 // (USB-D); both are upper sideband. The 100 Hz SSB offset is the conventional low edge of a voice filter; it is
 // drawing, not a measurement of any particular radio.
-export function passbandHz(mode, widthHz) {
+// dataCentreHz, when a radio has one, is where its DATA filter is centred
+// from the dial (a Yaesu's DATA SHIFT, 1500 Hz by default): the DATA modes are
+// then drawn around it, not from the 100 Hz edge. Radios without one leave it out.
+export function passbandHz(mode, widthHz, dataCentreHz) {
     const w = Math.max(0, Number(widthHz) || 0);
     const m = String(mode || '').toUpperCase();
     if (!w) return null;
-    if (m === 'USB' || m === 'DATA-U' || m === 'USB-D' || m === 'PSK' || m === 'DATA-USB') return { lo: 100, hi: 100 + w };
-    if (m === 'LSB' || m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB') return { lo: -100 - w, hi: -100 };
+    const c = Number(dataCentreHz) || 0;
+    const upper = m === 'USB' || m === 'DATA-U' || m === 'USB-D' || m === 'PSK' || m === 'DATA-USB';
+    const lower = m === 'LSB' || m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB';
+    if (c > 0 && (m.startsWith('DATA') || m.endsWith('-D'))) {
+        const lo = Math.max(100, c - w / 2), hi = c + w / 2;
+        if (upper) return { lo, hi };
+        if (lower) return { lo: -hi, hi: -lo };
+    }
+    if (upper) return { lo: 100, hi: 100 + w };
+    if (lower) return { lo: -100 - w, hi: -100 };
     return { lo: -w / 2, hi: w / 2 };
 }
 
-// The same passband as percentages of a span centred on the dial, clipped to
-// the screen. Returns null when there is nothing to draw.
-export function passbandPercent(mode, widthHz, spanHz) {
-    const pb = passbandHz(mode, widthHz);
+// The same passband as percentages of the span, clipped to the screen.
+// Returns null when there is nothing to draw. viewOffsetHz is how far the
+// span's centre sits from the dial (setViewOffset on the panes); 0, the
+// span is centred on the dial.
+export function passbandPercent(mode, widthHz, spanHz, dataCentreHz, viewOffsetHz = 0) {
+    const pb = passbandHz(mode, widthHz, dataCentreHz);
     const span = Number(spanHz) || 0;
     if (!pb || span <= 0) return null;
-    let left = 50 + pb.lo / span * 100;
-    let right = 50 + pb.hi / span * 100;
+    const off = Number(viewOffsetHz) || 0;
+    let left = 50 + (pb.lo - off) / span * 100;
+    let right = 50 + (pb.hi - off) / span * 100;
     left = Math.max(0, Math.min(100, left));
     right = Math.max(0, Math.min(100, right));
     if (right - left <= 0) return null;
@@ -141,7 +155,32 @@ export function spectrumHzAt(frac, centreHz, spanHz, spots = [], snapHz = 0) {
     return { hz, frac: f, spot };
 }
 
-// Axis labels for a span centred on the dial, in kHz: five evenly spaced.
+// Where the fine line at the middle of the DATA filter sits, in percent of a
+// span whose centre is viewOffsetHz from the dial: dataCentreHz above the dial
+// in DATA-U, below it in DATA-L - where Auto and a click on Mark 1415 / 170
+// put the pair (#250). Null in other modes, whose passband is centred on the
+// dial line already, and while it is off the screen.
+export function passbandCentrePercent(mode, spanHz, dataCentreHz, viewOffsetHz = 0) {
+    const m = String(mode || '').toUpperCase(), c = Number(dataCentreHz) || 0;
+    const span = Number(spanHz) || 0;
+    if (c <= 0 || span <= 0) return null;
+    const upper = m === 'DATA-U' || m === 'USB-D' || m === 'DATA-USB';
+    const lower = m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB';
+    if (!upper && !lower) return null;
+    const x = 50 + ((upper ? c : -c) - (Number(viewOffsetHz) || 0)) / span * 100;
+    return x >= 0 && x <= 100 ? x : null;
+}
+
+// Where the dial's line sits across a span whose centre is viewOffsetHz from
+// the dial, in percent; null while it is off the screen.
+export function dialPercent(viewOffsetHz, spanHz) {
+    const span = Number(spanHz) || 0;
+    if (span <= 0) return 50;
+    const x = 50 - (Number(viewOffsetHz) || 0) / span * 100;
+    return x >= 0 && x <= 100 ? x : null;
+}
+
+// Axis labels for a span centred on centreHz, in kHz: five evenly spaced.
 export function axisLabels(centreHz, spanHz, count = 5) {
     const c = Number(centreHz) || 0, s = Number(spanHz) || 0;
     const lo = c - s / 2;

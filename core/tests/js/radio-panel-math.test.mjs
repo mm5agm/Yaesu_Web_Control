@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    formatFrequency, sMeterFraction, sMeterText, passbandPercent, passbandHz,
+    formatFrequency, sMeterFraction, sMeterText, passbandPercent, passbandHz, dialPercent, passbandCentrePercent,
     axisLabels, spectrumHzAt, spanText, widthText, knobAngle, binsToColumns, percentile,
     meterGeometry, waterfallColour,
 } from '../../js/radio-panel/panel-math.js';
@@ -41,6 +41,48 @@ test('S-meter text', () => {
     assert.equal(sMeterText(9), 'S9');
     assert.equal(sMeterText(9.5), 'S9+5 dB');
     assert.equal(sMeterText(20), 'S9+20 dB');
+});
+
+// VK2RT, 2026-10-27: DATA-L at 300 Hz drew 100-400 Hz below the dial while
+// the FTdx101D listened 1500 Hz below it, on the signal.
+test('passband: DATA modes centre on the data shift when the radio has one', () => {
+    assert.deepEqual(passbandHz('DATA-L', 300, 1500), { lo: -1650, hi: -1350 });
+    assert.deepEqual(passbandHz('DATA-U', 300, 1500), { lo: 1350, hi: 1650 });
+    assert.deepEqual(passbandHz('LSB-D', 300, 1000), { lo: -1150, hi: -850 });
+    // A wide filter still stops 100 Hz from the dial.
+    assert.deepEqual(passbandHz('DATA-U', 3000, 1500), { lo: 100, hi: 3000 });
+    // Voice modes and radios with no data shift are as before.
+    assert.deepEqual(passbandHz('LSB', 2400, 1500), { lo: -2500, hi: -100 });
+    assert.deepEqual(passbandHz('DATA-L', 300), { lo: -400, hi: -100 });
+    const pct = passbandPercent('DATA-L', 300, 10000, 1500);
+    assert.equal(pct.left, 33.5);
+    assert.equal(pct.width, 3);
+});
+
+test('passband and dial line on a span centred off the dial (DATA, #250)', () => {
+    // DATA-L with the span centred on the filter, 1500 Hz below the dial:
+    // the passband sits in the middle and the dial line 1500 Hz to the right.
+    const pct = passbandPercent('DATA-L', 300, 2000, 1500, -1500);
+    assert.equal(pct.left, 42.5);
+    assert.equal(pct.width, 15);
+    assert.equal(dialPercent(-1500, 2000), null);   // 125%: off the screen
+    assert.equal(dialPercent(-1500, 5000), 80);
+    assert.equal(dialPercent(0, 5000), 50);
+    assert.equal(dialPercent(700, 0), 50);
+});
+
+test('the fine line at the middle of the DATA passband (#250)', () => {
+    // Centred on the filter: mid-screen in both DATA modes.
+    assert.equal(passbandCentrePercent('DATA-L', 2000, 1500, -1500), 50);
+    assert.equal(passbandCentrePercent('DATA-U', 2000, 1500, 1500), 50);
+    // Centred on the dial: 1500 Hz below it at a 5 kHz span.
+    assert.equal(passbandCentrePercent('DATA-L', 5000, 1500, 0), 20);
+    assert.equal(passbandCentrePercent('DATA-U', 2000, 1500, 0), null);   // off the screen
+    // Not in other modes, nor without a data centre or a span.
+    assert.equal(passbandCentrePercent('RTTY-L', 2000, 1500, 0), null);
+    assert.equal(passbandCentrePercent('USB', 5000, 1500, 0), null);
+    assert.equal(passbandCentrePercent('DATA-L', 5000, 0, 0), null);
+    assert.equal(passbandCentrePercent('DATA-L', 0, 1500, 0), null);
 });
 
 test('passband: USB above the dial, LSB below, CW centred', () => {

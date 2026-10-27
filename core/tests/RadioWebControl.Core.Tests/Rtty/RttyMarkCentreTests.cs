@@ -118,6 +118,29 @@ namespace RadioWebControl.Core.Tests.Rtty
             Assert.Null(RttyMarkCentre.SidebandForFskMode(mode));
         }
 
+        // A tuner that holds the radio in a DATA mode centres there too.
+        [Theory]
+        [InlineData("RTTY-L", true)]
+        [InlineData("RTTY-U", false)]
+        [InlineData("DATA-L", true)]
+        [InlineData("data-l", true)]
+        [InlineData("DATA-U", false)]
+        public void Knows_the_FSK_and_DATA_modes_and_which_way_each_inverts(string mode, bool lower)
+        {
+            Assert.Equal(lower, RttyMarkCentre.SidebandForMode(mode));
+        }
+
+        [Theory]
+        [InlineData("USB")]
+        [InlineData("LSB")]
+        [InlineData("CW-U")]
+        [InlineData("")]
+        [InlineData(null)]
+        public void Still_refuses_the_voice_and_CW_modes(string? mode)
+        {
+            Assert.Null(RttyMarkCentre.SidebandForMode(mode));
+        }
+
         // ─── the passband cap ────────────────────────────────────────────────
         //
         // Added after the bench on 2026-10-09, where a 619 Hz offset through a

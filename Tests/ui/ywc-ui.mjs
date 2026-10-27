@@ -786,6 +786,38 @@ test('/rtty-contest: the arrows move the dial one span down or up, and go with t
     } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.wfFirst')`).catch(() => {}); await page.close(); }
 });
 
+// Colin, 2026-10-26: SPAN belongs with the frequency in the pane's label,
+// not on the top strip. It follows the SDR's span and sets it.
+test('/rtty-contest: SPAN is a list in the pane label that follows the SDR and sets its span', async () => {
+    const page = await open('/rtty-contest', { settleMs: 2500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        expect(await page.eval(`!document.querySelector('.rc-top select.rp-spop-span, .rc-top .rp-pane-span')`), 'SPAN is still on the top strip');
+        await page.state('FrequencyA', 14_080_000);
+        const bins = Array.from({ length: 400 }, () => 40);
+        // A frame's span is whole bins: 20 kHz arrives a little short.
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 19_989, rfOrdered: true });
+        await sleep(300);
+        const shown = () => page.eval(`(() => { const s = document.querySelector('.rc-holder:not([hidden]) .rp-pane-bar .rp-pane-span'); return s ? s.value + '|' + s.selectedOptions[0]?.textContent : 'none'; })()`);
+        let s = await shown();
+        expect(s === '20000|SPAN 20 kHz', `the label's SPAN showed ${s}`);
+        const label = await page.eval(`document.querySelector('.rc-holder:not([hidden]) .rp-pane-label').textContent`);
+        expect(label.includes('14.080.000') && !label.includes('SPAN'), `the label said "${label}"`);
+
+        await page.clearWrites();
+        await page.eval(`(() => { const s = document.querySelector('.rc-holder:not([hidden]) .rp-pane-span'); s.value = '5000'; s.dispatchEvent(new Event('change')); })()`);
+        await sleep(300);
+        const w = (await page.writes()).filter(x => x.path.startsWith('/api/sdr/span'));
+        expect(w.length === 1 && /hz=5000\b/.test(w[0].path) && /sdrId=A\b/i.test(w[0].path), `the pick wrote ${JSON.stringify(w)}`);
+
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 3_000, rfOrdered: true });
+        await sleep(300);
+        s = await shown();
+        expect(s === '3000|SPAN 3 kHz', `a span not on the list showed ${s}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 // Bruce VK2RT, 2026-10-26: the trace was too heavy. TRACE starts at 0.8 px
 // here, and what is picked is kept.
 test('/rtty-contest: TRACE starts thin and keeps what is picked', async () => {
@@ -827,6 +859,36 @@ test('/radio: the mode keys include RTTY-U and DATA-L, and write MD 9 and 8', as
 // Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
 // The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
 // dial 1500 Hz above it, and the mark lands on 1415.
+// VK2RT, 2026-10-27: in DATA-L the passband was drawn just under the dial,
+// 1.5 kHz from the signal the radio was actually listening to.
+test('/rtty-contest: in DATA-L the passband is drawn DATA SHIFT below the dial, and in DATA-U above it', async () => {
+    const page = await open('/rtty-contest', {
+        settleMs: 1500,
+        before: `__rwcTest.getOverrides['/api/rtty/tuner?'] = { running: false, hostRunning: false, points: [] };`,
+    });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.state('FrequencyA', 7_051_000);
+        await page.state('ModeA', 'DATA-L');
+        await page.state('IfWidthA', '6');
+        const bins = Array.from({ length: 475 }, () => -110);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 7_051_000, spanHz: 10_000, rfOrdered: true });
+        await sleep(700);
+        const mid = () => page.eval(`(() => {
+            const pb = document.querySelector('.rc-holder:not([hidden]) .rp-passband');
+            if (!pb || pb.style.display === 'none') return null;
+            return parseFloat(pb.style.left) + parseFloat(pb.style.width) / 2;
+        })()`);
+        const lo = await mid();
+        expect(lo != null && Math.abs(lo - 35) < 0.5, `DATA-L passband middle at ${lo}% of a 10 kHz span, wanted 35%`);
+        await page.state('ModeA', 'DATA-U');
+        await sleep(300);
+        const hi = await mid();
+        expect(hi != null && Math.abs(hi - 65) < 0.5, `DATA-U passband middle at ${hi}%, wanted 65%`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 test('/rtty-contest: in DATA-L with Mark 1415 / 170 a click puts the dial 1500 Hz above the signal', async () => {
     const page = await open('/rtty-contest', {
         settleMs: 1500,
@@ -854,6 +916,37 @@ test('/rtty-contest: in DATA-L with Mark 1415 / 170 a click puts the dial 1500 H
         const all = await page.writes();
         const f = all.filter(x => x.path === '/api/cat/frequency/a');
         expect(f.length === 1 && f[0].body?.frequencyHz === 14_082_500 + 1500, `frequency wrote ${JSON.stringify(f)}`);
+        expect(!all.some(x => x.path.startsWith('/api/cat/mode')), 'a mode was written');
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.eval(`localStorage.removeItem('rttyTuner')`).catch(() => {}); await page.close(); }
+});
+
+// DATA-U here is RTTY, not FT8: the radio hears above the dial, so the dial
+// goes the tones' midpoint below the signal (Colin, 2026-10-27: a click put
+// the dial on the signal and the tones fell outside the passband).
+test('/rtty-contest: in DATA-U with Mark 2125 / 200 a click puts the dial 2225 Hz below the signal', async () => {
+    const page = await open('/rtty-contest', {
+        settleMs: 1500,
+        before: `try { localStorage.setItem('rttyTuner', JSON.stringify({ markHz: 2125, shiftHz: 200, reverse: false })); } catch {}
+            __rwcTest.getOverrides['/api/rtty/tuner?'] = { running: false, hostRunning: false, points: [] };`,
+    });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.state('FrequencyA', 14_080_000);
+        await page.state('ModeA', 'DATA-U');
+        const bins = Array.from({ length: 475 }, () => -110);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 10_000, rfOrdered: true });
+        await sleep(700);
+        await page.eval(`(() => {
+            const el = document.querySelector('.rc-holder:not([hidden]) .rp-spectrum');
+            const rc = el.getBoundingClientRect(), x = rc.left + rc.width * 0.75, y = rc.top + rc.height / 2;
+            el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+            el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+        })()`);
+        await sleep(300);
+        const all = await page.writes();
+        const f = all.filter(x => x.path === '/api/cat/frequency/a');
+        expect(f.length === 1 && f[0].body?.frequencyHz === 14_082_500 - 2225, `frequency wrote ${JSON.stringify(f)}`);
         expect(!all.some(x => x.path.startsWith('/api/cat/mode')), 'a mode was written');
         expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
     } finally { await page.eval(`localStorage.removeItem('rttyTuner')`).catch(() => {}); await page.close(); }

@@ -35,8 +35,9 @@ namespace RadioWebControl.Core.Services.Rtty
     /// - up 500 Hz on the dial moved the received tone up with it, and audio that
     /// rises with the dial is the lower-sideband case. So RTTY normal passes
     /// <c>lowerSideband: true</c> and RTTY-R ("RTTY-U" in the UI) passes false.
-    /// Those two modes are the only ones this is offered in; see
-    /// <see cref="SidebandForFskMode"/> for why.</para>
+    /// Those two modes are the only ones this is offered in unless the
+    /// application's own tuner holds a DATA mode; see
+    /// <see cref="SidebandForFskMode"/> and <see cref="SidebandForMode"/>.</para>
     /// </summary>
     public static class RttyMarkCentre
     {
@@ -195,6 +196,31 @@ namespace RadioWebControl.Core.Services.Rtty
             if (string.Equals(mode, "RTTY-U", StringComparison.OrdinalIgnoreCase)) return false;
             if (string.Equals(mode, "RTTY-L", StringComparison.OrdinalIgnoreCase)
              || string.Equals(mode, "RTTY",   StringComparison.OrdinalIgnoreCase)) return true;
+            return null;
+        }
+
+        /// <summary>
+        /// <see cref="SidebandForFskMode"/>, and the two DATA modes as well, for an
+        /// application whose own tuner can hold the radio in DATA-L or DATA-U.
+        ///
+        /// <para>The reason <see cref="SidebandForFskMode"/> leaves the DATA modes
+        /// out is an operator whose AFSK software has its own tuning indicator. A
+        /// tuner that holds the radio in DATA-L is that indicator, and its operator
+        /// asked for Auto to centre there as it does in RTTY-L (VK2RT, Discussion
+        /// #250, 2026-10-27).</para>
+        ///
+        /// <para>DATA-L is a lower sideband, so audio rises as the dial rises, and
+        /// DATA-U is the mirror. Checked on the bench on 2026-10-27 against DDK9
+        /// (10100.8 kHz, 450 Hz shift) on an FTdx101MP: from 200 Hz either side,
+        /// DATA-L brought the dial to 10102287/10102288 and DATA-U to 10099318,
+        /// the pair centred on the 1485 Hz carrier point both ways.</para>
+        /// </summary>
+        /// <returns>True for RTTY normal and DATA-L, false for RTTY-R and DATA-U, otherwise null.</returns>
+        public static bool? SidebandForMode(string? mode)
+        {
+            if (SidebandForFskMode(mode) is { } fsk) return fsk;
+            if (string.Equals(mode, "DATA-L", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(mode, "DATA-U", StringComparison.OrdinalIgnoreCase)) return false;
             return null;
         }
     }

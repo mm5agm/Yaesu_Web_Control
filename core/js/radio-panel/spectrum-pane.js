@@ -4,7 +4,8 @@
 // The radio panel's board draws the same picture with the same SpectrumView;
 // this is that picture without the board around it. Like SpectrumView it is
 // fed plain numbers - bins already ordered low to high and centred on the
-// dial - so it knows nothing about SDRs, the hub or which radio is attached.
+// dial, or on a point setViewOffset names - so it knows nothing about SDRs,
+// the hub or which radio is attached.
 //
 // Needs the radio panel's stylesheet (injectRadioPanelStyle) and a theme on
 // an ancestor (applyTheme): every colour is a --rp-* property.
@@ -14,7 +15,7 @@
 // pointer naming the frequency a click would send.
 
 import { SpectrumView } from './spectrum-view.js';
-import { axisLabels, formatFrequency, passbandPercent, spanText, spectrumHzAt } from './panel-math.js';
+import { axisLabels, dialPercent, formatFrequency, passbandCentrePercent, passbandPercent, spanText, spectrumHzAt } from './panel-math.js';
 
 function h(tag, cls, text) {
     const el = document.createElement(tag);
@@ -41,6 +42,9 @@ export class SpectrumPane {
      * @param {boolean} [opts.waterfallFirst=false]  the waterfall above the spectrum (setOrder)
      * @param {(hz:number) => void} [opts.onJump]  arrows at the left and right edges of the
      *        part on top: a click asks for the dial one span down or up, at hz
+     * @param {{hz:number, label:string}[]} [opts.spans]  with onSpan, the span in the
+     *        label is a list of these, styled as the label
+     * @param {(hz:number) => void} [opts.onSpan]  a span picked on that list
      */
     constructor(container, opts = {}) {
         this.el = h('div', 'rp-pane');
@@ -52,7 +56,9 @@ export class SpectrumPane {
         this._pb = h('div', 'rp-passband');
         this._spots = h('div');
         this._empty = h('div', 'rp-spec-empty', opts.empty ?? 'Waiting for data');
-        spec.append(this._pb, h('div', 'rp-cursor'), this._spots, this._empty);
+        this._pbMid = h('div', 'rp-pbcentre');
+        this._cursor = h('div', 'rp-cursor');
+        spec.append(this._pb, this._pbMid, this._cursor, this._spots, this._empty);
         this._axis = h('div', 'rp-axis');
         const wf = h('div', 'rp-waterfall');
         this.el.append(this.bar, spec, this._axis, wf);
@@ -61,7 +67,8 @@ export class SpectrumPane {
         this._wfEl = wf;
         if (opts.grip) this._grip(opts.onSplit, opts.onFit);
         this._view = new SpectrumView(spec, wf, { dbScale: opts.dbScale });
-        this._st = { hz: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null, passband: true };
+        this._st = { hz: 0, view: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null, passband: true };
+        if (opts.spans?.length && opts.onSpan) this._spanList(opts.spans, opts.onSpan);
         if (opts.onJump) this._jumps(opts.onJump);
         if (opts.waterfallFirst) this.setOrder(true);
         if (opts.onTune) this._tunable(spec, wf, opts.onTune, opts.tuneTo);
@@ -87,7 +94,7 @@ export class SpectrumPane {
         const at = (el, clientX) => {
             const s = this._st, rc = el.getBoundingClientRect();
             if (!rc.width) return null;
-            return spectrumHzAt((clientX - rc.left) / rc.width, s.hz, s.spanHz,
+            return spectrumHzAt((clientX - rc.left) / rc.width, s.hz > 0 ? s.hz + s.view : 0, s.spanHz,
                 s.showSpots ? s.spots : [], 8 / rc.width * s.spanHz);
         };
         const read = h('div', 'rp-xread');
@@ -228,12 +235,61 @@ export class SpectrumPane {
     /** What the label says before the frequency and span, e.g. 'MAIN · SDR A'. */
     setName(name) { this._st.name = name ?? ''; this._drawLabel(); }
     setFrequency(hz) { this._st.hz = Number(hz) || 0; this._draw(); }
-    setPassband(mode, widthHz) { this._st.mode = mode ?? ''; this._st.widthHz = widthHz ?? null; this._draw(); }
+    /**
+     * How far the bins' centre sits from the dial, in Hz: 0 when they are
+     * centred on the dial, as they are unless the feed says otherwise. The
+     * axis, spots and clicks then read from that centre, and the dial's line
+     * moves off the middle by as much.
+     */
+    setViewOffset(hz) {
+        const v = Number(hz) || 0;
+        if (v === this._st.view) return;
+        this._st.view = v;
+        this._draw();
+    }
+    /** dataCentreHz: where the radio centres its DATA filter from the dial; see passbandHz. */
+    setPassband(mode, widthHz, dataCentreHz) {
+        this._st.mode = mode ?? ''; this._st.widthHz = widthHz ?? null; this._st.dataCentreHz = dataCentreHz ?? 0;
+        this._draw();
+    }
     setSpan(hz) {
         const s = Number(hz) || 0;
         if (s === this._st.spanHz) return;
         this._st.spanHz = s;
         this._draw();
+        this._showSpan();
+    }
+
+    // The span in the label as a list: the bar keeps the label's look, and
+    // the list is the label's last part, so 'SPAN 10 kHz ▾' reads as before.
+    _spanList(spans, onSpan) {
+        this.bar.classList.add('has-span');
+        const wrap = h('span', 'rp-pane-spanwrap');
+        const sel = h('select', 'rp-pane-span');
+        sel.title = 'Span';
+        for (const s of spans) sel.append(new Option('SPAN ' + s.label, String(s.hz)));
+        sel.addEventListener('change', () => onSpan(Number(sel.value)));
+        wrap.append(sel);
+        this._label.after(wrap);
+        this._spanSel = sel;
+        this._showSpan();
+    }
+
+    // A frame's span is whole bins: 20 kHz arrives as 19989 Hz, so a list
+    // span within 2% is the one shown. A span not on the list shows as itself.
+    _showSpan() {
+        const sel = this._spanSel;
+        if (!sel || document.activeElement === sel) return;
+        const n = this._st.spanHz;
+        sel.querySelector('.rp-span-other')?.remove();
+        if (!n) { sel.selectedIndex = -1; return; }
+        const o = [...sel.options].find(x => Math.abs(Number(x.value) - n) <= Number(x.value) * 0.02);
+        if (o) { sel.value = o.value; return; }
+        const other = new Option('SPAN ' + spanText(n), String(n));
+        other.className = 'rp-span-other';
+        other.disabled = true;
+        sel.append(other);
+        sel.value = other.value;
     }
     setSpots(list) { this._st.spots = list ?? []; this._drawSpots(); this._reread?.(); }
     setShowSpots(show) { this._st.showSpots = !!show; this._drawSpots(); this._reread?.(); }
@@ -273,16 +329,23 @@ export class SpectrumPane {
         const p3 = n => String(n).padStart(3, '0');
         const hz = Math.round(s.hz);
         const f = hz > 0 ? `${Math.floor(hz / 1e6)}.${p3(Math.floor(hz / 1000) % 1000)}.${p3(hz % 1000)}` : '';
-        this._label.textContent = [s.name, f, s.spanHz ? 'SPAN ' + spanText(s.spanHz) : ''].filter(Boolean).join(' · ');
+        const span = s.spanHz && !this._spanSel ? 'SPAN ' + spanText(s.spanHz) : '';
+        this._label.textContent = [s.name, f, span].filter(Boolean).join(' · ') + (this._spanSel ? ' ·' : '');
     }
 
     _draw() {
         const s = this._st;
-        const pct = s.passband && passbandPercent(s.mode, s.widthHz, s.spanHz);
+        const pct = s.passband && passbandPercent(s.mode, s.widthHz, s.spanHz, s.dataCentreHz, s.view);
         if (pct) { this._pb.style.display = 'block'; this._pb.style.left = pct.left + '%'; this._pb.style.width = pct.width + '%'; }
         else this._pb.style.display = 'none';
+        const mid = s.passband ? passbandCentrePercent(s.mode, s.spanHz, s.dataCentreHz, s.view) : null;
+        this._pbMid.style.display = mid == null ? 'none' : 'block';
+        if (mid != null) this._pbMid.style.left = mid + '%';
+        const dial = dialPercent(s.view, s.spanHz);
+        this._cursor.style.display = dial == null ? 'none' : '';
+        if (dial != null) this._cursor.style.left = dial + '%';
         this._axis.textContent = '';
-        if (s.spanHz > 0 && s.hz > 0) for (const t of axisLabels(s.hz, s.spanHz, 9)) this._axis.append(h('span', null, t));
+        if (s.spanHz > 0 && s.hz > 0) for (const t of axisLabels(s.hz + s.view, s.spanHz, 9)) this._axis.append(h('span', null, t));
         this._drawLabel();
         this._drawSpots();
         this._reread?.();
@@ -294,7 +357,7 @@ export class SpectrumPane {
         if (!s.showSpots || !(s.spanHz > 0) || !(s.hz > 0)) return;
         let row = 0;
         for (const sp of s.spots) {
-            const pos = 50 + (sp.hz - s.hz) / s.spanHz * 100;
+            const pos = 50 + (sp.hz - s.hz - s.view) / s.spanHz * 100;
             if (pos < 2 || pos > 98) continue;
             const el = h('div', 'rp-spot', sp.call);
             el.style.left = pos + '%';

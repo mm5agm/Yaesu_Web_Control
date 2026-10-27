@@ -117,9 +117,10 @@ export function startYaesuRttyContest(root, cfg) {
         conn: cfg.conn,
         model: cfg.model,
         pane: vfo => view.pane(vfo),
-        onSpan: (vfo, span) => view.setSpanValue(vfo, span),
         holds: vfo => stepper.holds(vfo),
         vfos: receivers.map(r => r.id),
+        // DATA-U here is RTTY: a click puts the tones in the passband.
+        dataURtty: true,
     });
     const stepper = dialStepper({
         // The page's own STEP, 1 Hz to 1 kHz, not the board's.
