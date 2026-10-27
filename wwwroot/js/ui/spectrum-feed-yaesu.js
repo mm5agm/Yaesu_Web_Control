@@ -39,12 +39,13 @@ export function post(url, body) {
  * @param {(vfo:string, hz:number) => void} [cfg.onSpan]  a frame arrived at this span
  * @param {(vfo:string) => boolean} [cfg.holds]  true while the page's own dial write is in flight
  * @param {string[]} [cfg.vfos=['A','B']]  the panes spots are published to
+ * @param {boolean} [cfg.dataURtty]  a DATA-U click tunes for RTTY tones (see spectrumTuner)
  */
 export function startYaesuSpectrumFeed(cfg) {
     const model = cfg.model;
     const vfos = cfg.vfos ?? ['A', 'B'];
     const pane = vfo => cfg.pane(vfo);
-    const tuner = spectrumTuner();
+    const tuner = spectrumTuner({ dataURtty: cfg.dataURtty });
     loadBandPlanFromServer();
 
     const r = {

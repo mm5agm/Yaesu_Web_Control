@@ -921,6 +921,37 @@ test('/rtty-contest: in DATA-L with Mark 1415 / 170 a click puts the dial 1500 H
     } finally { await page.eval(`localStorage.removeItem('rttyTuner')`).catch(() => {}); await page.close(); }
 });
 
+// DATA-U here is RTTY, not FT8: the radio hears above the dial, so the dial
+// goes the tones' midpoint below the signal (Colin, 2026-10-27: a click put
+// the dial on the signal and the tones fell outside the passband).
+test('/rtty-contest: in DATA-U with Mark 2125 / 200 a click puts the dial 2225 Hz below the signal', async () => {
+    const page = await open('/rtty-contest', {
+        settleMs: 1500,
+        before: `try { localStorage.setItem('rttyTuner', JSON.stringify({ markHz: 2125, shiftHz: 200, reverse: false })); } catch {}
+            __rwcTest.getOverrides['/api/rtty/tuner?'] = { running: false, hostRunning: false, points: [] };`,
+    });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.state('FrequencyA', 14_080_000);
+        await page.state('ModeA', 'DATA-U');
+        const bins = Array.from({ length: 475 }, () => -110);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 10_000, rfOrdered: true });
+        await sleep(700);
+        await page.eval(`(() => {
+            const el = document.querySelector('.rc-holder:not([hidden]) .rp-spectrum');
+            const rc = el.getBoundingClientRect(), x = rc.left + rc.width * 0.75, y = rc.top + rc.height / 2;
+            el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+            el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+        })()`);
+        await sleep(300);
+        const all = await page.writes();
+        const f = all.filter(x => x.path === '/api/cat/frequency/a');
+        expect(f.length === 1 && f[0].body?.frequencyHz === 14_082_500 - 2225, `frequency wrote ${JSON.stringify(f)}`);
+        expect(!all.some(x => x.path.startsWith('/api/cat/mode')), 'a mode was written');
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.eval(`localStorage.removeItem('rttyTuner')`).catch(() => {}); await page.close(); }
+});
+
 test('/rtty-contest: the scope row swaps the waterfall on top, steps the wheel 1 Hz, and keeps REF and AUTO', async () => {
     const clean = `['wfFirst', 'step', 'levels.A'].forEach(k => localStorage.removeItem('ywc.rttyContest.' + k))`;
     const page = await open('/rtty-contest', { settleMs: 1500, before: `try { ${clean}; } catch {}` });
