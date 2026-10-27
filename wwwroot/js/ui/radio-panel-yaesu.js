@@ -30,7 +30,7 @@ import { alignBins, txMeterFraction, rangeLegends } from '/js/radio-panel/panel-
 import { BAND_PLANS, BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, getSegments, segmentForHz } from '/js/ui/band-plan.js';
 import { MODE_CAT, spectrumTuner } from '/js/ui/spectrum-tune-yaesu.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
-import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
+import { axisOffsetHz, viewOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 import { RadioScopeControl } from '/js/ui/radio-scope.js';
 import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js';
@@ -855,16 +855,22 @@ export function startYaesuRadioPanel(root, cfg) {
     // The axis correction, in the same convention as the Classic spectrum
     // panel: true RF of the frame's centre = dial + offset. Null (unmeasured
     // radio) is treated as no correction.
+    const filterFor = vfo => ({
+        mode: r.mode[vfo],
+        ifWidthHz: widthHz(vfo) ?? 3000,
+        ifShiftHz: num(r.shift[vfo]),
+        cwPitchHz: pitchHz(),
+        dataShiftHz: r.dataShiftHz,
+    });
     function offsetFor(vfo, frame) {
         if (frame.rfOrdered) return num(frame.centreHz) - r.freq[vfo];
-        const filter = {
-            mode: r.mode[vfo],
-            ifWidthHz: widthHz(vfo) ?? 3000,
-            ifShiftHz: num(r.shift[vfo]),
-            cwPitchHz: pitchHz(),
-            dataShiftHz: r.dataShiftHz,
-        };
-        try { return axisOffsetHz(model, vfo, frame.centreHz, filter) ?? 0; } catch { return 0; }
+        try { return axisOffsetHz(model, vfo, frame.centreHz, filterFor(vfo)) ?? 0; } catch { return 0; }
+    }
+    // Where the pane is centred from the dial: the filter in DATA modes
+    // (viewOffsetHz). The radio's own scope is drawn as it is sent.
+    function viewFor(vfo, frame) {
+        if (frame.rfOrdered) return 0;
+        try { return viewOffsetHz(model, filterFor(vfo)); } catch { return 0; }
     }
     // The SDR lamp shows the better of the two SDRs; one that is not
     // configured does not count against the other.
@@ -1004,7 +1010,11 @@ export function startYaesuRadioPanel(root, cfg) {
             if (sdrState[vfo] !== 'streaming') { sdrState[vfo] = 'streaming'; refreshSdrLamp(); }
             panel.setSpectrumSource({ label: 'SDR ' + vfo, spanHz: span, status: null }, vfo);
             let bins = v.rfOrdered ? v.bins : Array.prototype.slice.call(v.bins).reverse();
-            if (r.freq[vfo] > 0) bins = alignBins(bins, offsetFor(vfo, v), span);
+            if (r.freq[vfo] > 0) {
+                const view = viewFor(vfo, v);
+                panel.setViewOffset(vfo, view);
+                bins = alignBins(bins, offsetFor(vfo, v) - view, span);
+            }
             if (!specAway) panel.pushSpectrum(bins, vfo);
         },
         DxSpot: addSpot,

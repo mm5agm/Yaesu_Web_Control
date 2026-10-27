@@ -121,14 +121,17 @@ export function passbandHz(mode, widthHz, dataCentreHz) {
     return { lo: -w / 2, hi: w / 2 };
 }
 
-// The same passband as percentages of a span centred on the dial, clipped to
-// the screen. Returns null when there is nothing to draw.
-export function passbandPercent(mode, widthHz, spanHz, dataCentreHz) {
+// The same passband as percentages of the span, clipped to the screen.
+// Returns null when there is nothing to draw. viewOffsetHz is how far the
+// span's centre sits from the dial (setViewOffset on the panes); 0, the
+// span is centred on the dial.
+export function passbandPercent(mode, widthHz, spanHz, dataCentreHz, viewOffsetHz = 0) {
     const pb = passbandHz(mode, widthHz, dataCentreHz);
     const span = Number(spanHz) || 0;
     if (!pb || span <= 0) return null;
-    let left = 50 + pb.lo / span * 100;
-    let right = 50 + pb.hi / span * 100;
+    const off = Number(viewOffsetHz) || 0;
+    let left = 50 + (pb.lo - off) / span * 100;
+    let right = 50 + (pb.hi - off) / span * 100;
     left = Math.max(0, Math.min(100, left));
     right = Math.max(0, Math.min(100, right));
     if (right - left <= 0) return null;
@@ -152,7 +155,16 @@ export function spectrumHzAt(frac, centreHz, spanHz, spots = [], snapHz = 0) {
     return { hz, frac: f, spot };
 }
 
-// Axis labels for a span centred on the dial, in kHz: five evenly spaced.
+// Where the dial's line sits across a span whose centre is viewOffsetHz from
+// the dial, in percent; null while it is off the screen.
+export function dialPercent(viewOffsetHz, spanHz) {
+    const span = Number(spanHz) || 0;
+    if (span <= 0) return 50;
+    const x = 50 - (Number(viewOffsetHz) || 0) / span * 100;
+    return x >= 0 && x <= 100 ? x : null;
+}
+
+// Axis labels for a span centred on centreHz, in kHz: five evenly spaced.
 export function axisLabels(centreHz, spanHz, count = 5) {
     const c = Number(centreHz) || 0, s = Number(spanHz) || 0;
     const lo = c - s / 2;

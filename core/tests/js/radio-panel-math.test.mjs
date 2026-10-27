@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    formatFrequency, sMeterFraction, sMeterText, passbandPercent, passbandHz,
+    formatFrequency, sMeterFraction, sMeterText, passbandPercent, passbandHz, dialPercent,
     axisLabels, spectrumHzAt, spanText, widthText, knobAngle, binsToColumns, percentile,
     meterGeometry, waterfallColour,
 } from '../../js/radio-panel/panel-math.js';
@@ -57,6 +57,18 @@ test('passband: DATA modes centre on the data shift when the radio has one', () 
     const pct = passbandPercent('DATA-L', 300, 10000, 1500);
     assert.equal(pct.left, 33.5);
     assert.equal(pct.width, 3);
+});
+
+test('passband and dial line on a span centred off the dial (DATA, #250)', () => {
+    // DATA-L with the span centred on the filter, 1500 Hz below the dial:
+    // the passband sits in the middle and the dial line 1500 Hz to the right.
+    const pct = passbandPercent('DATA-L', 300, 2000, 1500, -1500);
+    assert.equal(pct.left, 42.5);
+    assert.equal(pct.width, 15);
+    assert.equal(dialPercent(-1500, 2000), null);   // 125%: off the screen
+    assert.equal(dialPercent(-1500, 5000), 80);
+    assert.equal(dialPercent(0, 5000), 50);
+    assert.equal(dialPercent(700, 0), 50);
 });
 
 test('passband: USB above the dial, LSB below, CW centred', () => {

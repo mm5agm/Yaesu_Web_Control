@@ -19,7 +19,7 @@ import { SpectrumView } from './spectrum-view.js';
 import { spectrumSettingsPanel, tidySpectrumSettings } from './spectrum-settings.js';
 import {
     formatFrequency, sMeterFraction, sMeterText, meterGeometry, LOWER_SCALES,
-    passbandPercent, axisLabels, spanText, widthText, knobAngle,
+    passbandPercent, dialPercent, axisLabels, spanText, widthText, knobAngle,
 } from './panel-math.js';
 import { mountPanelWindows } from './panel-windows.js';
 import { freqDigits, wheelDigits } from './freq-digits.js';
@@ -567,7 +567,8 @@ export function mountRadioPanel(root, opts = {}) {
         const label = h('div', 'rp-spec-label', '');
         const empty = h('div', 'rp-spec-empty', 'Waiting for data');
         const oob = h('div', 'rp-spec-oob', 'OUT OF BAND');
-        spec.append(pb, marksEl, h('div', 'rp-cursor'), spotsEl, label, oob, empty);
+        const cursor = h('div', 'rp-cursor');
+        spec.append(pb, marksEl, cursor, spotsEl, label, oob, empty);
         const axis = h('div', 'rp-axis');
         const wf = h('div', 'rp-waterfall');
         // The span picker, HOLD and the settings key sit in the waterfall's
@@ -608,7 +609,8 @@ export function mountRadioPanel(root, opts = {}) {
         setKey.addEventListener('click', () => { sets.el.classList.toggle('open'); setKey.classList.toggle('on', sets.el.classList.contains('open')); });
         // A click on the spectrum or waterfall names the frequency under it,
         // or a DX spot's own frequency when the click is within 8 px of its
-        // marker: act('spectrum', Hz, pane id). The pane's centre is its dial.
+        // marker: act('spectrum', Hz, pane id). The pane's centre is its dial,
+        // or as far from it as setViewOffset says (centreOf).
         // The readout below names exactly what a click there would send: both
         // come from hzAt, and from the same x. A click's clientX is whole CSS
         // pixels while a pointer's is fractional (display scaling), and at a
@@ -617,7 +619,7 @@ export function mountRadioPanel(root, opts = {}) {
         // disagree by a few hundred Hz (Colin, 2026-10-15: 14.815.690 read,
         // 14.815.439 tuned).
         const hzAt = (el, clientX) => {
-            const span = st.spanHz[d.id], f = st.freq[d.id];
+            const span = st.spanHz[d.id], f = centreOf(d.id);
             const rc = el.getBoundingClientRect();
             if (!(span > 0 && f > 0) || !rc.width) return null;
             const frac = Math.max(0, Math.min(1, (clientX - rc.left) / rc.width));
@@ -647,7 +649,7 @@ export function mountRadioPanel(root, opts = {}) {
                         const pn = panes[d.id], span = st.spanHz[d.id];
                         const w = el.getBoundingClientRect().width || 1;
                         pn.pinHz = pn.pinHz != null && Math.abs(pn.pinHz - at.hz) <= 8 / w * span ? null : at.hz;
-                        drawPin(pn, st.freq[d.id], span);
+                        drawPin(pn, centreOf(d.id), span);
                         return;
                     }
                     act('spectrum', String(at.hz), d.id);
@@ -700,7 +702,7 @@ export function mountRadioPanel(root, opts = {}) {
         const pinRead = h('div', 'rp-pin-read');
         spec.append(pinRead);
         sdrView.append(box);
-        panes[d.id] = { box, spec, pb, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '',
+        panes[d.id] = { box, spec, pb, cursor, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '',
             pinHz: null, pinLines, pinRead, reread: xReread };
         drawPin(panes[d.id], 0, 0);
     }
@@ -1034,7 +1036,7 @@ export function mountRadioPanel(root, opts = {}) {
 
     // ---- state ---------------------------------------------------------
     const st = {
-        freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null }, dataCentreHz: 0,
+        freq: { A: 0, B: 0 }, view: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null }, dataCentreHz: 0,
         s: { A: 0, B: 0 }, tx: false, meter: store.get(prefix + 'meter', 'PO'),
         txMeters: {}, spanHz: { A: 0, B: 0 }, theme: null, spots: [], marks: { edges: [], ticks: [] }, sel: 'A',
         specView: specViews[0],
@@ -1073,15 +1075,23 @@ export function mountRadioPanel(root, opts = {}) {
     function chooseMeter(m) { st.meter = m; store.set(prefix + 'meter', m); drawMeterFace(); }
 
     // ---- spectrum overlays ---------------------------------------------
-    // Each pane's passband, axis and spots come from its own VFO.
+    // The frequency at a pane's centre: its dial, moved by setViewOffset.
+    function centreOf(vfo) {
+        return st.freq[vfo] > 0 ? st.freq[vfo] + (st.view[vfo] || 0) : 0;
+    }
+    // Each pane's passband, axis and spots come from its own VFO, placed
+    // from the pane's centre; the dial's line is wherever the dial falls.
     function drawOverlays(vfo) {
         if (!vfo) { for (const id of Object.keys(panes)) drawOverlays(id); return; }
         const pn = panes[vfo];
         if (!pn) return;
-        const span = st.spanHz[vfo], f = st.freq[vfo];
-        const pct = pn.sets.get().passband && passbandPercent(st.mode[vfo], st.widthHz[vfo], span, st.dataCentreHz);
+        const span = st.spanHz[vfo], f = centreOf(vfo);
+        const pct = pn.sets.get().passband && passbandPercent(st.mode[vfo], st.widthHz[vfo], span, st.dataCentreHz, st.view[vfo]);
         if (pct) { pn.pb.style.display = 'block'; pn.pb.style.left = pct.left + '%'; pn.pb.style.width = pct.width + '%'; }
         else pn.pb.style.display = 'none';
+        const dial = dialPercent(st.view[vfo], span);
+        pn.cursor.style.display = dial == null ? 'none' : '';
+        if (dial != null) pn.cursor.style.left = dial + '%';
         pn.axis.textContent = '';
         if (span > 0 && f > 0) for (const t of axisLabels(f, span)) pn.axis.append(h('span', null, t));
         drawMarks(pn, f, span);
@@ -1308,6 +1318,16 @@ export function mountRadioPanel(root, opts = {}) {
         setFrequency(vfo, hz) {
             st.freq[vfo] = Number(hz) || 0;
             setVfoText(vfo);
+            drawOverlays(vfo);
+        },
+        /**
+         * How far that VFO's pane centre sits from its dial, in Hz: 0 (the
+         * default) when the bins are centred on the dial.
+         */
+        setViewOffset(vfo, hz) {
+            const v = Number(hz) || 0;
+            if (v === st.view[vfo]) return;
+            st.view[vfo] = v;
             drawOverlays(vfo);
         },
         setMode(vfo, mode) {

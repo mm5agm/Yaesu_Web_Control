@@ -12,7 +12,7 @@
 // may have handlers of its own to add first.
 
 import { alignBins } from '/js/radio-panel/panel-math.js';
-import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
+import { axisOffsetHz, viewOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor } from '/js/ui/if-width-tables.js';
 import { loadBandPlanFromServer } from '/js/ui/band-plan.js';
 import { MODE_CAT, spectrumTuner } from '/js/ui/spectrum-tune-yaesu.js';
@@ -58,16 +58,22 @@ export function startYaesuSpectrumFeed(cfg) {
 
     // Same convention as the board and Classic: true RF of the frame's centre
     // = dial + offset; null (an unmeasured radio) is no correction.
+    const filterFor = vfo => ({
+        mode: r.mode[vfo],
+        ifWidthHz: widthHz(vfo) ?? 3000,
+        ifShiftHz: num(r.shift[vfo]),
+        cwPitchHz: pitchHz(),
+        dataShiftHz: r.dataShiftHz,
+    });
     function offsetFor(vfo, frame) {
         if (frame.rfOrdered) return num(frame.centreHz) - r.freq[vfo];
-        const filter = {
-            mode: r.mode[vfo],
-            ifWidthHz: widthHz(vfo) ?? 3000,
-            ifShiftHz: num(r.shift[vfo]),
-            cwPitchHz: pitchHz(),
-            dataShiftHz: r.dataShiftHz,
-        };
-        try { return axisOffsetHz(model, vfo, frame.centreHz, filter) ?? 0; } catch { return 0; }
+        try { return axisOffsetHz(model, vfo, frame.centreHz, filterFor(vfo)) ?? 0; } catch { return 0; }
+    }
+    // Where the pane is centred from the dial: the filter in DATA modes
+    // (viewOffsetHz). The radio's own scope is drawn as it is sent.
+    function viewFor(vfo, frame) {
+        if (frame.rfOrdered) return 0;
+        try { return viewOffsetHz(model, filterFor(vfo)); } catch { return 0; }
     }
 
     function readDataShift(mode) {
@@ -121,7 +127,11 @@ export function startYaesuSpectrumFeed(cfg) {
             p.setSpan(span);
             cfg.onSpan?.(vfo, span);
             let bins = v.rfOrdered ? v.bins : Array.prototype.slice.call(v.bins).reverse();
-            if (r.freq[vfo] > 0) bins = alignBins(bins, offsetFor(vfo, v), span);
+            if (r.freq[vfo] > 0) {
+                const view = viewFor(vfo, v);
+                p.setViewOffset(view);
+                bins = alignBins(bins, offsetFor(vfo, v) - view, span);
+            }
             p.push(bins);
         },
         DxSpot: addSpot,
