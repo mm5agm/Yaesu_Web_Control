@@ -41,6 +41,9 @@ export class SpectrumPane {
      * @param {boolean} [opts.waterfallFirst=false]  the waterfall above the spectrum (setOrder)
      * @param {(hz:number) => void} [opts.onJump]  arrows at the left and right edges of the
      *        part on top: a click asks for the dial one span down or up, at hz
+     * @param {{hz:number, label:string}[]} [opts.spans]  with onSpan, the span in the
+     *        label is a list of these, styled as the label
+     * @param {(hz:number) => void} [opts.onSpan]  a span picked on that list
      */
     constructor(container, opts = {}) {
         this.el = h('div', 'rp-pane');
@@ -62,6 +65,7 @@ export class SpectrumPane {
         if (opts.grip) this._grip(opts.onSplit, opts.onFit);
         this._view = new SpectrumView(spec, wf, { dbScale: opts.dbScale });
         this._st = { hz: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null, passband: true };
+        if (opts.spans?.length && opts.onSpan) this._spanList(opts.spans, opts.onSpan);
         if (opts.onJump) this._jumps(opts.onJump);
         if (opts.waterfallFirst) this.setOrder(true);
         if (opts.onTune) this._tunable(spec, wf, opts.onTune, opts.tuneTo);
@@ -234,6 +238,39 @@ export class SpectrumPane {
         if (s === this._st.spanHz) return;
         this._st.spanHz = s;
         this._draw();
+        this._showSpan();
+    }
+
+    // The span in the label as a list: the bar keeps the label's look, and
+    // the list is the label's last part, so 'SPAN 10 kHz ▾' reads as before.
+    _spanList(spans, onSpan) {
+        this.bar.classList.add('has-span');
+        const wrap = h('span', 'rp-pane-spanwrap');
+        const sel = h('select', 'rp-pane-span');
+        sel.title = 'Span';
+        for (const s of spans) sel.append(new Option('SPAN ' + s.label, String(s.hz)));
+        sel.addEventListener('change', () => onSpan(Number(sel.value)));
+        wrap.append(sel);
+        this._label.after(wrap);
+        this._spanSel = sel;
+        this._showSpan();
+    }
+
+    // A frame's span is whole bins: 20 kHz arrives as 19989 Hz, so a list
+    // span within 2% is the one shown. A span not on the list shows as itself.
+    _showSpan() {
+        const sel = this._spanSel;
+        if (!sel || document.activeElement === sel) return;
+        const n = this._st.spanHz;
+        sel.querySelector('.rp-span-other')?.remove();
+        if (!n) { sel.selectedIndex = -1; return; }
+        const o = [...sel.options].find(x => Math.abs(Number(x.value) - n) <= Number(x.value) * 0.02);
+        if (o) { sel.value = o.value; return; }
+        const other = new Option('SPAN ' + spanText(n), String(n));
+        other.className = 'rp-span-other';
+        other.disabled = true;
+        sel.append(other);
+        sel.value = other.value;
     }
     setSpots(list) { this._st.spots = list ?? []; this._drawSpots(); this._reread?.(); }
     setShowSpots(show) { this._st.showSpots = !!show; this._drawSpots(); this._reread?.(); }
@@ -273,7 +310,8 @@ export class SpectrumPane {
         const p3 = n => String(n).padStart(3, '0');
         const hz = Math.round(s.hz);
         const f = hz > 0 ? `${Math.floor(hz / 1e6)}.${p3(Math.floor(hz / 1000) % 1000)}.${p3(hz % 1000)}` : '';
-        this._label.textContent = [s.name, f, s.spanHz ? 'SPAN ' + spanText(s.spanHz) : ''].filter(Boolean).join(' · ');
+        const span = s.spanHz && !this._spanSel ? 'SPAN ' + spanText(s.spanHz) : '';
+        this._label.textContent = [s.name, f, span].filter(Boolean).join(' · ') + (this._spanSel ? ' ·' : '');
     }
 
     _draw() {

@@ -1,8 +1,9 @@
 // contest-view.js - the RTTY Contest view: only what a contest RTTY operator
 // uses, on one screen. A top strip (frequency, mode or a MODE list, Mark/Shift, compact
-// meters, Main/Sub, DX SPOTS, SPAN, Views), a row of scope controls (ref
-// level, auto floor, range, fit, swap, wheel step), the spectrum over the
-// waterfall with a grip between them, and the RTTY tuner docked at the side.
+// meters, Main/Sub, DX SPOTS, Views), a row of scope controls (ref
+// level, auto floor, range, fit, swap, wheel step), the spectrum, with a
+// SPAN list in its label, over the waterfall with a grip between them, and
+// the RTTY tuner docked at the side.
 //
 // The scale is dB above the noise floor. REF is where the bottom of the
 // trace sits from the floor, AUTO lets the floor follow the noise, FIT (or a
@@ -264,7 +265,7 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {HTMLElement} root
  * @param {object} opts
  * @param {{id:string, tab:string, name:string}[]} opts.receivers  one or two; with one there is no Main/Sub switch
- * @param {{hz:number, label:string}[]} [opts.spans]
+ * @param {{hz:number, label:string}[]} [opts.spans]  the SPAN list in each pane's label
  * @param {(id:string, hz:number) => void} [opts.onSpan]
  * @param {(id:string, hz:number) => void} [opts.onTune]  a click on a pane
  * @param {(id:string, hz:number) => number} [opts.tuneTo]  where the dial lands for a click at hz
@@ -381,15 +382,6 @@ export function mountContestView(root, opts) {
     const spotsBtn = btn('rp-spop-key', 'DX SPOTS', () => setShowSpots(!showSpots));
     spotsBtn.title = 'Show or hide the DX spot tags on the spectrum';
     top.append(spotsBtn);
-
-    let spanSel = null;
-    if (opts.spans?.length) {
-        spanSel = h('select', 'rp-spop-span');
-        spanSel.title = 'Span';
-        for (const s of opts.spans) spanSel.append(new Option('SPAN ' + s.label, String(s.hz)));
-        spanSel.addEventListener('change', () => opts.onSpan?.(receiver, Number(spanSel.value)));
-        top.append(spanSel);
-    }
 
     if (part) {
         const dock = btn('rp-spop-key on rc-dock', 'DOCK', () => opts.onDock?.());
@@ -762,6 +754,9 @@ export function mountContestView(root, opts) {
             onJump: opts.onFrequencyEntry && (hz => {
                 if (hz >= (opts.minHz ?? 30_000) && hz <= (opts.maxHz ?? 75_000_000)) opts.onFrequencyEntry(r.id, Math.round(hz));
             }),
+            // The span is picked in the pane's label, beside the frequency it goes with.
+            spans: opts.spans,
+            onSpan: opts.onSpan && (hz => opts.onSpan(r.id, hz)),
             grip: true,
             dbScale: true,
             waterfallFirst: wfFirst,
@@ -1308,13 +1303,6 @@ export function mountContestView(root, opts) {
         setTx(on) {
             txChip.textContent = on ? 'TX' : 'RX';
             txChip.classList.toggle('tx', !!on);
-        },
-        /** Show the span the SDR is actually at. A frame's span is whole bins: 20 kHz arrives as 19989 Hz. */
-        setSpanValue(id, hz) {
-            if (!spanSel || id !== receiver) return;
-            const n = Number(hz) || 0;
-            const o = [...spanSel.options].find(x => Math.abs(Number(x.value) - n) <= Number(x.value) * 0.02);
-            if (o && spanSel.value !== o.value && document.activeElement !== spanSel) spanSel.value = o.value;
         },
         get showSpots() { return showSpots; },
         /** The wheel step the operator picked, in Hz. */

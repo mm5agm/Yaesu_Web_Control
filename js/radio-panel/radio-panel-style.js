@@ -379,6 +379,13 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-pane-bar{display:flex;align-items:center;gap:10px;min-height:32px}
 .rp-pane-label{flex:1;font:400 18px ${MONO};color:${v('chip-fg')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rp-pane-tools{display:flex;gap:6px}
+.rp-pane-bar.has-span .rp-pane-label{flex:0 1 auto}
+.rp-pane-bar.has-span .rp-pane-tools{margin-left:auto}
+.rp-pane-spanwrap{position:relative;flex:none;display:inline-flex}
+.rp-pane-spanwrap::after{content:'▾';position:absolute;right:4px;top:50%;transform:translateY(-50%);pointer-events:none;font:400 14px ${MONO};color:${v('chip-fg')}}
+.rp-pane-span{appearance:none;-webkit-appearance:none;background:transparent;border:0;border-radius:4px;margin:0;padding:1px 20px 1px 4px;font:400 18px ${MONO};color:${v('chip-fg')};cursor:pointer}
+.rp-pane-span:hover,.rp-pane-span:focus-visible{background:${v('accent-bg')};outline:none}
+.rp-pane-span option{background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};font:500 15px ${SANS}}
 .rp-spop-span{font:500 16px ${SANS};min-height:32px;background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};border:1px solid ${v('key-border')};border-radius:4px;padding:2px 6px}
 `;
 }
