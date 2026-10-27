@@ -220,6 +220,8 @@ export function startYaesuRadioPanel(root, cfg) {
         mic: null, procl: null, amc: null, procType: null, power: null, mon: null, speed: null, pitchKnown: false,
         tx: false, txMeterRaw: {}, poHist: [], swrHist: [], sel: 'A', split: 0, txVfo: 0, proc: false, moni: false, catOn: false,
     };
+    // The DATA filter sits DATA SHIFT from the dial; drawn there until the radio says otherwise.
+    panel.setDataShift(r.dataShiftHz);
     let stepHz = (() => { try { return num(localStorage.getItem(STEP_KEY)); } catch { return 0; } })();
     if (!STEPS_HZ.includes(stepHz)) stepHz = 100;
     panel.setStep(stepText(stepHz));
@@ -877,7 +879,7 @@ export function startYaesuRadioPanel(root, cfg) {
         if (mode !== 'DATA-L' && mode !== 'DATA-U') return;
         fetch('/api/cat/datashift')
             .then(x => (x.ok ? x.json() : null))
-            .then(d => { const hz = Number(d?.dataShiftHz); if (Number.isFinite(hz)) r.dataShiftHz = hz; })
+            .then(d => { const hz = Number(d?.dataShiftHz); if (Number.isFinite(hz)) { r.dataShiftHz = hz; panel.setDataShift(hz); } })
             .catch(() => { /* 1500 stays */ });
     }
 

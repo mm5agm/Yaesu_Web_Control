@@ -1034,7 +1034,7 @@ export function mountRadioPanel(root, opts = {}) {
 
     // ---- state ---------------------------------------------------------
     const st = {
-        freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null },
+        freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null }, dataCentreHz: 0,
         s: { A: 0, B: 0 }, tx: false, meter: store.get(prefix + 'meter', 'PO'),
         txMeters: {}, spanHz: { A: 0, B: 0 }, theme: null, spots: [], marks: { edges: [], ticks: [] }, sel: 'A',
         specView: specViews[0],
@@ -1079,7 +1079,7 @@ export function mountRadioPanel(root, opts = {}) {
         const pn = panes[vfo];
         if (!pn) return;
         const span = st.spanHz[vfo], f = st.freq[vfo];
-        const pct = pn.sets.get().passband && passbandPercent(st.mode[vfo], st.widthHz[vfo], span);
+        const pct = pn.sets.get().passband && passbandPercent(st.mode[vfo], st.widthHz[vfo], span, st.dataCentreHz);
         if (pct) { pn.pb.style.display = 'block'; pn.pb.style.left = pct.left + '%'; pn.pb.style.width = pct.width + '%'; }
         else pn.pb.style.display = 'none';
         pn.axis.textContent = '';
@@ -1321,6 +1321,11 @@ export function mountRadioPanel(root, opts = {}) {
             st.widthHz[vfo] = hz;
             flagsFor(vfo).width.textContent = widthText(hz);
             drawOverlays(vfo);
+        },
+        /** Where the radio centres its DATA filter from the dial, in Hz; 0 for none. See passbandHz. */
+        setDataShift(hz) {
+            st.dataCentreHz = Number(hz) || 0;
+            drawOverlays();
         },
         setAgc(vfo, text) { flagsFor(vfo).agc.textContent = text ? 'AGC ' + text : ''; },
         // A vfoChips chip's text; empty hides it.

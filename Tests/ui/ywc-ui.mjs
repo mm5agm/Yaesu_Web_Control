@@ -859,6 +859,36 @@ test('/radio: the mode keys include RTTY-U and DATA-L, and write MD 9 and 8', as
 // Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
 // The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
 // dial 1500 Hz above it, and the mark lands on 1415.
+// VK2RT, 2026-10-27: in DATA-L the passband was drawn just under the dial,
+// 1.5 kHz from the signal the radio was actually listening to.
+test('/rtty-contest: in DATA-L the passband is drawn DATA SHIFT below the dial, and in DATA-U above it', async () => {
+    const page = await open('/rtty-contest', {
+        settleMs: 1500,
+        before: `__rwcTest.getOverrides['/api/rtty/tuner?'] = { running: false, hostRunning: false, points: [] };`,
+    });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.state('FrequencyA', 7_051_000);
+        await page.state('ModeA', 'DATA-L');
+        await page.state('IfWidthA', '6');
+        const bins = Array.from({ length: 475 }, () => -110);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 7_051_000, spanHz: 10_000, rfOrdered: true });
+        await sleep(700);
+        const mid = () => page.eval(`(() => {
+            const pb = document.querySelector('.rc-holder:not([hidden]) .rp-passband');
+            if (!pb || pb.style.display === 'none') return null;
+            return parseFloat(pb.style.left) + parseFloat(pb.style.width) / 2;
+        })()`);
+        const lo = await mid();
+        expect(lo != null && Math.abs(lo - 35) < 0.5, `DATA-L passband middle at ${lo}% of a 10 kHz span, wanted 35%`);
+        await page.state('ModeA', 'DATA-U');
+        await sleep(300);
+        const hi = await mid();
+        expect(hi != null && Math.abs(hi - 65) < 0.5, `DATA-U passband middle at ${hi}%, wanted 65%`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 test('/rtty-contest: in DATA-L with Mark 1415 / 170 a click puts the dial 1500 Hz above the signal', async () => {
     const page = await open('/rtty-contest', {
         settleMs: 1500,

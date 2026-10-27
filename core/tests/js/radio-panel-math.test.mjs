@@ -43,6 +43,22 @@ test('S-meter text', () => {
     assert.equal(sMeterText(20), 'S9+20 dB');
 });
 
+// VK2RT, 2026-10-27: DATA-L at 300 Hz drew 100-400 Hz below the dial while
+// the FTdx101D listened 1500 Hz below it, on the signal.
+test('passband: DATA modes centre on the data shift when the radio has one', () => {
+    assert.deepEqual(passbandHz('DATA-L', 300, 1500), { lo: -1650, hi: -1350 });
+    assert.deepEqual(passbandHz('DATA-U', 300, 1500), { lo: 1350, hi: 1650 });
+    assert.deepEqual(passbandHz('LSB-D', 300, 1000), { lo: -1150, hi: -850 });
+    // A wide filter still stops 100 Hz from the dial.
+    assert.deepEqual(passbandHz('DATA-U', 3000, 1500), { lo: 100, hi: 3000 });
+    // Voice modes and radios with no data shift are as before.
+    assert.deepEqual(passbandHz('LSB', 2400, 1500), { lo: -2500, hi: -100 });
+    assert.deepEqual(passbandHz('DATA-L', 300), { lo: -400, hi: -100 });
+    const pct = passbandPercent('DATA-L', 300, 10000, 1500);
+    assert.equal(pct.left, 33.5);
+    assert.equal(pct.width, 3);
+});
+
 test('passband: USB above the dial, LSB below, CW centred', () => {
     assert.deepEqual(passbandHz('USB', 2400), { lo: 100, hi: 2500 });
     assert.deepEqual(passbandHz('LSB', 2400), { lo: -2500, hi: -100 });

@@ -162,8 +162,9 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// <summary>
         /// The mode being held for as long as the tuner runs, or null if
         /// none is. Read without the gate on purpose: it is a single reference
-        /// and the only caller is deciding whether a re-assert is worth a task
-        /// at all, which <see cref="ReassertAsync"/> then re-checks properly.
+        /// and its callers only decide whether a re-assert is worth a task at
+        /// all, which <see cref="ReassertAsync"/> then re-checks properly, or
+        /// whether Auto's wrong-mode note applies.
         /// </summary>
         public string? HeldMode => _heldMode;
 
@@ -253,7 +254,7 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// Open the filter to <see cref="ListenWidthHz"/> for Auto's listen.
         /// Returns the SH code it was at, for <see cref="EndListeningAsync"/>, or
         /// null when nothing was changed - the tuner is not running, the radio is
-        /// not in RTTY, or the filter is already wide enough.
+        /// not in RTTY or DATA, or the filter is already wide enough.
         /// </summary>
         public async Task<string?> BeginListeningAsync(CancellationToken ct = default)
         {
@@ -263,7 +264,7 @@ namespace Yaesu_Web_Control.Services.Rtty
             {
                 if (_saved is null || !_cat.IsConnected) return null;
                 string mode = _state.ModeA ?? "";
-                if (RttyMarkCentre.SidebandForFskMode(mode) is null) return null;
+                if (RttyMarkCentre.SidebandForMode(mode) is null) return null;
 
                 var settings = await _settings.GetSettingsAsync();
                 string? was = _state.IfWidthA;
@@ -305,13 +306,14 @@ namespace Yaesu_Web_Control.Services.Rtty
 
         /// <summary>
         /// Where Auto should put the middle of the tone pair: this radio's
-        /// passband centre, or null when the tuner is not holding an FSK mode.
+        /// passband centre, or null when the tuner is not holding an FSK or DATA
+        /// mode. In DATA that is the model's DATA carrier point, not a menu read.
         /// Also lets the next start size the filter afresh for the moved pair.
         /// </summary>
         public async Task<double?> CentreForAutoAsync(CancellationToken ct = default)
         {
             string? mode = _state.ModeA;
-            if (_saved is null || RttyMarkCentre.SidebandForFskMode(mode) is null) return null;
+            if (_saved is null || RttyMarkCentre.SidebandForMode(mode) is null) return null;
             _sizedFor = null;
             return await PassbandCentreAsync(mode, ct);
         }

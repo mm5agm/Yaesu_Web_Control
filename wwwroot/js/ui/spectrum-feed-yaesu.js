@@ -53,7 +53,7 @@ export function startYaesuSpectrumFeed(cfg) {
     };
     const pitchHz = () => 300 + num(r.pitchCode) * 10;
     const widthHz = vfo => (r.widthCode[vfo] == null ? null : ifWidthHzFor(model, r.mode[vfo], parseInt(r.widthCode[vfo], 10)));
-    const refreshPassband = vfo => pane(vfo)?.setPassband(r.mode[vfo], widthHz(vfo));
+    const refreshPassband = vfo => pane(vfo)?.setPassband(r.mode[vfo], widthHz(vfo), r.dataShiftHz);
 
     // Same convention as the board and Classic: true RF of the frame's centre
     // = dial + offset; null (an unmeasured radio) is no correction.
@@ -73,7 +73,7 @@ export function startYaesuSpectrumFeed(cfg) {
         if (mode !== 'DATA-L' && mode !== 'DATA-U') return;
         fetch('/api/cat/datashift')
             .then(x => (x.ok ? x.json() : null))
-            .then(d => { const hz = Number(d?.dataShiftHz); if (Number.isFinite(hz)) r.dataShiftHz = hz; })
+            .then(d => { const hz = Number(d?.dataShiftHz); if (Number.isFinite(hz)) r.dataShiftHz = hz; vfos.forEach(refreshPassband); })
             .catch(() => { /* 1500 stays */ });
     }
 

@@ -530,7 +530,10 @@ namespace Yaesu_Web_Control.Services.Rtty
             var settings = await _settings.GetSettingsAsync();
             if (!settings.RttyAutoCentreMark) return false;
 
-            if (RttyMarkCentre.SidebandForFskMode(result.Mode) is not { } lowerSideband)
+            // DATA-L and DATA-U count only while this app's tuner holds them
+            // (checked below): then the tuner is the operator's tuning aid.
+            bool fsk = RttyMarkCentre.SidebandForFskMode(result.Mode) is not null;
+            if (RttyMarkCentre.SidebandForMode(result.Mode) is not { } lowerSideband)
             {
                 // Not logged as a refusal. The mode advisory has already told the
                 // operator that the radio is not in RTTY, which is the useful
@@ -545,10 +548,14 @@ namespace Yaesu_Web_Control.Services.Rtty
             // the dialog's mark: that is what lets the filter come down to the
             // signal's own width (proved on air 2026-10-11, and on the IC-7300
             // 2026-10-13). Without a tuner holding an FSK mode there is no centre
-            // to aim at, and the old target - the dialog's mark - stands.
+            // to aim at, and the old target - the dialog's mark - stands. In a
+            // DATA mode with no tuner holding it, the dial is the AFSK
+            // software's, and is left alone.
             bool prepared = false;
             double? target = wantedMarkHz;
-            if (await _tunerMode.CentreForAutoAsync(ct) is { } centre)
+            double? held = await _tunerMode.CentreForAutoAsync(ct);
+            if (held is null && !fsk) return false;
+            if (held is { } centre)
             {
                 prepared = true;
                 target = RttyMarkCentre.MarkForCentredPair(result.MarkHz, result.SpaceHz, centre) ?? target;
@@ -638,8 +645,11 @@ namespace Yaesu_Web_Control.Services.Rtty
             // station - and said so with a straight face. Nothing in the audio can
             // reveal that the receiver is in the wrong mode, because the audio is
             // all the analyser gets.
+            // Not said when the tuner itself is holding the radio in that DATA
+            // mode: the operator chose it, and Auto centres there as in RTTY.
             var mode = _state.ModeA ?? "";
-            if (!mode.StartsWith("RTTY", StringComparison.OrdinalIgnoreCase))
+            if (!mode.StartsWith("RTTY", StringComparison.OrdinalIgnoreCase)
+             && !string.Equals(mode, _tunerMode.HeldMode, StringComparison.OrdinalIgnoreCase))
                 notes.Add($"The radio is in {mode}, not RTTY, so the tones you are "
                         + "hearing are not where RTTY would put them. Switch to RTTY "
                         + "and press Auto again.");

@@ -232,7 +232,11 @@ export class SpectrumPane {
     /** What the label says before the frequency and span, e.g. 'MAIN · SDR A'. */
     setName(name) { this._st.name = name ?? ''; this._drawLabel(); }
     setFrequency(hz) { this._st.hz = Number(hz) || 0; this._draw(); }
-    setPassband(mode, widthHz) { this._st.mode = mode ?? ''; this._st.widthHz = widthHz ?? null; this._draw(); }
+    /** dataCentreHz: where the radio centres its DATA filter from the dial; see passbandHz. */
+    setPassband(mode, widthHz, dataCentreHz) {
+        this._st.mode = mode ?? ''; this._st.widthHz = widthHz ?? null; this._st.dataCentreHz = dataCentreHz ?? 0;
+        this._draw();
+    }
     setSpan(hz) {
         const s = Number(hz) || 0;
         if (s === this._st.spanHz) return;
@@ -316,7 +320,7 @@ export class SpectrumPane {
 
     _draw() {
         const s = this._st;
-        const pct = s.passband && passbandPercent(s.mode, s.widthHz, s.spanHz);
+        const pct = s.passband && passbandPercent(s.mode, s.widthHz, s.spanHz, s.dataCentreHz);
         if (pct) { this._pb.style.display = 'block'; this._pb.style.left = pct.left + '%'; this._pb.style.width = pct.width + '%'; }
         else this._pb.style.display = 'none';
         this._axis.textContent = '';
