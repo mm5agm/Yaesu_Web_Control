@@ -19,7 +19,7 @@ import { SpectrumView } from './spectrum-view.js';
 import { spectrumSettingsPanel, tidySpectrumSettings } from './spectrum-settings.js';
 import {
     formatFrequency, sMeterFraction, sMeterText, meterGeometry, LOWER_SCALES,
-    passbandPercent, dialPercent, axisLabels, spanText, widthText, knobAngle,
+    passbandPercent, passbandCentrePercent, dialPercent, axisLabels, spanText, widthText, knobAngle,
 } from './panel-math.js';
 import { mountPanelWindows } from './panel-windows.js';
 import { freqDigits, wheelDigits } from './freq-digits.js';
@@ -567,8 +567,9 @@ export function mountRadioPanel(root, opts = {}) {
         const label = h('div', 'rp-spec-label', '');
         const empty = h('div', 'rp-spec-empty', 'Waiting for data');
         const oob = h('div', 'rp-spec-oob', 'OUT OF BAND');
+        const pbMid = h('div', 'rp-pbcentre');
         const cursor = h('div', 'rp-cursor');
-        spec.append(pb, marksEl, cursor, spotsEl, label, oob, empty);
+        spec.append(pb, pbMid, marksEl, cursor, spotsEl, label, oob, empty);
         const axis = h('div', 'rp-axis');
         const wf = h('div', 'rp-waterfall');
         // The span picker, HOLD and the settings key sit in the waterfall's
@@ -702,7 +703,7 @@ export function mountRadioPanel(root, opts = {}) {
         const pinRead = h('div', 'rp-pin-read');
         spec.append(pinRead);
         sdrView.append(box);
-        panes[d.id] = { box, spec, pb, cursor, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '',
+        panes[d.id] = { box, spec, pb, pbMid, cursor, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '',
             pinHz: null, pinLines, pinRead, reread: xReread };
         drawPin(panes[d.id], 0, 0);
     }
@@ -1089,6 +1090,9 @@ export function mountRadioPanel(root, opts = {}) {
         const pct = pn.sets.get().passband && passbandPercent(st.mode[vfo], st.widthHz[vfo], span, st.dataCentreHz, st.view[vfo]);
         if (pct) { pn.pb.style.display = 'block'; pn.pb.style.left = pct.left + '%'; pn.pb.style.width = pct.width + '%'; }
         else pn.pb.style.display = 'none';
+        const mid = pn.sets.get().passband ? passbandCentrePercent(st.mode[vfo], span, st.dataCentreHz, st.view[vfo]) : null;
+        pn.pbMid.style.display = mid == null ? 'none' : 'block';
+        if (mid != null) pn.pbMid.style.left = mid + '%';
         const dial = dialPercent(st.view[vfo], span);
         pn.cursor.style.display = dial == null ? 'none' : '';
         if (dial != null) pn.cursor.style.left = dial + '%';

@@ -15,7 +15,7 @@
 // pointer naming the frequency a click would send.
 
 import { SpectrumView } from './spectrum-view.js';
-import { axisLabels, dialPercent, formatFrequency, passbandPercent, spanText, spectrumHzAt } from './panel-math.js';
+import { axisLabels, dialPercent, formatFrequency, passbandCentrePercent, passbandPercent, spanText, spectrumHzAt } from './panel-math.js';
 
 function h(tag, cls, text) {
     const el = document.createElement(tag);
@@ -56,8 +56,9 @@ export class SpectrumPane {
         this._pb = h('div', 'rp-passband');
         this._spots = h('div');
         this._empty = h('div', 'rp-spec-empty', opts.empty ?? 'Waiting for data');
+        this._pbMid = h('div', 'rp-pbcentre');
         this._cursor = h('div', 'rp-cursor');
-        spec.append(this._pb, this._cursor, this._spots, this._empty);
+        spec.append(this._pb, this._pbMid, this._cursor, this._spots, this._empty);
         this._axis = h('div', 'rp-axis');
         const wf = h('div', 'rp-waterfall');
         this.el.append(this.bar, spec, this._axis, wf);
@@ -337,6 +338,9 @@ export class SpectrumPane {
         const pct = s.passband && passbandPercent(s.mode, s.widthHz, s.spanHz, s.dataCentreHz, s.view);
         if (pct) { this._pb.style.display = 'block'; this._pb.style.left = pct.left + '%'; this._pb.style.width = pct.width + '%'; }
         else this._pb.style.display = 'none';
+        const mid = s.passband ? passbandCentrePercent(s.mode, s.spanHz, s.dataCentreHz, s.view) : null;
+        this._pbMid.style.display = mid == null ? 'none' : 'block';
+        if (mid != null) this._pbMid.style.left = mid + '%';
         const dial = dialPercent(s.view, s.spanHz);
         this._cursor.style.display = dial == null ? 'none' : '';
         if (dial != null) this._cursor.style.left = dial + '%';

@@ -155,6 +155,22 @@ export function spectrumHzAt(frac, centreHz, spanHz, spots = [], snapHz = 0) {
     return { hz, frac: f, spot };
 }
 
+// Where the fine line at the middle of the DATA filter sits, in percent of a
+// span whose centre is viewOffsetHz from the dial: dataCentreHz above the dial
+// in DATA-U, below it in DATA-L - where Auto and a click on Mark 1415 / 170
+// put the pair (#250). Null in other modes, whose passband is centred on the
+// dial line already, and while it is off the screen.
+export function passbandCentrePercent(mode, spanHz, dataCentreHz, viewOffsetHz = 0) {
+    const m = String(mode || '').toUpperCase(), c = Number(dataCentreHz) || 0;
+    const span = Number(spanHz) || 0;
+    if (c <= 0 || span <= 0) return null;
+    const upper = m === 'DATA-U' || m === 'USB-D' || m === 'DATA-USB';
+    const lower = m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB';
+    if (!upper && !lower) return null;
+    const x = 50 + ((upper ? c : -c) - (Number(viewOffsetHz) || 0)) / span * 100;
+    return x >= 0 && x <= 100 ? x : null;
+}
+
 // Where the dial's line sits across a span whose centre is viewOffsetHz from
 // the dial, in percent; null while it is off the screen.
 export function dialPercent(viewOffsetHz, spanHz) {
