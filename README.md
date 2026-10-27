@@ -335,11 +335,14 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## 2026-10-27 - v2.5.4-pre4 (pre-release)
 
-*Auto centres in DATA-L, as Bruce VK2RT asked after trying pre3. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+*The spectrum centres on the DATA passband, and Auto tunes to your Mark in DATA-L, as Bruce VK2RT asked after trying pre3. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
 
 **RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
 
-- **Auto centres the signal in DATA-L and DATA-U** when MODE holds the radio there: one press moves the dial so the mark and space sit either side of the middle of the DATA filter, as in RTTY-L. Tested receive-only on an FTdx101MP on DDK9: from 200 Hz off either side, each press landed within 3 Hz.
+- **In DATA-L and DATA-U the spectrum is centred on the passband**, not the dial, so the signal you are reading sits in the middle and you can zoom right in; at a 2 kHz span it used to be off the screen. The dial line sits wherever the dial falls, off to one side. The same on the Radio panel. Other modes are centred on the dial as before.
+- **Auto tunes to your Mark in DATA-L and DATA-U** when MODE holds the radio there: one press moves the dial so the mark lands on the tuner's **Mark**, the same place a click puts it. Set the Mark to match your RTTY software (1415 for MMTTY) and the tones arrive where it expects them. If the signal is already within 25 Hz, Auto leaves the dial and the Mark alone. Tested receive-only on an FTdx101MP: from 200 Hz off either side, each press landed within 3 Hz.
+- **A click in DATA-U** puts the dial below the signal, so the tones fall inside the DATA passband; it used to tune onto the signal and the decoder printed noise.
+- **The tuner's trace is red for mark and amber for space** on a blue face, with the labels in the same colours.
 - **The DATA passband is drawn where the radio listens.** In DATA-L and DATA-U the shading sits on the radio's DATA SHIFT (1500 Hz by default) from the dial, not just beside it, so the tones fall inside it. The same on the Radio panel.
 - **SPAN** is a list in the spectrum's label, beside the frequency.
 
