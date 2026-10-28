@@ -14,6 +14,7 @@
 **Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release), [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release), [v2.5.4-pre3](#2026-10-26---v254-pre3-pre-release) and [v2.5.4-pre4](#2026-10-27---v254-pre4-pre-release)):
 
 - **RTTY Contest, a new GUI for RTTY contesting** *(pre2 to pre4, still being tested)*. Only what a contest RTTY operator uses, on one screen: the frequency, band keys for MAIN and SUB, the spectrum over the waterfall, and the RTTY tuner docked at the side with its decoded text. Each part pops out into a window of its own, and named layouts put every window back on its own monitor. Bruce VK2RT asked for it. [§5.24](USER_MANUAL.md#524-rtty-contest).
+- **Three changes from Bruce VK2RT's testing** *(pre5)*. **From radio** and **Auto** are in the RTTY Tuner heading, so **Tones only** keeps them. The scope's arms no longer lean when the signal is on tune, so mark and space straighten at the same dial setting (on Bruce's FTdx101D they were 50 Hz apart). And **FIXED** on RTTY Contest holds the spectrum still while the dial moves.
 - **The Radio panel's CW window has the memory keyer** (M1 to M5, with SAVE), and **BREAK-IN is a key** that steps OFF → SEMI → FULL. The mouse wheel steps SPEED and PITCH. [§5.23](USER_MANUAL.md#523-radio-panel).
 - **The pop-out spectrum window tunes on a click or the mouse wheel**, with a readout of the frequency under the mouse, and has the panel's SCOPE settings on each pane. [§5.23](USER_MANUAL.md#523-radio-panel).
 - **A corner grip scales the Radio panel** to any size.
@@ -376,7 +377,7 @@ Known limits: as for pre2. Receive has been tested on an FTdx101MP only, and not
 - **One screen:** the frequency, mode, Mark/Shift and compact meters along the top, **Main / Sub**, **DX SPOTS** on and off, **SPAN**, the spectrum over the waterfall, and the RTTY tuner docked at the side.
 - **Band keys for MAIN and SUB** go to the RTTY part of the band in RTTY-L. 60 m and 4 m (2 m and 70 cm on the FT-991A) go to the radio's band memory, then RTTY-L.
 - **Tuning:** click a signal on the spectrum or the waterfall, turn the mouse wheel over the spectrum or over any digit of the frequency, or click the frequency and type one. A click never changes the mode ([#169](https://github.com/mm5agm/Yaesu_Web_Control/discussions/169)).
-- **REF, AUTO, RANGE and FIT** set the scale in dB above the noise floor. **WF ON TOP** swaps the spectrum and the waterfall.
+- **REF, AUTO, RANGE and FIT** set the scale in dB above the noise floor. **WF ON TOP** swaps the spectrum and the waterfall. **FIXED** holds the spectrum still while the dial moves, so stations stay where you saw them.
 - **DECODE** on the tuner's bar shows the decoded text with the tuner.
 - **Pop-outs:** the spectrum, the waterfall, both, or the tuner each go into a window of their own. The tuner can also go **ON TOP**, above your logger, where the browser allows it.
 - **Sizes and layouts:** drag the edges and corner of the spectrum and the tuner. **LAYOUT** saves all of it by name, including which windows are open and where.
