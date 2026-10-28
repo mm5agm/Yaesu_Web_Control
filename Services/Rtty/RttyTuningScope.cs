@@ -27,6 +27,17 @@ namespace RadioWebControl.Core.Services.Rtty
     /// levels are taken from a second, unlimited pair of filters, because a
     /// clipped signal is always full scale and cannot say how much is there.
     ///
+    /// Each filter lets a little of the other tone through, and what decides
+    /// whether that tilts an arm is its phase, not how little there is. With
+    /// two sections of a fixed width the leak arrived about 150 degrees round,
+    /// so on tune each arm leaned 4 to 5 degrees, and making the mark arm flat
+    /// and the space arm upright took two dial settings some 60 Hz apart, where
+    /// MMTTY drew both straight at once (Bruce VK2RT, FTdx101D, 2026-10-28).
+    /// Four sections now, each as wide as puts the other tone 270 degrees
+    /// round - in quadrature with the tone the filter is for - so on tune the
+    /// leak only opens the arm a hair and cannot lean it. Four sections of
+    /// that width are about as wide overall as the two of 100 Hz were.
+    ///
     /// What comes out is the filtered waveforms themselves, not a summary of
     /// them: at 2 kHz a tone needs many points per cycle to draw an ellipse
     /// rather than a polygon, so points are kept at half the input rate and the
@@ -34,17 +45,25 @@ namespace RadioWebControl.Core.Services.Rtty
     /// the scope - each time it redraws.
     ///
     /// Thread-safe: Process is expected on an audio thread and Snapshot on a
-    /// request thread. The work done under the lock is nine biquad sections a
-    /// sample, a few tens of microseconds per 10 ms frame.
+    /// request thread. The work done under the lock is seventeen biquad
+    /// sections a sample, a few tens of microseconds per 10 ms frame.
     /// </summary>
     public sealed class RttyTuningScope
     {
         /// <summary>Points kept, at half the input rate: 200 ms at 48 kHz.</summary>
         public const int RingPoints = 4800;
 
+        private const int Sections = 4;
+
+        /// <summary>
+        /// The limiter's channel is never narrower than this, so at a narrow
+        /// shift both tones still sit well inside it.
+        /// </summary>
+        private const double NarrowestChannelHz = 200.0;
+
         private readonly object _gate = new();
         private readonly int _sampleRate;
-        private readonly double _bandwidthHz;
+        private readonly double _widestSectionHz;
 
         private readonly bool _limit;
 
@@ -70,23 +89,24 @@ namespace RadioWebControl.Core.Services.Rtty
         /// <param name="sampleRate">Input rate in Hz.</param>
         /// <param name="markHz">Mark tone, audio Hz.</param>
         /// <param name="spaceHz">Space tone, audio Hz.</param>
-        /// <param name="bandwidthHz">
-        /// Width of each filter section. Two sections are cascaded, so the
-        /// overall -3 dB width is about two thirds of this. 100 Hz gives about
-        /// 65 Hz overall - close to the tone filters in a 45-baud terminal
-        /// unit, which is what makes the arms of the cross thin.
+        /// <param name="widestSectionHz">
+        /// The most a filter section may be widened to put the other tone in
+        /// quadrature. At 170 Hz shift that needs about 135 to 155 Hz, which
+        /// makes about 60 Hz overall - close to the tone filters in a 45-baud
+        /// terminal unit. A wide shift would need far more, and gets this
+        /// instead; its leak is then too small to lean anything.
         /// </param>
         /// <param name="limiter">
         /// Clip ahead of the filters that draw the figure, as a terminal unit
         /// did. Off, the figure follows the signal's level.
         /// </param>
-        public RttyTuningScope(int sampleRate, double markHz, double spaceHz, double bandwidthHz = 100.0, bool limiter = true)
+        public RttyTuningScope(int sampleRate, double markHz, double spaceHz, double widestSectionHz = 200.0, bool limiter = true)
         {
             if (sampleRate <= 0) throw new ArgumentOutOfRangeException(nameof(sampleRate));
-            if (bandwidthHz <= 0) throw new ArgumentOutOfRangeException(nameof(bandwidthHz));
+            if (widestSectionHz <= 0) throw new ArgumentOutOfRangeException(nameof(widestSectionHz));
 
             _sampleRate = sampleRate;
-            _bandwidthHz = bandwidthHz;
+            _widestSectionHz = widestSectionHz;
             _limit = limiter;
             _levelAlpha = 1.0 - Math.Exp(-1.0 / (0.05 * sampleRate));
             SetTones(markHz, spaceHz);
@@ -112,17 +132,19 @@ namespace RadioWebControl.Core.Services.Rtty
             {
                 MarkHz = markHz;
                 SpaceHz = spaceHz;
-                _mark = new Bandpass(_sampleRate, markHz, _bandwidthHz);
-                _space = new Bandpass(_sampleRate, spaceHz, _bandwidthHz);
-                _markLimited = new Bandpass(_sampleRate, markHz, _bandwidthHz);
-                _spaceLimited = new Bandpass(_sampleRate, spaceHz, _bandwidthHz);
+                double markWidth  = QuadratureWidth(markHz, spaceHz);
+                double spaceWidth = QuadratureWidth(spaceHz, markHz);
+                _mark = new Bandpass(_sampleRate, markHz, markWidth, Sections);
+                _space = new Bandpass(_sampleRate, spaceHz, spaceWidth, Sections);
+                _markLimited = new Bandpass(_sampleRate, markHz, markWidth, Sections);
+                _spaceLimited = new Bandpass(_sampleRate, spaceHz, spaceWidth, Sections);
 
                 // Over both tones and no wider: the clipper shares its output
                 // among everything it is given, so noise let in here takes
                 // figure away from the signal. Twice the shift keeps both
                 // tones well inside it and equally placed.
                 double centre = (markHz + spaceHz) / 2.0;
-                double width = Math.Max(2.0 * Math.Abs(spaceHz - markHz), 2.0 * _bandwidthHz);
+                double width = Math.Max(2.0 * Math.Abs(spaceHz - markHz), NarrowestChannelHz);
                 _channel = new Bandpass(_sampleRate, centre, Math.Min(width, 2.0 * centre - 1.0), sections: 1);
             }
         }
@@ -192,41 +214,72 @@ namespace RadioWebControl.Core.Services.Rtty
             10.0 * Math.Log10(Math.Max(meanSquare, 1e-12));
 
         /// <summary>
-        /// Two cascaded RBJ band-pass sections, 0 dB at the centre. One section
-        /// alone has skirts too wide at a 170 Hz shift: each filter would pass
-        /// the other tone only about 11 dB down, and the arms of the cross
-        /// would be visibly open. Two sections put it about 22 dB down. The
-        /// limiter's channel filter uses one, where gentle skirts are wanted.
+        /// The section width at which a filter on <paramref name="centreHz"/>
+        /// turns <paramref name="otherHz"/> 270 degrees round, over all four
+        /// sections, or the widest allowed if that is short of it. Each
+        /// section's phase there grows from 0 towards 90 degrees as the
+        /// section narrows, so halving finds it.
         /// </summary>
-        private struct Bandpass
+        private double QuadratureWidth(double centreHz, double otherHz)
+        {
+            double target = 1.5 * Math.PI / Sections;
+            if (Bandpass.PhaseAt(_sampleRate, centreHz, _widestSectionHz, otherHz) >= target)
+                return _widestSectionHz;
+
+            double narrow = 1.0, wide = _widestSectionHz;
+            for (int i = 0; i < 50; i++)
+            {
+                double mid = (narrow + wide) / 2.0;
+                if (Bandpass.PhaseAt(_sampleRate, centreHz, mid, otherHz) > target) narrow = mid;
+                else wide = mid;
+            }
+            return (narrow + wide) / 2.0;
+        }
+
+        /// <summary>
+        /// Cascaded RBJ band-pass sections, 0 dB at the centre. The tone
+        /// filters use four, which with their quadrature width put the other
+        /// tone of a 170 Hz pair about 33 dB down; the limiter's channel
+        /// filter uses one, where gentle skirts are wanted.
+        /// </summary>
+        private sealed class Bandpass
         {
             private readonly double _b0, _a1, _a2;
-            private readonly bool _second;
-            private double _x1a, _x2a, _y1a, _y2a;
-            private double _x1b, _x2b, _y1b, _y2b;
+            private readonly double[] _state;   // x1, x2, y1, y2 per section
 
-            public Bandpass(int sampleRate, double centreHz, double bandwidthHz, int sections = 2)
+            public Bandpass(int sampleRate, double centreHz, double bandwidthHz, int sections)
             {
-                _second = sections >= 2;
+                (_b0, _a1, _a2) = Coefficients(sampleRate, centreHz, bandwidthHz);
+                _state = new double[4 * sections];
+            }
+
+            private static (double b0, double a1, double a2) Coefficients(int sampleRate, double centreHz, double bandwidthHz)
+            {
                 double w0 = 2.0 * Math.PI * centreHz / sampleRate;
                 double alpha = Math.Sin(w0) * bandwidthHz / (2.0 * centreHz);
                 double a0 = 1.0 + alpha;
-                _b0 = alpha / a0;                 // b1 = 0, b2 = -b0
-                _a1 = -2.0 * Math.Cos(w0) / a0;
-                _a2 = (1.0 - alpha) / a0;
-                _x1a = _x2a = _y1a = _y2a = 0;
-                _x1b = _x2b = _y1b = _y2b = 0;
+                return (alpha / a0, -2.0 * Math.Cos(w0) / a0, (1.0 - alpha) / a0);   // b1 = 0, b2 = -b0
+            }
+
+            /// <summary>How far round one section turns a tone at <paramref name="hz"/>, radians, 0 to pi/2.</summary>
+            public static double PhaseAt(int sampleRate, double centreHz, double bandwidthHz, double hz)
+            {
+                var (b0, a1, a2) = Coefficients(sampleRate, centreHz, bandwidthHz);
+                var z1 = System.Numerics.Complex.FromPolarCoordinates(1.0, -2.0 * Math.PI * hz / sampleRate);
+                var h = b0 * (1.0 - z1 * z1) / (1.0 + a1 * z1 + a2 * z1 * z1);
+                return Math.Abs(h.Phase);
             }
 
             public double Next(double x)
             {
-                double y = _b0 * (x - _x2a) - _a1 * _y1a - _a2 * _y2a;
-                _x2a = _x1a; _x1a = x; _y2a = _y1a; _y1a = y;
-                if (!_second) return y;
-
-                double z = _b0 * (y - _x2b) - _a1 * _y1b - _a2 * _y2b;
-                _x2b = _x1b; _x1b = y; _y2b = _y1b; _y1b = z;
-                return z;
+                var s = _state;
+                for (int k = 0; k < s.Length; k += 4)
+                {
+                    double y = _b0 * (x - s[k + 1]) - _a1 * s[k + 2] - _a2 * s[k + 3];
+                    s[k + 1] = s[k]; s[k] = x; s[k + 3] = s[k + 2]; s[k + 2] = y;
+                    x = y;
+                }
+                return x;
             }
         }
     }

@@ -289,6 +289,23 @@ export function alignBins(bins, offsetHz, spanHz) {
     return out;
 }
 
+// A fixed spectrum: the screen stays on the RF it shows while the dial moves
+// inside it, so a station keeps its place and the operator can find it again
+// by where it sits (Bruce VK2RT, 2026-10-28). `held` is the last answer, or
+// null; `wantedHz` is the view offset the pane would have centred
+// (setViewOffset). The screen moves only when there is no held centre, the
+// span changed, or what would be centred has gone more than `edge` of the
+// span from the middle - a band change or a jump along it. Returns the new
+// held centre and the view offset that draws it.
+export function holdView(held, dialHz, wantedHz, spanHz, edge = 0.35) {
+    const dial = Number(dialHz) || 0;
+    const span = Number(spanHz) || 0;
+    const wanted = dial + (Number(wantedHz) || 0);
+    const keep = held && span > 0 && held.spanHz === span && Math.abs(wanted - held.centreHz) <= edge * span;
+    const centreHz = keep ? held.centreHz : wanted;
+    return { centreHz, spanHz: span, viewHz: centreHz - dial };
+}
+
 // Needle positions for the TX meters, matching LOWER_SCALES' five legends at
 // 0, 1/4, 1/2, 3/4 and full scale. VDD takes its dial as `range`, matching
 // rangeLegends(range.min, range.max).
