@@ -25,6 +25,18 @@ public static class AppVersion
     /// </summary>
     public static readonly string Display = ComputeDisplay(Current, BuildTag);
 
+    /// <summary>
+    /// What the top bar, About page, tray and log show: <see cref="Display"/>,
+    /// plus " (local build)" when no tag was baked in, so a bench build from
+    /// the repo can't be mistaken for the release of the same number. Keep
+    /// <see cref="Display"/> in the x-app-version meta: the update banner
+    /// parses that, and someone building from source still wants the banner.
+    /// </summary>
+    public static readonly string Label = ComputeLabel(Display, BuildTag);
+
+    internal static string ComputeLabel(string display, string buildTag) =>
+        string.IsNullOrWhiteSpace(buildTag) ? $"{display} (local build)" : display;
+
     private static string ReadBuildTag() =>
         typeof(AppVersion).Assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()

@@ -37,6 +37,14 @@ public class AppVersionDisplayTests
     public void MismatchedTag_IsShownBesideCurrent_NotHidden(string tag, string expected)
         => Assert.Equal(expected, AppVersion.ComputeDisplay("2.5.2", tag));
 
+    [Theory]
+    [InlineData("",            "2.5.2",      "2.5.2 (local build)")]
+    [InlineData("  ",          "2.5.2",      "2.5.2 (local build)")]
+    [InlineData("v2.5.2",      "2.5.2",      "2.5.2")]
+    [InlineData("v2.5.2-pre2", "2.5.2-pre2", "2.5.2-pre2")]
+    public void Label_MarksOnlyAnUntaggedBuild(string tag, string display, string expected)
+        => Assert.Equal(expected, AppVersion.ComputeLabel(display, tag));
+
     [Fact]
     public void Display_IsDerivedFromCurrentAndBuildTag()
         => Assert.Equal(AppVersion.ComputeDisplay(AppVersion.Current, AppVersion.BuildTag), AppVersion.Display);

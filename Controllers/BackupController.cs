@@ -92,7 +92,7 @@ namespace Yaesu_Web_Control.Controllers
                 using (var w = new StreamWriter(readme.Open()))
                 {
                     w.WriteLine($"YWC user data backup — created {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
-                    w.WriteLine($"App version: {AppVersion.Display}");
+                    w.WriteLine($"App version: {AppVersion.Label}");
                     w.WriteLine();
                     w.WriteLine("To restore: open YWC → Settings → Import full backup, and pick this zip.");
                     w.WriteLine("Files included: " + included);
