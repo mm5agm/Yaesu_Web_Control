@@ -87,6 +87,40 @@ namespace RadioWebControl.Core.Tests.Rtty
             Assert.True(Db(y / x) > 15, $"mark arm only {Db(y / x):F1} dB below space");
         }
 
+        /// <summary>
+        /// On tune each arm lies along its axis, not merely mostly on it: the
+        /// operator straightens one arm at a time, so a lean puts mark and
+        /// space at different dial settings. Two fixed 100 Hz sections leaned
+        /// both about 4 degrees, 1415/1585 as well as 2125/2295, and Bruce
+        /// VK2RT found mark flat and space upright 50 Hz apart on the dial
+        /// (FTdx101D, 2026-10-28).
+        /// </summary>
+        [Theory]
+        [InlineData(2125.0, 2295.0)]
+        [InlineData(1415.0, 1585.0)]
+        [InlineData(1275.0, 1445.0)]
+        [InlineData(2125.0, 2325.0)]
+        public void OnTuneNeitherArmLeans(double mark, double space)
+        {
+            double markLean  = Lean(Tone(mark),  mark, space);
+            double spaceLean = Lean(Tone(space), mark, space) - 90.0;
+            _out.WriteLine($"{mark}/{space}: mark arm {markLean:F2} deg, space arm {spaceLean:F2} deg off upright");
+            Assert.InRange(markLean,  -1.0, 1.0);
+            Assert.InRange(spaceLean, -1.0, 1.0);
+        }
+
+        /// <summary>The long axis of the figure over the last 50 ms, degrees from X, -90 to 90.</summary>
+        private static double Lean(float[] audio, double mark, double space)
+        {
+            var scope = new RttyTuningScope(Rate, mark, space);
+            scope.Process(audio);
+            var p = scope.Snapshot(scope.PointRate / 20).Points;
+            double sxx = 0, syy = 0, sxy = 0;
+            for (int k = 0; k < p.Length; k += 2) { sxx += p[k] * p[k]; syy += p[k + 1] * p[k + 1]; sxy += p[k] * p[k + 1]; }
+            double deg = 0.5 * Math.Atan2(2.0 * sxy, sxx - syy) * 180.0 / Math.PI;
+            return deg < -45.0 ? deg + 180.0 : deg;
+        }
+
         [Fact]
         public void HalfwayBetweenTheTonesTheFigureLeansAtFortyFiveDegrees()
         {
