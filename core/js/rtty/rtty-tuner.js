@@ -82,8 +82,6 @@ export class RttyTuner {
         this._autoBusy  = false;     // an Auto analysis is outstanding
         this._pushBusy    = false;   // a radio-tones write is outstanding
         this._pushPending = null;    // the newest tones to write once it finishes
-        this._pushQuiet   = false;   // hand the note back rather than post it
-        this._pushNote    = null;    // what the radio took, for the caller to fold in
         this._modeNoteShown = null;  // the host's last note about the radio, once said
         this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
         this._restartAt   = 0;       // Date.now() of the last automatic restart
@@ -499,20 +497,13 @@ export class RttyTuner {
             this._saveSettings();
             this._send('start');
 
-            // The radio's menu goes with it where it can, and clears
-            // _radioApplied either way so the four-second sync does not drag any
-            // of this back.
-            //
-            // Awaited, and asked to stay quiet, because there is one status line
-            // and two things to say. Left to post its own note it would land a
-            // few hundred ms after the summary below, overwrite it, and reset the
-            // hold to its own - and the part of the summary worth reading is the
-            // one it was wiping: the warning about which tone is mark, which is
-            // the only part the operator has to act on.
+            // The radio's menu is left alone. The radio transmits FSK on its
+            // mark and shift, so a 425 written for a utility station heard on
+            // receive would go out on the operator's next call (DDK9,
+            // 2026-10-28); the server says when the shifts differ, in advice.
+            // _radioApplied is cleared so the four-second sync does not drag
+            // Auto's figures back to the menu's; From radio hands it back.
             this._radioApplied = null;
-            this._pushNote = null;
-            this._pushQuiet = true;
-            try { await this._pushToRadio(); } finally { this._pushQuiet = false; }
 
             const shift = r.snappedShiftHz == null ? `${shiftHz} Hz measured` : `${shiftHz} Hz`;
             const baud  = r.speedUnmeasured
@@ -528,7 +519,6 @@ export class RttyTuner {
             const doubt = r.toneMargin <= 0.08
                 ? ' Which tone is mark is a guess here - if it does not copy, try Rev.'
                 : '';
-            const note = this._pushNote ? ` ${this._pushNote}` : '';
 
             // Said plainly, because the radio has just retuned itself and an
             // operator who is not told why has a radio that moved on its own.
@@ -546,7 +536,7 @@ export class RttyTuner {
 
             // Longer than the usual hold: this is up to four clauses, and the ones
             // that ask the operator to do something are at the end of them.
-            this._setStatus(`Auto: ${parts.join(', ')}.${centre}${note}${advice}${doubt}`, 14000);
+            this._setStatus(`Auto: ${parts.join(', ')}.${centre}${advice}${doubt}`, 14000);
         } catch {
             this._setStatus('Cannot reach the server.', 5000);
         } finally {
@@ -669,14 +659,7 @@ export class RttyTuner {
     async _pushToRadio() {
         if (!this._radioEl) return;                  // this app has no radio endpoint
 
-        // Quiet mode hands the note back in _pushNote instead of posting it, so a
-        // caller with its own one-line summary can fold this into it. A field
-        // rather than an argument because the latest-wins continuation at the end
-        // of this function re-enters with none, and it has to stay quiet too.
-        const say = text => {
-            if (this._pushQuiet) this._pushNote = text;
-            else this._setStatus(text, 4000);
-        };
+        const say = text => this._setStatus(text, 4000);
 
         const want = { markHz: this._settings.markHz, shiftHz: this._settings.shiftHz };
         if (this._pushBusy) { this._pushPending = want; return; }
