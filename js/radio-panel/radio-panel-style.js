@@ -210,6 +210,7 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-spectrum{flex:1;min-height:200px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}
 .rp-spectrum canvas,.rp-waterfall canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .rp-passband{position:absolute;top:0;bottom:0;background:${v('passband')};border-left:1px solid ${v('passband-edge')};border-right:1px solid ${v('passband-edge')};display:none}
+.rp-pbcentre{position:absolute;top:0;bottom:0;width:1px;background:${v('passband-edge')};display:none}
 .rp-cursor{position:absolute;top:0;bottom:0;left:50%;width:1px;background:${v('cursor')}}
 .rp-spot{position:absolute;transform:translateX(-50%);font:600 16px ${SANS};letter-spacing:.06em;color:${v('spot-fg')};background:${v('spot-bg')};border-radius:3px;padding:2px 7px;white-space:nowrap}
 .rp-spec-label{position:absolute;left:10px;top:8px;font:400 15px ${MONO};color:${v('spec-label')}}

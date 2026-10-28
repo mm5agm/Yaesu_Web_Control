@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    formatFrequency, sMeterFraction, sMeterText, passbandPercent, passbandHz, dialPercent,
+    formatFrequency, sMeterFraction, sMeterText, passbandPercent, passbandHz, dialPercent, passbandCentrePercent,
     axisLabels, spectrumHzAt, spanText, widthText, knobAngle, binsToColumns, percentile,
     meterGeometry, waterfallColour,
 } from '../../js/radio-panel/panel-math.js';
@@ -69,6 +69,20 @@ test('passband and dial line on a span centred off the dial (DATA, #250)', () =>
     assert.equal(dialPercent(-1500, 5000), 80);
     assert.equal(dialPercent(0, 5000), 50);
     assert.equal(dialPercent(700, 0), 50);
+});
+
+test('the fine line at the middle of the DATA passband (#250)', () => {
+    // Centred on the filter: mid-screen in both DATA modes.
+    assert.equal(passbandCentrePercent('DATA-L', 2000, 1500, -1500), 50);
+    assert.equal(passbandCentrePercent('DATA-U', 2000, 1500, 1500), 50);
+    // Centred on the dial: 1500 Hz below it at a 5 kHz span.
+    assert.equal(passbandCentrePercent('DATA-L', 5000, 1500, 0), 20);
+    assert.equal(passbandCentrePercent('DATA-U', 2000, 1500, 0), null);   // off the screen
+    // Not in other modes, nor without a data centre or a span.
+    assert.equal(passbandCentrePercent('RTTY-L', 2000, 1500, 0), null);
+    assert.equal(passbandCentrePercent('USB', 5000, 1500, 0), null);
+    assert.equal(passbandCentrePercent('DATA-L', 5000, 0, 0), null);
+    assert.equal(passbandCentrePercent('DATA-L', 0, 1500, 0), null);
 });
 
 test('passband: USB above the dial, LSB below, CW centred', () => {

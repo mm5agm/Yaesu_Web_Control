@@ -180,7 +180,7 @@ const CSS = `
 .rc-page{height:100vh;display:flex;flex-direction:column}
 .rc-top{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:6px 10px;background:var(--rp-key-bg);border-bottom:1px solid var(--rp-key-border)}
 .rc-title{font:700 16px ${SANS};letter-spacing:.1em;color:var(--rp-key-fg);white-space:nowrap}
-.rc-freq{appearance:none;border:1px solid transparent;background:none;border-radius:4px;padding:0 4px;font:500 26px ${MONO};color:var(--rp-title);cursor:text;white-space:nowrap}
+.rc-freq{appearance:none;border:1px solid transparent;background:none;border-radius:4px;padding:0 4px;font:500 26px ${MONO};color:var(--rp-key-fg);cursor:text;white-space:nowrap}
 .rc-freq small{font-size:18px;color:var(--rp-chip-fg)}
 .rc-freq:hover{border-color:var(--rp-soft-border)}
 .rc-freq.wheel span[data-step]:hover{background:var(--rp-accent-bg);border-radius:3px;cursor:ns-resize}
@@ -188,7 +188,7 @@ const CSS = `
 .rc-brow{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
 .rc-brow .rc-lbl{min-width:3.2em}
 .rc-brow .rp-spop-key{min-height:26px;min-width:44px;padding:1px 6px;font-size:14px}
-.rc-freq-in{width:9em;font:500 22px ${MONO};background:var(--rp-spec-bg);color:var(--rp-title);border:1px solid var(--rp-highlight);border-radius:4px;padding:1px 6px}
+.rc-freq-in{width:9em;font:500 22px ${MONO};background:var(--rp-spec-bg);color:var(--rp-freq);border:1px solid var(--rp-highlight);border-radius:4px;padding:1px 6px}
 .rc-chip{font:600 15px ${SANS};letter-spacing:.06em;color:var(--rp-chip-fg);border:1px solid var(--rp-well-border);border-radius:4px;padding:2px 8px;white-space:nowrap}
 .rc-chip.tx{background:var(--rp-tx);border-color:var(--rp-tx);color:var(--rp-tx-fg)}
 .rc-meters{display:flex;gap:8px;align-items:center}
@@ -227,7 +227,7 @@ const CSS = `
 .rc-scope .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
 .rc-scope .rc-pm{min-width:28px;padding:1px 0}
 .rc-step,.rc-mode{font:500 14px ${SANS};min-height:28px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:1px 4px}
-.rc-mode{font:600 15px ${SANS};letter-spacing:.06em;color:var(--rp-chip-fg)}
+.rc-mode{font:600 15px ${SANS};letter-spacing:.06em}
 .rc-out{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:500 18px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
 .rc-out[hidden]{display:none}
 .rc-tbar{display:flex;gap:6px;justify-content:flex-end;padding:0 0 6px}
