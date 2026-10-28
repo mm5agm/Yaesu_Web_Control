@@ -128,7 +128,7 @@ export function startYaesuSpectrumFeed(cfg) {
             cfg.onSpan?.(vfo, span);
             let bins = v.rfOrdered ? v.bins : Array.prototype.slice.call(v.bins).reverse();
             if (r.freq[vfo] > 0) {
-                const view = viewFor(vfo, v);
+                const view = p.viewFor(viewFor(vfo, v));
                 p.setViewOffset(view);
                 bins = alignBins(bins, offsetFor(vfo, v) - view, span);
             }

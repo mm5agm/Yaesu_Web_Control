@@ -1430,6 +1430,7 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 - **REF** moves the bottom of the trace up or down from the noise floor. **AUTO** lets the floor follow the noise; off, it stays where it is.
 - **RANGE** is how many dB the trace covers. **FIT** sets it so the strongest signal of the last few seconds just fits, as does a double-click on the bar between the spectrum and the waterfall.
 - **WF ON TOP** puts the waterfall above the spectrum.
+- **FIXED** holds the spectrum still while the dial moves. Click a signal and only the passband and the dial line move, so the stations stay where you saw them. The spectrum moves on only when the passband gets near an edge, or you change the span or the band. Off, the spectrum is centred as described under Tuning.
 - **STEP** is how far one notch of the mouse wheel moves the dial over the spectrum, 1 Hz to 1 kHz.
 - **TRACE** is how thick the spectrum's line is: 0.5, 0.8 (the start), 1.2 or 2.
 - **BANDS** chooses the band keys and whether SUB shows (above).
@@ -4282,6 +4283,8 @@ That is a real RTTY station on 80 m, received on my FTdx101MP in RTTY-L. The two
 | A dim, fuzzy ball in the middle | Noise. Nothing is landing in the tone filters. |
 
 The figure grows to fill the face whatever the signal level. So that plain noise does not look as solid as a signal, the trace is drawn dim whenever little of the audio is landing in the two filters.
+
+On tune, mark lies flat and space stands upright at the same dial setting. Until v2.5.4 each arm leaned about 4 degrees even on tune, so straightening mark and then space could put the dial in two places about 50 Hz apart (Bruce VK2RT found it on an FTdx101D). The filters are now shaped so the other tone no longer tilts them.
 
 Under the scope, a line gives the two filter frequencies and three levels in dBFS: mark filter (**M**), space filter (**S**) and everything the receiver is passing (**in**). The line under that says in words which of the cases above you are looking at.
 
