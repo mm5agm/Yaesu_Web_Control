@@ -334,6 +334,19 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 [RELEASE_HISTORY.md](RELEASE_HISTORY.md); their installers are still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
 
+## 2026-10-29 - v2.5.4-pre5 (pre-release)
+
+*Three changes Bruce VK2RT asked for after trying pre4: the tuner's buttons stay in Tones only, the scope's arms straighten at the same dial setting, and a FIXED spectrum. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **From radio and Auto are in the RTTY Tuner heading**, so they are still there when the tuner shows **Tones only**.
+- **The scope's arms no longer lean when the signal is on tune.** Each arm leaned about 4 degrees, so getting mark flat and then space upright put the dial in two places; on Bruce's FTdx101D they were 50 Hz apart. The tone filters are shaped differently now and both arms straighten at the same dial setting.
+- **FIXED**, in the row above the spectrum, holds the spectrum still while the dial moves: a click moves the passband and the dial line, not the picture. It moves on when the passband gets near an edge, or when you change the span or the band. It is kept in your layouts.
+- **The frequency readout is all one colour.**
+
+Known limits: receive has been tested on an FTdx101MP only, the scope change has been checked in tests but not yet on air, and nothing has been transmitted from this GUI yet.
+
 ## 2026-10-27 - v2.5.4-pre4 (pre-release)
 
 *The spectrum centres on the DATA passband with a fine line at its middle, and Auto tunes to your Mark in DATA-L, as Bruce VK2RT asked after trying pre3. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
