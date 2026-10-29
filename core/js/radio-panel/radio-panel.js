@@ -13,6 +13,7 @@
 // No accessibility layer by design (Colin, 2026-10-13): this page starts from
 // scratch; Classic keeps the screen-reader and voice work.
 
+import { appVersion } from './app-version.js';
 import { dropKey } from './drop-key.js';
 import { injectRadioPanelStyle } from './radio-panel-style.js';
 import { applyTheme, themeIds, resolveTheme, DEFAULT_THEME, SYSTEM_THEME } from './radio-panel-themes.js';
@@ -303,6 +304,8 @@ export function mountRadioPanel(root, opts = {}) {
     const brand = h('div', 'rp-brand');
     const model = h('span', 'rp-brand-model', opts.model ?? '');
     brand.append(h('span', 'rp-brand-short', opts.brandShort ?? ''), Object.assign(h('span', 'rp-legend', opts.brandName ?? ''), { style: 'color:var(--rp-legend-dim)' }), model);
+    const version = appVersion();
+    if (version) brand.append(Object.assign(h('span', 'rp-brand-ver', 'v' + version), { title: 'The version running' }));
 
     // Reads VIEWS, never the current view's name, so it is plain there
     // are others to pick.

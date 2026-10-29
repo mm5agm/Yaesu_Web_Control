@@ -71,6 +71,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-top{height:50px;display:flex;align-items:center;justify-content:space-between;gap:24px}
 .rp-brand{display:flex;align-items:baseline;gap:14px}
 .rp-brand-short{font-size:34px;font-weight:700;letter-spacing:.18em;color:${v('title')}}
+.rp-brand-ver{font:500 14px ${SANS};letter-spacing:.04em;color:${v('legend-dim')}}
 .rp-brand-model{font:600 23px ${SANS};letter-spacing:.1em;color:${v('accent')}}
 .rp-lamps{display:flex;align-items:center;gap:18px}
 .rp-lamps>span,.rp-lampkey{display:flex;align-items:center;gap:7px}
