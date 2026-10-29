@@ -1405,7 +1405,7 @@ The Radio panel has none of the screen-reader or voice-control work of the Class
 
 *New in v2.5.4-pre2, with more in v2.5.4-pre3 and v2.5.4-pre4, and still being tested.*
 
-**RTTY Contest** has only what a contest RTTY operator uses, on one screen: the frequency, the spectrum over the waterfall, and the RTTY tuner docked at the side. Pick it from **Views** on the Radio panel ([§5.23](#523-radio-panel)), or go to `http://localhost:8080/rtty-contest`. **Views** on the page itself goes back to the other GUIs.
+**RTTY Contest** has only what a contest RTTY operator uses, on one screen: the frequency, the spectrum over the waterfall, and the RTTY tuner docked at the side. Pick it from **Views** on the Radio panel ([§5.23](#523-radio-panel)), or go to `http://localhost:8080/rtty-contest`. **VIEWS**, next to the RTTY CONTEST title, goes back to the other GUIs.
 
 While it is open, its tuner keeps the radio in the mode chosen in **MODE** (below). CW Reader Mode can't switch the radio to CW while the page is open, so close it, or use another GUI, for CW.
 
