@@ -205,6 +205,8 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *                                          api.windows.slot(groupId, panelId)
  *   onWindowPanel(groupId, panelId, shown) told when a window panel shows or hides
  *   onWindowPopout(groupId, panelId)       a window panel's ⇱ key (panels with popout set)
+ *   onWindowLaunch(groupId) -> boolean     a launcher key; true if the adapter dealt
+ *                                          with it (the window is popped out)
  *   onSpectrumPopout(), onSpectrumBack()   optional: a ⧉ key on the spectrum, and the
  *                                          BRING BACK key shown while setSpectrumAway(true)
  *   spectrumTuneTo(hz, paneId)             optional: the Hz a spectrum click at hz will put
@@ -1272,6 +1274,7 @@ export function mountRadioPanel(root, opts = {}) {
         board: panel, launcher, groups: opts.windows ?? [], store, prefix,
         onShow: opts.onWindowPanel,
         onPopout: opts.onWindowPopout,
+        onLaunch: opts.onWindowLaunch,
     });
 
     setTheme(store.get(prefix + 'theme', DEFAULT_THEME));
