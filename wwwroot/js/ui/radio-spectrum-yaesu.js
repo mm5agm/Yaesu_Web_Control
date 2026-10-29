@@ -13,7 +13,8 @@ import { spanText } from '/js/radio-panel/panel-math.js';
 import { dialStepper } from '/js/radio-panel/dial-stepper.js';
 import { post, startYaesuSpectrumFeed } from '/js/ui/spectrum-feed-yaesu.js';
 
-const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
+// SpectrumSpanPlan.ValidSpans.
+const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
 
 // The board's STEP (radio-panel-yaesu.js), saved in this browser.
 const STEP_KEY = 'ywc.radioPanel.stepHz';

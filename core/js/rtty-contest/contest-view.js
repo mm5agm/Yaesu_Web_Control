@@ -289,6 +289,8 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  *        changed here; vfo is the receiver on screen for a perReceiver one
  * @param {{id:string, label:string}[]} [opts.meters]  compact bars in the strip, e.g. S, PO, SWR, ALC
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
+ * @param {{group?:string, items:{label:string, href:string, title?:string}[]}[]} [opts.menu]  the main
+ *        page: a MENU key at the end of the strip, the app's other pages, each in a new tab
  * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
  * @param {HTMLElement} [opts.decode]  the decoded text, in a box of its own under the
  *        tuner while DECODE is on, with its own POP OUT
@@ -409,6 +411,13 @@ export function mountContestView(root, opts) {
         top.append(layoutSel);
     }
 
+    // MENU: the app's other pages, as on the radio panel, so Settings is one
+    // click away (Bruce VK2RT, Discussion #257, 2026-10-29). Each opens in a
+    // new tab, so the contest page keeps running behind it.
+    if (isMain && opts.menu?.length)
+        top.append(dropKey('MENU', 'Settings, memories, the manual and the other pages, each in a new tab',
+            opts.menu, { newTab: true }));
+
     // The scope row. Each control acts on the receiver on screen.
     const scope = h('div', 'rc-scope');
     const key = (text, title, onClick, cls = '') => { const b = btn('rp-spop-key ' + cls, text, onClick); b.title = title; return b; };
@@ -431,7 +440,7 @@ export function mountContestView(root, opts) {
     const swapKey = key('WF ON TOP', 'Put the waterfall above the spectrum', () => setOrder(!wfFirst), 'rc-swap');
     // Bruce VK2RT: a station is remembered by where it sits, so the screen
     // can hold still while the dial moves; it moves on only near an edge.
-    const fixedKey = key('FIXED', 'Hold the spectrum still while the dial moves: only the passband and the dial line move, until they near an edge. Off, the spectrum stays centred', () => setFixed(!fixed), 'rc-fixed');
+    const fixedKey = key('FIXED', 'Hold the spectrum still while the dial moves: only the passband and the dial line move, until they reach the edge. Off, the spectrum stays centred', () => setFixed(!fixed), 'rc-fixed');
     const stepSel = h('select', 'rc-step');
     stepSel.title = 'How far one notch of the mouse wheel moves the dial';
     stepSel.setAttribute('aria-label', 'Wheel step');

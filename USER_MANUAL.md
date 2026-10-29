@@ -1405,7 +1405,7 @@ The Radio panel has none of the screen-reader or voice-control work of the Class
 
 *New in v2.5.4-pre2, with more in v2.5.4-pre3 and v2.5.4-pre4, and still being tested.*
 
-**RTTY Contest** has only what a contest RTTY operator uses, on one screen: the frequency, the spectrum over the waterfall, and the RTTY tuner docked at the side. Pick it from **Views** on the Radio panel ([§5.23](#523-radio-panel)), or go to `http://localhost:8080/rtty-contest`. **VIEWS**, next to the RTTY CONTEST title, goes back to the other GUIs.
+**RTTY Contest** has only what a contest RTTY operator uses, on one screen: the frequency, the spectrum over the waterfall, and the RTTY tuner docked at the side. Pick it from **Views** on the Radio panel ([§5.23](#523-radio-panel)), or go to `http://localhost:8080/rtty-contest`. **VIEWS**, next to the RTTY CONTEST title, goes back to the other GUIs. **MENU**, beside it, has the same pages as the Radio panel's MENU (Settings, Application Setup, Memories, Labels, Meter Calibration, Diagnostics, the User Manual and About), each in a new tab, so the contest page keeps running behind it.
 
 While it is open, its tuner keeps the radio in the mode chosen in **MODE** (below). CW Reader Mode can't switch the radio to CW while the page is open, so close it, or use another GUI, for CW.
 
@@ -1416,7 +1416,7 @@ While it is open, its tuner keeps the radio in the mode chosen in **MODE** (belo
 - **Meters:** S, and PO, SWR and ALC while transmitting. **METERS** hides or shows them.
 - **Main / Sub** chooses which receiver's spectrum is on screen, where there are two SDRs. The strip follows it. **BANDS** (below) can hide SUB.
 - **DX SPOTS** switches the spot tags on the spectrum on and off.
-- **SPAN** is a list in the label at the top of the spectrum, beside the frequency, and sets the SDR's span.
+- **SPAN** is a list in the label at the top of the spectrum, beside the frequency, and sets the SDR's span. As well as the radio's own spans it has **30 kHz** and **40 kHz**, to fill the jump from 20 to 50; they are on the Radio panel and in Settings too, but not on Classic's span buttons.
 - **LAYOUT** saves and recalls named layouts (below).
 
 **The band keys**
@@ -1430,7 +1430,7 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 - **REF** moves the bottom of the trace up or down from the noise floor. **AUTO** lets the floor follow the noise; off, it stays where it is.
 - **RANGE** is how many dB the trace covers. **FIT** sets it so the strongest signal of the last few seconds just fits, as does a double-click on the bar between the spectrum and the waterfall.
 - **WF ON TOP** puts the waterfall above the spectrum.
-- **FIXED** holds the spectrum still while the dial moves. Click a signal and only the passband and the dial line move, so the stations stay where you saw them. The spectrum moves on only when the passband gets near an edge, or you change the span or the band. With an SDR on the radio's IF the picture is filled to both edges; until v2.5.4-pre6 the side away from the dial could go blank. Off, the spectrum is centred as described under Tuning.
+- **FIXED** holds the spectrum still while the dial moves. Click a signal and only the passband and the dial line move, so the stations stay where you saw them. The spectrum moves on only when the passband reaches the edge of the screen, or you change the span or the band. With an SDR on the radio's IF the picture is filled to both edges; until v2.5.4-pre6 the side away from the dial could go blank. Off, the spectrum is centred as described under Tuning.
 - **STEP** is how far one notch of the mouse wheel moves the dial over the spectrum, 1 Hz to 1 kHz.
 - **TRACE** is how thick the spectrum's line is: 0.5, 0.8 (the start), 1.2 or 2.
 - **BANDS** chooses the band keys and whether SUB shows (above).

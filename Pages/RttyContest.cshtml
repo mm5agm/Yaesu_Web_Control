@@ -98,6 +98,21 @@
                 { label: 'Radio', href: '/radio' },
                 { label: 'RTTY Contest', href: '/rtty-contest', on: true },
             ],
+            // The same pages as the Radio panel's MENU.
+            menu: [
+                { group: 'SETUP', items: [
+                    { label: 'Settings', href: '/Settings' },
+                    { label: 'Application Setup', href: '/ApplicationSetup' },
+                    { label: 'Memories', href: '/Memories' },
+                    { label: 'Labels', href: '/Labels' },
+                    { label: 'Meter Calibration', href: '/MeterCalibration' },
+                    { label: 'Diagnostics', href: '/Diagnostics' },
+                ] },
+                { group: 'HELP', items: [
+                    { label: 'User Manual', href: '/UserManual' },
+                    { label: 'About', href: '/About' },
+                ] },
+            ],
         });
 
         // The tuner, docked. It pauses rather than closes when the radio
