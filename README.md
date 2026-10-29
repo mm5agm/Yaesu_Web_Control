@@ -200,16 +200,7 @@ These are one-time steps — once the app is installed you won't see them again.
 
 ---
 
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
-
-- Committers and reviewers: [Colin Campbell (mm5agm)](https://github.com/mm5agm)
-- Approvers: [Colin Campbell (mm5agm)](https://github.com/mm5agm)
-
-Only the Windows installer and the program inside it, built by GitHub Actions from this repository, are signed. Each release is approved by hand before it is signed. Signing is being set up: releases so far are unsigned, which is why the warnings above appear.
-
-### Privacy
+## Privacy
 
 Yaesu Web Control runs on your own PC and does not send your data anywhere. It makes only these network connections:
 
