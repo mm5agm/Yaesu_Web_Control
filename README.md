@@ -200,6 +200,25 @@ These are one-time steps — once the app is installed you won't see them again.
 
 ---
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [Colin Campbell (mm5agm)](https://github.com/mm5agm)
+- Approvers: [Colin Campbell (mm5agm)](https://github.com/mm5agm)
+
+Only the Windows installer and the program inside it, built by GitHub Actions from this repository, are signed. Each release is approved by hand before it is signed. Signing is being set up: releases so far are unsigned, which is why the warnings above appear.
+
+### Privacy
+
+Yaesu Web Control runs on your own PC and does not send your data anywhere. It makes only these network connections:
+
+- Between your browser and the PC it runs on, on your own network, for the web interface.
+- From your browser to GitHub (api.github.com), to see whether a newer release exists. It reads the release list; nothing about you or your station is sent. See [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
+- To a DX cluster, only if you turn DX spots on and enter a cluster yourself. It logs in with the callsign you enter, as every DX cluster requires.
+
+---
+
 ## 📡 Spectrum display with an SDR
 
 A real-time spectrum and waterfall, fed by an SDR connected to the transceiver's 9 MHz
