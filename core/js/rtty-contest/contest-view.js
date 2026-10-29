@@ -1,7 +1,7 @@
 // contest-view.js - the RTTY Contest view: only what a contest RTTY operator
 // uses, on one screen. A top strip (frequency, mode or a MODE list, Mark/Shift, compact
 // meters, Main/Sub, DX SPOTS, Views), a row of scope controls (ref
-// level, auto floor, range, fit, swap, wheel step), the spectrum, with a
+// level, auto floor, range, fit, swap, fixed, wheel step), the spectrum, with a
 // SPAN list in its label, over the waterfall with a grip between them, and
 // the RTTY tuner docked at the side.
 //
@@ -14,7 +14,7 @@
 // spectrum, the waterfall, both, and the tuner. A window is this same view
 // with opts.part set, showing that part and a DOCK key. The main page hides
 // what is out, and the windows follow its choices - receiver, spots, levels,
-// swap, step - through storage events, so there is one set of them. The
+// swap, fixed, step - through storage events, so there is one set of them. The
 // tuner can also go On top (pip-dock.js), where the browser allows it.
 // DECODE on the tuner's bar shows the decoded text with it (opts.onDecode:
 // the app shows its reader and starts or stops the decoder). Between the
@@ -158,6 +158,7 @@ export function tidyLayout(l) {
         meters: o.meters !== false,
         spots: o.spots !== false,
         wfFirst: o.wfFirst === true,
+        fixed: o.fixed === true,
         decode: o.decode === true,
         split: split > 0 && split < 1 ? split : 0.5,
         step: STEP_CHOICES_HZ.includes(Number(o.step)) ? Number(o.step) : DEFAULT_STEP_HZ,
@@ -180,15 +181,15 @@ const CSS = `
 .rc-page{height:100vh;display:flex;flex-direction:column}
 .rc-top{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:6px 10px;background:var(--rp-key-bg);border-bottom:1px solid var(--rp-key-border)}
 .rc-title{font:700 16px ${SANS};letter-spacing:.1em;color:var(--rp-key-fg);white-space:nowrap}
-.rc-freq{appearance:none;border:1px solid transparent;background:none;border-radius:4px;padding:0 4px;font:500 26px ${MONO};color:var(--rp-title);cursor:text;white-space:nowrap}
-.rc-freq small{font-size:18px;color:var(--rp-chip-fg)}
+.rc-freq{appearance:none;border:1px solid transparent;background:none;border-radius:4px;padding:0 4px;font:500 26px ${MONO};color:var(--rp-chip-fg);cursor:text;white-space:nowrap}
+.rc-freq small{font-size:18px}
 .rc-freq:hover{border-color:var(--rp-soft-border)}
 .rc-freq.wheel span[data-step]:hover{background:var(--rp-accent-bg);border-radius:3px;cursor:ns-resize}
 .rc-bands{flex:none;display:flex;flex-direction:column;gap:4px;padding:6px 10px 0}
 .rc-brow{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
 .rc-brow .rc-lbl{min-width:3.2em}
 .rc-brow .rp-spop-key{min-height:26px;min-width:44px;padding:1px 6px;font-size:14px}
-.rc-freq-in{width:9em;font:500 22px ${MONO};background:var(--rp-spec-bg);color:var(--rp-title);border:1px solid var(--rp-highlight);border-radius:4px;padding:1px 6px}
+.rc-freq-in{width:9em;font:500 22px ${MONO};background:var(--rp-spec-bg);color:var(--rp-freq);border:1px solid var(--rp-highlight);border-radius:4px;padding:1px 6px}
 .rc-chip{font:600 15px ${SANS};letter-spacing:.06em;color:var(--rp-chip-fg);border:1px solid var(--rp-well-border);border-radius:4px;padding:2px 8px;white-space:nowrap}
 .rc-chip.tx{background:var(--rp-tx);border-color:var(--rp-tx);color:var(--rp-tx-fg)}
 .rc-meters{display:flex;gap:8px;align-items:center}
@@ -227,7 +228,7 @@ const CSS = `
 .rc-scope .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
 .rc-scope .rc-pm{min-width:28px;padding:1px 0}
 .rc-step,.rc-mode{font:500 14px ${SANS};min-height:28px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:1px 4px}
-.rc-mode{font:600 15px ${SANS};letter-spacing:.06em;color:var(--rp-chip-fg)}
+.rc-mode{font:600 15px ${SANS};letter-spacing:.06em}
 .rc-out{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:500 18px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
 .rc-out[hidden]{display:none}
 .rc-tbar{display:flex;gap:6px;justify-content:flex-end;padding:0 0 6px}
@@ -430,6 +431,9 @@ export function mountContestView(root, opts) {
     rangeGrp.title = 'dB from the bottom of the trace to the top';
     const fitKey = key('FIT', 'Fit the range to the strongest signal of the last few seconds (or double-click the bar between the spectrum and the waterfall)', () => fitNow(), 'rc-fit');
     const swapKey = key('WF ON TOP', 'Put the waterfall above the spectrum', () => setOrder(!wfFirst), 'rc-swap');
+    // Bruce VK2RT: a station is remembered by where it sits, so the screen
+    // can hold still while the dial moves; it moves on only near an edge.
+    const fixedKey = key('FIXED', 'Hold the spectrum still while the dial moves: only the passband and the dial line move, until they near an edge. Off, the spectrum stays centred', () => setFixed(!fixed), 'rc-fixed');
     const stepSel = h('select', 'rc-step');
     stepSel.title = 'How far one notch of the mouse wheel moves the dial';
     stepSel.setAttribute('aria-label', 'Wheel step');
@@ -448,6 +452,7 @@ export function mountContestView(root, opts) {
     traceSel.addEventListener('change', () => setTrace(Number(traceSel.value), true));
     if (part !== 'waterfall') scope.append(refGrp, autoKey, rangeGrp, fitKey);
     if (isMain || part === 'both') scope.append(swapKey);
+    scope.append(fixedKey);
     scope.append(stepSel);
     if (part !== 'waterfall') scope.append(traceSel);
     if (isMain && opts.bands?.length && opts.bandRows?.length) {
@@ -735,6 +740,7 @@ export function mountContestView(root, opts) {
 
     const split = Number(store.get(own + 'split', '0.5')) || 0.5;
     let wfFirst = store.get(own + 'wfFirst', '0') === '1';
+    let fixed = store.get(own + 'fixed', '0') === '1';
     const levels = {};
     for (const id of ids) {
         let saved = null;
@@ -768,6 +774,7 @@ export function mountContestView(root, opts) {
             },
         });
         pane.setName(r.name);
+        pane.setFixed(fixed);
         pane.setSplit(split);
         const l = levels[r.id];
         pane.setLevels({ auto: l.auto, ref: l.ref });
@@ -841,6 +848,8 @@ export function mountContestView(root, opts) {
         autoKey.setAttribute('aria-pressed', l.auto ? 'true' : 'false');
         swapKey.classList.toggle('on', wfFirst);
         swapKey.setAttribute('aria-pressed', wfFirst ? 'true' : 'false');
+        fixedKey.classList.toggle('on', fixed);
+        fixedKey.setAttribute('aria-pressed', fixed ? 'true' : 'false');
     }
     function setLevel(patch) {
         const l = levels[receiver] = tidyLevels({ ...levels[receiver], ...patch });
@@ -864,6 +873,12 @@ export function mountContestView(root, opts) {
         wfFirst = on;
         store.set(own + 'wfFirst', on ? '1' : '0');
         for (const p of Object.values(panes)) p.setOrder(on);
+        drawScope();
+    }
+    function setFixed(on) {
+        fixed = !!on;
+        store.set(own + 'fixed', fixed ? '1' : '0');
+        for (const p of Object.values(panes)) p.setFixed(fixed);
         drawScope();
     }
     // The pop-outs (main page only).
@@ -998,6 +1013,7 @@ export function mountContestView(root, opts) {
         if (name === 'receiver') setReceiver(v, false);
         else if (name === 'spots') setShowSpots(v === '1');
         else if (name === 'wfFirst') setOrder(v === '1');
+        else if (name === 'fixed') setFixed(v === '1');
         else if (name === 'split') { const f = Number(v); if (f > 0) for (const p of Object.values(panes)) p.setSplit(f); }
         else if (name in BOX_SIZES) setSize(name, v, false);
         else if (name === 'decode') setDecode(v === '1', false);
@@ -1068,7 +1084,7 @@ export function mountContestView(root, opts) {
             kind: 'rtty-contest',
             version: 1,
             ...sizes,
-            meters: metersShown, spots: showSpots, wfFirst, decode: decoding,
+            meters: metersShown, spots: showSpots, wfFirst, fixed, decode: decoding,
             split: Number(store.get(own + 'split', '0.5')) || 0.5,
             step: stepHz,
             trace: tracePx,
@@ -1082,6 +1098,7 @@ export function mountContestView(root, opts) {
         setMetersShown(l.meters);
         setShowSpots(l.spots);
         setOrder(l.wfFirst);
+        setFixed(l.fixed);
         if (decodeKey && l.decode !== decoding) setDecode(l.decode, true);
         store.set(own + 'split', String(l.split));
         for (const p of Object.values(panes)) p.setSplit(l.split);

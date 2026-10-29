@@ -1430,6 +1430,7 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 - **REF** moves the bottom of the trace up or down from the noise floor. **AUTO** lets the floor follow the noise; off, it stays where it is.
 - **RANGE** is how many dB the trace covers. **FIT** sets it so the strongest signal of the last few seconds just fits, as does a double-click on the bar between the spectrum and the waterfall.
 - **WF ON TOP** puts the waterfall above the spectrum.
+- **FIXED** holds the spectrum still while the dial moves. Click a signal and only the passband and the dial line move, so the stations stay where you saw them. The spectrum moves on only when the passband gets near an edge, or you change the span or the band. Off, the spectrum is centred as described under Tuning.
 - **STEP** is how far one notch of the mouse wheel moves the dial over the spectrum, 1 Hz to 1 kHz.
 - **TRACE** is how thick the spectrum's line is: 0.5, 0.8 (the start), 1.2 or 2.
 - **BANDS** chooses the band keys and whether SUB shows (above).
@@ -4283,6 +4284,8 @@ That is a real RTTY station on 80 m, received on my FTdx101MP in RTTY-L. The two
 
 The figure grows to fill the face whatever the signal level. So that plain noise does not look as solid as a signal, the trace is drawn dim whenever little of the audio is landing in the two filters.
 
+On tune, mark lies flat and space stands upright at the same dial setting. Until v2.5.4 each arm leaned about 4 degrees even on tune, so straightening mark and then space could put the dial in two places about 50 Hz apart (Bruce VK2RT found it on an FTdx101D). The filters are now shaped so the other tone no longer tilts them.
+
 Under the scope, a line gives the two filter frequencies and three levels in dBFS: mark filter (**M**), space filter (**S**) and everything the receiver is passing (**in**). The line under that says in words which of the cases above you are looking at.
 
 ### 22.2 Mark, Shift, Speed and Rev
@@ -4349,7 +4352,7 @@ There are four different kinds of answer, and the status line distinguishes them
 
 > **Why one tone out of range gets its own answer.** It is the one failure that does not look like one. With both tones present, a signal Auto cannot read gives a low score and is refused. With only one tone present, it measures that tone against the loudest thing left beside it — which is a piece of the same tone's own skirt — and the keying in it fits a speed beautifully, so the answer comes back *confident* and wrong: on the bench a true 450 Hz shift at 50 baud was reported as 115 Hz at 100 baud, and scored 0.92 out of 1. It no longer writes anything at all in this case, and says which case it is, because the dial correction it makes from the tone it can hear is usually enough that a second press gets it right.
 
-Auto measures rather than choosing from a list, so a station on no standard shift or speed is reported as it is, shown in the box labelled *measured*, and used that way. It will also tick or untick **Rev** for you, and push the mark and shift into the radio's menu where there is a rung for them, exactly as if you had typed them ([§22.2](#222-mark-shift-speed-and-rev)).
+Auto measures rather than choosing from a list, so a station on no standard shift or speed is reported as it is, shown in the box labelled *measured*, and used that way. It will also tick or untick **Rev** for you. It does **not** write the mark or shift to the radio's own RTTY menu, as typing them does ([§22.2](#222-mark-shift-speed-and-rev)): the radio transmits FSK on that shift, so a 425 written for a utility station you were listening to would go out on your next contest call. Type the shift if you want the radio's own decoder on it, and **From radio** puts the tuner back on the menu's figures. Up to v2.5.4-pre4 Auto did write them.
 
 **And when it is sure of what it heard, it tunes the signal in.** The dial moves so that the mark tone arrives on the tuner's **Mark** — 2125 Hz unless you have changed it — and the status line says which way it went and by how much: *"Moved the dial 66 Hz down to put the mark on 2125 Hz - it was arriving at 2191 Hz."* The figure then redraws upright, because the signal is now where the filters are.
 

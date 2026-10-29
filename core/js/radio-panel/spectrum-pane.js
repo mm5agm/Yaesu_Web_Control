@@ -15,7 +15,7 @@
 // pointer naming the frequency a click would send.
 
 import { SpectrumView } from './spectrum-view.js';
-import { axisLabels, dialPercent, formatFrequency, passbandCentrePercent, passbandPercent, spanText, spectrumHzAt } from './panel-math.js';
+import { axisLabels, dialPercent, formatFrequency, holdView, passbandCentrePercent, passbandPercent, spanText, spectrumHzAt } from './panel-math.js';
 
 function h(tag, cls, text) {
     const el = document.createElement(tag);
@@ -247,6 +247,19 @@ export class SpectrumPane {
         this._st.view = v;
         this._draw();
     }
+    /**
+     * Fixed, the screen holds still while the dial moves inside it (holdView);
+     * off, it follows the dial. The feed asks viewFor what to pass to
+     * setViewOffset, and so sees the same either way.
+     */
+    setFixed(on) { this._fixed = !!on; this._held = null; }
+    get fixed() { return !!this._fixed; }
+    /** The view offset to draw, given the one the feed would centre on. */
+    viewFor(wantedHz) {
+        if (!this._fixed) return Number(wantedHz) || 0;
+        this._held = holdView(this._held, this._st.hz, wantedHz, this._st.spanHz);
+        return this._held.viewHz;
+    }
     /** dataCentreHz: where the radio centres its DATA filter from the dial; see passbandHz. */
     setPassband(mode, widthHz, dataCentreHz) {
         this._st.mode = mode ?? ''; this._st.widthHz = widthHz ?? null; this._st.dataCentreHz = dataCentreHz ?? 0;
@@ -306,7 +319,7 @@ export class SpectrumPane {
         this._view.push(bins);
     }
 
-    clear() { this._view.clear(); }
+    clear() { this._view.clear(); this._held = null; }
 
     /** Show or hide the waterfall; hidden, the trace takes its room. */
     setWaterfall(show) { this.el.classList.toggle('no-wf', !show); this._placeJumps(); }

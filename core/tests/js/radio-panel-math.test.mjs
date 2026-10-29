@@ -242,3 +242,22 @@ test('spectrumHzAt names the frequency under the pointer, or a spot near it', ()
     assert.equal(spectrumHzAt(0.5, 0, 10_000), null);
     assert.equal(spectrumHzAt(0.5, 14_074_000, 0), null);
 });
+
+test('holdView keeps the screen still until what is wanted nears an edge', async () => {
+    const { holdView } = await import('../../js/radio-panel/panel-math.js');
+    // First frame: centred where the pane wants it, 1500 Hz above the dial.
+    let h = holdView(null, 14_080_000, 1500, 10_000);
+    assert.deepEqual(h, { centreHz: 14_081_500, spanHz: 10_000, viewHz: 1500 });
+    // A click 2 kHz up: the screen stays, the dial line moves.
+    h = holdView(h, 14_082_000, 1500, 10_000);
+    assert.equal(h.centreHz, 14_081_500);
+    assert.equal(h.viewHz, -500);
+    // Further than 0.35 of the span from the middle: it moves.
+    h = holdView(h, 14_085_000, 1500, 10_000);
+    assert.equal(h.centreHz, 14_086_500);
+    // A new span starts again.
+    h = holdView(h, 14_085_500, 1500, 5_000);
+    assert.equal(h.centreHz, 14_087_000);
+    // No dial or span yet: whatever is wanted.
+    assert.equal(holdView(null, 0, 0, 0).viewHz, 0);
+});
