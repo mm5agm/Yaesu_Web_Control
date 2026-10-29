@@ -69,6 +69,9 @@ Set-Location $repoRoot
 function Remove-Split {
     git show-ref --verify --quiet "refs/heads/$Tmp"
     if ($LASTEXITCODE -eq 0) { git branch -D $Tmp | Out-Null }
+    # git subtree leaves its working notes behind, one folder per run.
+    $cache = Join-Path (git rev-parse --path-format=absolute --git-common-dir) 'subtree-cache'
+    if (Test-Path $cache) { Remove-Item -Recurse -Force $cache }
 }
 
 # The last split: "<app commit> <core commit>". Shared by this clone's worktrees.
