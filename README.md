@@ -334,6 +334,16 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 [RELEASE_HISTORY.md](RELEASE_HISTORY.md); their installers are still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
 
+## 2026-10-29 - v2.5.4-pre6 (pre-release)
+
+*FIXED fills the spectrum to both edges with an SDR, as Bruce VK2RT asked after trying pre5. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **With FIXED on, the side of the spectrum away from the dial is no longer blank.** The SDR's picture was cut out around the dial, so once the dial moved off the middle there was nothing to show on the far side. Now it is cut around the held picture. FIXED still re-centres when the dial gets into the outer 15% on either side.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from this GUI yet.
+
 ## 2026-10-29 - v2.5.4-pre5 (pre-release)
 
 *Three changes Bruce VK2RT asked for after trying pre4: the tuner's buttons stay in Tones only, the scope's arms straighten at the same dial setting, and a FIXED spectrum. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
