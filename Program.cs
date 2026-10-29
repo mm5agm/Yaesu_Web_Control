@@ -910,6 +910,22 @@ try
             sdr.RequestRestart(target);
         return Results.Ok();
     });
+
+    // FIXED on RTTY Contest: how far (RF Hz) the held picture sits from the
+    // usual centre, so the SDR crop is cut around what the pane shows and not
+    // around the dial. Without it a held view runs off the crop and the edge
+    // is blank (Bruce VK2RT, Discussion #250, 2026-10-29). 0 puts it back.
+    app.MapPost("/api/sdr/hold", async (
+        [Microsoft.AspNetCore.Mvc.FromQuery] long rfHz,
+        [Microsoft.AspNetCore.Mvc.FromQuery] string? sdrId,
+        Yaesu_Web_Control.Services.Sdr.SdrManager sdr) =>
+    {
+        var target = (sdrId ?? "A").ToUpperInvariant();
+        if (target != "A" && target != "B") return Results.BadRequest("sdrId must be A or B.");
+        if (Math.Abs(rfHz) > 1_000_000) return Results.BadRequest("rfHz out of range.");
+        await sdr.SetHoldAsync(target, rfHz);
+        return Results.Ok();
+    });
 #endif
 
     // Open browser automatically when app starts (but not when debugging in Visual Studio)
