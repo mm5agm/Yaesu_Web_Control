@@ -16,6 +16,10 @@
     Report whether core/ here and Radio_Web_Control_Core main have diverged.
     Read-only: fetches, splits to a temp branch, compares, cleans up.
 
+.PARAMETER Verify
+    With -Check: split the quick way and the whole-history way and say whether
+    they agree. The quick way is trusted because this agrees.
+
 .PARAMETER Pull
     Bring Radio_Web_Control_Core main down into core/.
 
@@ -29,7 +33,15 @@
 
 .NOTES
     git subtree split walks the whole history of this repo - over a thousand
-    commits - and prints nothing for a couple of minutes. It is not hung.
+    commits - and prints nothing for ten minutes or more. It is not hung.
+
+    So after each split the script remembers which app commit became which
+    core commit (.git/core-sync-last, this clone only), and the next split
+    starts there: it hands git subtree a throwaway commit carrying the same
+    git-subtree-mainline / git-subtree-split trailers a --rejoin would leave,
+    so only the commits since are walked. Nothing is added to any branch. If
+    the remembered commit is not in this branch's history, or is missing, the
+    whole history is split as before. -Check -Verify compares the two ways.
 
     Deliberately no 2>$null anywhere: in Windows PowerShell 5.1 redirecting a
     native command's stderr wraps each line in an ErrorRecord and trips
@@ -39,6 +51,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Check')]
 param(
     [Parameter(ParameterSetName = 'Check')][switch]$Check,
+    [Parameter(ParameterSetName = 'Check')][switch]$Verify,
     [Parameter(ParameterSetName = 'Pull')][switch]$Pull,
     [Parameter(ParameterSetName = 'Push')][switch]$Push
 )
@@ -58,13 +71,46 @@ function Remove-Split {
     if ($LASTEXITCODE -eq 0) { git branch -D $Tmp | Out-Null }
 }
 
-function Split-Core {
+# The last split: "<app commit> <core commit>". Shared by this clone's worktrees.
+$Marker = Join-Path (git rev-parse --path-format=absolute --git-common-dir) 'core-sync-last'
+
+# The remembered split, if it can be built on from HEAD; otherwise $null.
+function Get-Marker {
+    if (-not (Test-Path $Marker)) { return $null }
+    $parts = (Get-Content $Marker -TotalCount 1) -split ' '
+    if ($parts.Count -ne 2 -or $parts[0] -notmatch '^[0-9a-f]{40}$' -or $parts[1] -notmatch '^[0-9a-f]{40}$') { return $null }
+    git cat-file -e "$($parts[1])^{commit}"
+    if ($LASTEXITCODE -ne 0) { return $null }
+    git merge-base --is-ancestor $parts[0] HEAD
+    if ($LASTEXITCODE -ne 0) { return $null }
+    return $parts
+}
+
+# Remember that HEAD splits to $tip. Not a subtree pull's squash commit: git
+# subtree already reads that one's own trailers, and the two would collide.
+function Set-Marker([string]$tip) {
+    $head = git rev-parse HEAD
+    $body = git log -1 --format=%B $head
+    if ($body -match 'git-subtree-split:') { return }
+    Set-Content -Path $Marker -Value "$head $tip" -Encoding ascii
+}
+
+function Split-Core([switch]$Full) {
     Remove-Split
-    Write-Host 'Splitting core/ out of the history. A couple of minutes, no output. Not hung.' -ForegroundColor DarkGray
+    $from = if ($Full) { $null } else { Get-Marker }
+    $rev = 'HEAD'
+    if ($from) {
+        Write-Host "Splitting core/ from the last split ($($from[0].Substring(0, 9))) on. Seconds." -ForegroundColor DarkGray
+        $tree = git rev-parse 'HEAD^{tree}'
+        $rev = git commit-tree $tree -p HEAD -m 'core-sync: split from here' -m "git-subtree-dir: $Prefix" -m "git-subtree-mainline: $($from[0])" -m "git-subtree-split: $($from[1])"
+        if ($LASTEXITCODE -ne 0) { Fail 'Could not make the start-here commit.' }
+    } else {
+        Write-Host 'Splitting core/ out of the whole history. Ten minutes or more, no output. Not hung.' -ForegroundColor DarkGray
+    }
     # subtree split prints the resulting commit id on stdout even under -q.
     # Left unswallowed it becomes part of this function's return value and the
     # caller ends up with two hashes in one string.
-    git subtree split --prefix=$Prefix -b $Tmp -q | Out-Null
+    git subtree split --prefix=$Prefix $rev -b $Tmp -q | Out-Null
     if ($LASTEXITCODE -ne 0) { Fail 'git subtree split failed.' }
     $tip = git rev-parse $Tmp
     if ($LASTEXITCODE -ne 0) { Fail 'Could not read the split branch.' }
@@ -103,6 +149,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Push') {
 
     if ($tip -eq $upstream) {
         Write-Host 'Nothing to push - core/ already matches Radio_Web_Control_Core main.' -ForegroundColor Green
+        Set-Marker $tip
         Remove-Split; exit 0
     }
 
@@ -115,6 +162,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Push') {
     if ($LASTEXITCODE -ne 0) { Remove-Split; Fail 'Push rejected.' }
 
     Write-Host 'Pushed.' -ForegroundColor Green
+    Set-Marker $tip
     Write-Host 'Now pull it into the sibling app so both carry the same core:' -ForegroundColor Cyan
     Write-Host '    ./scripts/core-sync.ps1 -Pull' -ForegroundColor Cyan
     Remove-Split; exit 0
@@ -123,6 +171,17 @@ if ($PSCmdlet.ParameterSetName -eq 'Push') {
 # -Check (the default)
 $tip      = Split-Core
 $upstream = Get-Upstream
+
+if ($Verify) {
+    $whole = Split-Core -Full
+    if ($whole -ne $tip) {
+        Remove-Split
+        if (Test-Path $Marker) { Remove-Item $Marker }
+        Fail "The quick split ($tip) and the whole-history split ($whole) differ. Forgot the last split; the next one walks the whole history."
+    }
+    Write-Host "The quick split and the whole-history split agree ($($tip.Substring(0, 9)))." -ForegroundColor Green
+}
+Set-Marker $tip
 
 $ahead  = git rev-list --count "$upstream..$tip"
 $behind = git rev-list --count "$tip..$upstream"
