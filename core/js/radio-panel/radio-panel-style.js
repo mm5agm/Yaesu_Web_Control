@@ -131,7 +131,9 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-wpanel-title{font:700 14px ${SANS};letter-spacing:.14em;color:${v('lcd-fg')};white-space:nowrap;margin-right:auto;overflow:hidden;text-overflow:ellipsis}
 .rp-wbtn{appearance:none;border:1px solid ${v('chip-border')};background:${v('soft-bg')};color:${v('soft-fg')};border-radius:3px;width:22px;height:18px;font:600 12px sans-serif;cursor:pointer;padding:0;line-height:1;flex:none}
 .rp-wbtn[hidden]{display:none}
-.rp-wbtn.rp-wx{border-color:${v('key-border')};background:${v('key-bg')};color:${v('tx')};font-weight:700}
+.rp-wbtn.rp-wx{border-color:${v('key-border')};background:${v('key-bg')};position:relative;font-size:0}
+.rp-wbtn.rp-wx::before,.rp-wbtn.rp-wx::after{content:'';position:absolute;left:50%;top:50%;width:12px;height:2px;border-radius:1px;background:${v('tx')};transform:translate(-50%,-50%) rotate(45deg)}
+.rp-wbtn.rp-wx::after{transform:translate(-50%,-50%) rotate(-45deg)}
 .rp-wnote{font:500 14px ${SANS};color:${v('legend-dim')}}
 .rp-wpanel-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:7px;padding:8px 10px;overflow:auto;font:500 15px ${SANS};color:${v('text')}}
 /* What goes in a window panel: the adapter builds these, the theme colours them. */
