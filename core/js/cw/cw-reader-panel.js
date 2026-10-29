@@ -89,6 +89,11 @@ export class CwReaderPanel {
         this._startBtn?.addEventListener('click', () => this._toggleRunning());
         this._clearBtn?.addEventListener('click', () => this._clear());
 
+        // Save writes the copy to a text file, as a record of the QSO
+        // (IWC Discussion #86). Optional, like the buttons below.
+        document.getElementById('cwReaderSaveBtn')
+            ?.addEventListener('click', () => this._save());
+
         // Reader Mode sets the radio up for decoding and remembers what to put
         // back. The button is optional: the host page may not offer it, and an
         // app whose radio cannot be driven this way simply omits it.
@@ -186,6 +191,33 @@ export class CwReaderPanel {
         } catch (e) {
             this._showError(e.message);
         }
+    }
+
+    /// Download what is in the pane as a .txt file. The file goes wherever
+    /// the browser saves downloads, so on a tablet it lands on the tablet,
+    /// not the radio's PC. It holds the pane's text, the last MAX_RENDERED
+    /// characters, exactly as decoded: no colour, nothing corrected.
+    _save() {
+        const text = this._text.trim();
+        if (!text) {
+            this._autoNote = { text: 'Nothing to save yet.', problem: false, until: Date.now() + 4000 };
+            this._setStatus(this._autoNote.text, null, null);
+            return;
+        }
+        // UTC, as a log is kept: the file name sorts by time and says when.
+        const iso   = new Date().toISOString();          // 2026-10-29T14:32:05.123Z
+        const stamp = iso.slice(0, 16).replace('T', ' ');
+        const body  = `CW Reader copy, saved ${stamp} UTC\r\n\r\n`
+                    + text.replace(/\r?\n/g, '\r\n') + '\r\n';
+        const blob = new Blob([body], { type: 'text/plain' });
+        const url  = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `cw-read-${iso.slice(0, 10)}-${iso.slice(11, 16).replace(':', '')}z.txt`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
     }
 
     async _clear() {
