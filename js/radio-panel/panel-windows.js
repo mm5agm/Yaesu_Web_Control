@@ -26,6 +26,9 @@
 // showPanel to take the panel off the board while it is out, and put it back.
 // A group marked popout gets a ⇱ WINDOW key in its title bar the same way,
 // for the whole window (onPopout with no panel); the app uses close and open.
+// Its panels then get no ⇱ of their own: the app pops such a window out
+// whole whichever key is pressed, so a second key would only repeat
+// ⇱ WINDOW (Colin, 2026-10-29).
 // A launcher key asks the app first (onLaunch), so a window that is out in a
 // browser window of its own is brought to the front rather than drawn on the
 // board as well.
@@ -114,7 +117,7 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
             closeBtn.title = 'Close this panel';
             closeBtn.addEventListener('click', () => closePanel(g.id, p.id));
             ph.append(h('span', 'rp-wpanel-title', p.title));
-            if (p.popout && onPopout) {
+            if (p.popout && !g.popout && onPopout) {
                 const popBtn = h('button', 'rp-wbtn', '⇱');
                 popBtn.type = 'button';
                 popBtn.title = 'Open this panel in a browser window of its own - it can go on another screen';
