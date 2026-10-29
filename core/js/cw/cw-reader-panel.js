@@ -197,7 +197,7 @@ export class CwReaderPanel {
     /// the browser saves downloads, so on a tablet it lands on the tablet,
     /// not the radio's PC. It holds the pane's text, the last MAX_RENDERED
     /// characters, exactly as decoded: no colour, nothing corrected.
-    _save() {
+    async _save() {
         const text = this._text.trim();
         if (!text) {
             this._autoNote = { text: 'Nothing to save yet.', problem: false, until: Date.now() + 4000 };
@@ -209,11 +209,35 @@ export class CwReaderPanel {
         const stamp = iso.slice(0, 16).replace('T', ' ');
         const body  = `CW Reader copy, saved ${stamp} UTC\r\n\r\n`
                     + text.replace(/\r?\n/g, '\r\n') + '\r\n';
+        const name = `cw-read-${iso.slice(0, 10)}-${iso.slice(11, 16).replace(':', '')}z.txt`;
         const blob = new Blob([body], { type: 'text/plain' });
-        const url  = URL.createObjectURL(blob);
+
+        // Chrome and Edge: a real Save dialog. The id makes the browser open
+        // it in the folder used last time (Colin, 2026-10-29). Needs a secure
+        // page (localhost or https); elsewhere, and in Firefox/Safari, fall
+        // back to a download into the browser's download folder.
+        if (window.showSaveFilePicker) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    id: 'cw-reader-save',
+                    startIn: 'documents',
+                    suggestedName: name,
+                    types: [{ description: 'Text file', accept: { 'text/plain': ['.txt'] } }],
+                });
+                const w = await handle.createWritable();
+                await w.write(blob);
+                await w.close();
+                return;
+            } catch (e) {
+                if (e?.name === 'AbortError') return;   // the user pressed Cancel
+                console.warn('CW save dialog failed, downloading instead', e);
+            }
+        }
+
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `cw-read-${iso.slice(0, 10)}-${iso.slice(11, 16).replace(':', '')}z.txt`;
+        a.download = name;
         document.body.appendChild(a);
         a.click();
         a.remove();
