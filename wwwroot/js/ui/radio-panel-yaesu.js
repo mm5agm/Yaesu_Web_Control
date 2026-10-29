@@ -180,6 +180,7 @@ export function startYaesuRadioPanel(root, cfg) {
         windows: YAESU_WINDOWS,
         onWindowPanel: (g, p, shown) => { win?.onShow(g, p, shown); windowMode(g, p, shown); },
         onWindowPopout: (g, p) => { win?.popout(g, p); windowMode(g, p, true, true); },
+        onWindowLaunch: g => win?.launch(g) ?? false,
         frequencyEntry: true,
         clock: true,
         fullscreenKey: true,
