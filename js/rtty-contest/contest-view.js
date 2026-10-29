@@ -45,6 +45,8 @@
 //
 // Needs the radio panel's stylesheet (injected here) and its themes.
 
+import { appVersion } from '../radio-panel/app-version.js';
+import { dropKey } from '../radio-panel/drop-key.js';
 import { injectRadioPanelStyle } from '../radio-panel/radio-panel-style.js';
 import { applyTheme, DEFAULT_THEME } from '../radio-panel/radio-panel-themes.js';
 import { SpectrumPane } from '../radio-panel/spectrum-pane.js';
@@ -239,7 +241,9 @@ const CSS = `
 .rc-pop{display:flex;align-items:center;gap:4px}
 .rc-pop[hidden]{display:none}
 body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;border-radius:0 !important}
+.rc-ver{font:500 13px ${SANS};color:var(--rp-legend-dim)}
 .rc-views{font:500 15px ${SANS};min-height:32px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:2px 6px}
+.rc-top .rp-bar{padding:2px}.rc-top .rp-viewbtn{font-size:15px;padding:4px 12px}
 .rc-layouts{max-width:16em}
 .rc-grab{position:absolute;z-index:3;border-radius:4px;touch-action:none}
 .rc-grab:hover,.rc-grab:focus-visible,.rc-grab.drag{background:var(--rp-soft-border);outline:none}
@@ -324,6 +328,13 @@ export function mountContestView(root, opts) {
     root.classList.add('rp-page', 'rc-page');
     const top = h('div', 'rc-top');
     if (isMain) top.append(h('span', 'rc-title', 'RTTY CONTEST'));
+    const version = isMain ? appVersion() : '';
+    if (version) top.append(Object.assign(h('span', 'rc-ver', 'v' + version), { title: 'The version running' }));
+    // The other views, next to the title so a long strip never pushes it
+    // out of sight; reads VIEWS, as on the radio panel.
+    if (isMain && opts.views?.length)
+        top.append(dropKey('Views ▾', 'Choose a view. The one you used last opens when the app starts.',
+            [{ items: opts.views }], { alignLeft: true }));
 
     // The frequency: click it to type one, or turn the wheel over a digit.
     const freqBtn = btn('rc-freq', '', () => editFrequency());
@@ -396,19 +407,6 @@ export function mountContestView(root, opts) {
         layoutSel.title = 'Layouts: the sizes, the choices on this page, and which windows are open and where. Saved on the server';
         layoutSel.setAttribute('aria-label', 'Layout');
         top.append(layoutSel);
-    }
-
-    if (isMain && opts.views?.length) {
-        const views = h('select', 'rc-views');
-        views.title = 'Views';
-        views.setAttribute('aria-label', 'Views');
-        for (const v of opts.views) {
-            const o = new Option(v.label, v.href);
-            if (v.on) o.selected = true;
-            views.append(o);
-        }
-        views.addEventListener('change', () => { location.href = views.value; });
-        top.append(views);
     }
 
     // The scope row. Each control acts on the receiver on screen.

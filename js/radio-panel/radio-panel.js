@@ -13,6 +13,8 @@
 // No accessibility layer by design (Colin, 2026-10-13): this page starts from
 // scratch; Classic keeps the screen-reader and voice work.
 
+import { appVersion } from './app-version.js';
+import { dropKey } from './drop-key.js';
 import { injectRadioPanelStyle } from './radio-panel-style.js';
 import { applyTheme, themeIds, resolveTheme, DEFAULT_THEME, SYSTEM_THEME } from './radio-panel-themes.js';
 import { SpectrumView } from './spectrum-view.js';
@@ -302,44 +304,8 @@ export function mountRadioPanel(root, opts = {}) {
     const brand = h('div', 'rp-brand');
     const model = h('span', 'rp-brand-model', opts.model ?? '');
     brand.append(h('span', 'rp-brand-short', opts.brandShort ?? ''), Object.assign(h('span', 'rp-legend', opts.brandName ?? ''), { style: 'color:var(--rp-legend-dim)' }), model);
-
-    // A key that drops down a list of links: the view switch and MENU.
-    // Closes on a pick, a click anywhere else, or Esc. `newTab` opens the
-    // links in a new tab, so the panel keeps running behind them.
-    const dropKey = (label, title, groups, { newTab = false, alignLeft = false } = {}) => {
-        const wrap = h('div', 'rp-menu');
-        const key = h('button', 'rp-viewbtn', label);
-        key.type = 'button';
-        key.title = title;
-        key.setAttribute('aria-haspopup', 'true');
-        key.setAttribute('aria-expanded', 'false');
-        const list = h('div', 'rp-menu-list' + (alignLeft ? ' rp-menu-left' : ''));
-        list.hidden = true;
-        for (const g of groups) {
-            if (g.group) list.append(h('div', 'rp-menu-group', g.group));
-            for (const it of g.items ?? []) {
-                const a = h('a', 'rp-menu-item' + (it.on ? ' on' : ''), it.label);
-                a.href = it.href;
-                if (newTab) { a.target = '_blank'; a.rel = 'noopener'; }
-                if (it.on) a.setAttribute('aria-current', 'page');
-                if (it.title) a.title = it.title;
-                a.addEventListener('click', () => show(false));
-                list.append(a);
-            }
-        }
-        const show = on => {
-            list.hidden = !on;
-            key.classList.toggle('on', on);
-            key.setAttribute('aria-expanded', String(on));
-        };
-        key.addEventListener('click', () => show(list.hidden));
-        document.addEventListener('pointerdown', e => { if (!list.hidden && !wrap.contains(e.target)) show(false); });
-        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !list.hidden) show(false); });
-        wrap.append(key, list);
-        const bar = h('div', 'rp-bar');
-        bar.append(wrap);
-        return bar;
-    };
+    const version = appVersion();
+    if (version) brand.append(Object.assign(h('span', 'rp-brand-ver', 'v' + version), { title: 'The version running' }));
 
     // Reads VIEWS, never the current view's name, so it is plain there
     // are others to pick.
