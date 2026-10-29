@@ -507,6 +507,11 @@ else {
     $notesBody = "$notesBody`n`nSee README.md for the full release notes."
 }
 
+# SignPath Foundation (free code signing) asks for the code signing policy
+# on the download page as well as the home page, so every release carries
+# a pointer to the README section.
+$notesBody = "$notesBody`n`n---`n`n**Code signing policy:** see [the README](https://github.com/mm5agm/Yaesu_Web_Control#code-signing-policy)."
+
 $notesFile = Join-Path ([System.IO.Path]::GetTempPath()) "release-notes-$Version.md"
 [System.IO.File]::WriteAllText($notesFile, $notesBody, (New-Object System.Text.UTF8Encoding($false)))
 
