@@ -181,8 +181,8 @@ const CSS = `
 .rc-page{height:100vh;display:flex;flex-direction:column}
 .rc-top{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:6px 10px;background:var(--rp-key-bg);border-bottom:1px solid var(--rp-key-border)}
 .rc-title{font:700 16px ${SANS};letter-spacing:.1em;color:var(--rp-key-fg);white-space:nowrap}
-.rc-freq{appearance:none;border:1px solid transparent;background:none;border-radius:4px;padding:0 4px;font:500 26px ${MONO};color:var(--rp-key-fg);cursor:text;white-space:nowrap}
-.rc-freq small{font-size:18px;color:var(--rp-chip-fg)}
+.rc-freq{appearance:none;border:1px solid transparent;background:none;border-radius:4px;padding:0 4px;font:500 26px ${MONO};color:var(--rp-chip-fg);cursor:text;white-space:nowrap}
+.rc-freq small{font-size:18px}
 .rc-freq:hover{border-color:var(--rp-soft-border)}
 .rc-freq.wheel span[data-step]:hover{background:var(--rp-accent-bg);border-radius:3px;cursor:ns-resize}
 .rc-bands{flex:none;display:flex;flex-direction:column;gap:4px;padding:6px 10px 0}
