@@ -76,6 +76,18 @@ export function startYaesuSpectrumFeed(cfg) {
         try { return viewOffsetHz(model, filterFor(vfo)); } catch { return 0; }
     }
 
+    // FIXED holds the picture away from the usual centre; the SDR crop has
+    // to be cut there too or the far edge is blank (Bruce VK2RT, #250,
+    // 2026-10-29). Sent only when it changes: a held view moves in jumps.
+    const heldCrop = {};
+    function holdCrop(vfo, rfHz) {
+        if (heldCrop[vfo] === rfHz) return;
+        heldCrop[vfo] = rfHz;
+        fetch(`/api/sdr/hold?rfHz=${rfHz}&sdrId=${vfo}`, { method: 'POST' })
+            .then(res => { if (!res.ok) console.warn('spectrum: hold', res.status); })
+            .catch(e => console.warn('spectrum: hold', e));
+    }
+
     function readDataShift(mode) {
         if (mode !== 'DATA-L' && mode !== 'DATA-U') return;
         fetch('/api/cat/datashift')
@@ -128,7 +140,9 @@ export function startYaesuSpectrumFeed(cfg) {
             cfg.onSpan?.(vfo, span);
             let bins = v.rfOrdered ? v.bins : Array.prototype.slice.call(v.bins).reverse();
             if (r.freq[vfo] > 0) {
-                const view = p.viewFor(viewFor(vfo, v));
+                const usual = viewFor(vfo, v);
+                const view = p.viewFor(usual);
+                if (!v.rfOrdered) holdCrop(vfo, Math.round(view - usual));
                 p.setViewOffset(view);
                 bins = alignBins(bins, offsetFor(vfo, v) - view, span);
             }
