@@ -220,6 +220,7 @@ const CSS = `
 .rc-crow input[type=range]{flex:1;min-width:0;accent-color:var(--rp-highlight)}
 .rc-crow select{flex:1;min-width:0}
 .rc-crow .rc-num{min-width:4.6em;text-align:right}
+.rc-crow .rc-auto{flex:none;min-height:24px;min-width:0;padding:0 6px;font-size:12px}
 .rc-dbox{flex:1 1 0;min-height:${DECODE_MIN_H}px;display:flex;flex-direction:column;width:var(--rc-tuner-w,300px)}
 .rc-dbox[hidden]{display:none}
 .rc-dbox.out{flex:none;min-height:0}
@@ -282,11 +283,14 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {(id:string, mode:string) => void} [opts.onMode]  a mode picked for the receiver on screen
  * @param {string} [opts.modeTitle]  the MODE list's tooltip
  * @param {{id:string, label:string, kind:'range'|'list', title?:string, perReceiver?:boolean,
- *          min?:number, max?:number, step?:number, reset?:number, unit?:string,
+ *          min?:number, max?:number, step?:number, reset?:number, unit?:string, auto?:string,
  *          format?:(v:number) => string}[]} [opts.controls]  settings in a box under the tuner,
- *        e.g. power, IF width and IF shift; their values come through setControl
+ *        e.g. power, IF width and IF shift; their values come through setControl. auto adds
+ *        an AUTO key to the row, lit while the app sizes the setting itself; the text is its
+ *        tooltip then, and setControl's kept says when the operator's own value is kept
  * @param {(id:string, value:number|string, vfo:string|null) => void} [opts.onControl]  one was
- *        changed here; vfo is the receiver on screen for a perReceiver one
+ *        changed here; vfo is the receiver on screen for a perReceiver one. AUTO pressed
+ *        sends the value 'auto'
  * @param {{id:string, label:string}[]} [opts.meters]  compact bars in the strip, e.g. S, PO, SWR, ALC
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
  * @param {{group?:string, items:{label:string, href:string, title?:string}[]}[]} [opts.menu]  the main
@@ -619,6 +623,11 @@ export function mountContestView(root, opts) {
                 if (c.reset != null) r.addEventListener('dblclick', () => { r.value = String(c.reset); ctl.val.textContent = ctlText(c, c.reset); send(Number(c.reset)); });
                 row.append(h('span', 'rc-lbl', c.label), r, ctl.val);
             }
+            if (c.auto) {
+                ctl.auto = key('AUTO', c.auto, e => { e.preventDefault(); send('auto'); }, 'rc-auto');
+                ctl.auto.disabled = true;
+                row.append(ctl.auto);
+            }
             ctls[c.id] = ctl;
             ctlBox.append(row);
         }
@@ -627,6 +636,16 @@ export function mountContestView(root, opts) {
     function drawControls() {
         for (const ctl of Object.values(ctls)) {
             const e = ctlVals[ctl.c.id]?.[ctlKey(ctl.c)];
+            if (ctl.auto) {
+                // kept: null while automatic, the tooltip while the operator's
+                // value is kept, and anything else where AUTO does not apply.
+                const kept = e?.kept;
+                const auto = kept === null;
+                ctl.auto.disabled = !(auto || typeof kept === 'string');
+                ctl.auto.classList.toggle('on', auto);
+                ctl.auto.setAttribute('aria-pressed', auto ? 'true' : 'false');
+                ctl.auto.title = typeof kept === 'string' ? kept : ctl.c.auto;
+            }
             if (ctl.c.kind === 'list') {
                 const list = e?.options ?? [];
                 const sig = JSON.stringify(list);
@@ -1310,8 +1329,11 @@ export function mountContestView(root, opts) {
          * What the radio has for one of opts.controls. vfo names the receiver
          * for a per-receiver setting; options is a list's choices
          * ({id, label}[], empty when it does not apply), max a slider's top.
+         * kept is for a control with AUTO: null while the app sizes it itself,
+         * the AUTO key's tooltip while the operator's value is kept, false
+         * where AUTO does not apply. Left out, it stays as it was.
          */
-        setControl(id, value, { vfo = null, options, max } = {}) {
+        setControl(id, value, { vfo = null, options, max, kept } = {}) {
             const c = ctls[id]?.c;
             if (!c) return;
             const k = c.perReceiver ? vfo : '';
@@ -1319,6 +1341,7 @@ export function mountContestView(root, opts) {
             e.value = value;
             if (options !== undefined) e.options = options;
             if (max != null) e.max = max;
+            if (kept !== undefined) e.kept = kept;
             if (!c.perReceiver || k === receiver) drawControls();
         },
         /** frac 0..1 for the bar, text beside it; over lights it red. */
