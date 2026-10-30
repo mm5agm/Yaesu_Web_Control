@@ -291,6 +291,8 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
  * @param {{group?:string, items:{label:string, href:string, title?:string}[]}[]} [opts.menu]  the main
  *        page: a MENU key at the end of the strip, the app's other pages, each in a new tab
+ * @param {{label:string, title?:string, onClick:(key:HTMLButtonElement) => void}[]} [opts.keys]  the
+ *        main page: keys of the app's own before MENU, e.g. one that sends the operator's setup
  * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
  * @param {HTMLElement} [opts.decode]  the decoded text, in a box of its own under the
  *        tuner while DECODE is on, with its own POP OUT
@@ -409,6 +411,13 @@ export function mountContestView(root, opts) {
         layoutSel.title = 'Layouts: the sizes, the choices on this page, and which windows are open and where. Saved on the server';
         layoutSel.setAttribute('aria-label', 'Layout');
         top.append(layoutSel);
+    }
+
+    // The app's own keys, before MENU.
+    if (isMain) for (const k of opts.keys ?? []) {
+        const b = btn('rp-spop-key rc-app-key', k.label, () => k.onClick(b));
+        if (k.title) b.title = k.title;
+        top.append(b);
     }
 
     // MENU: the app's other pages, as on the radio panel, so Settings is one

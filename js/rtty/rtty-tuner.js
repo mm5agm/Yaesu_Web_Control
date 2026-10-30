@@ -18,7 +18,7 @@
 // Radio-agnostic: it talks to /api/rtty and nothing else. The host page
 // provides the dialog and the elements named in the constructor defaults.
 
-import { RTTY_SHIFTS as SHIFTS, DEFAULT_RTTY_SETTINGS, loadRttySettings, saveRttySettings } from './rtty-settings.js';
+import { RTTY_SHIFTS as SHIFTS, DEFAULT_RTTY_SETTINGS, loadRttySettings, saveRttySettings, normaliseRttySettings } from './rtty-settings.js';
 
 const POLL_MS    = 50;     // 20 redraws a second
 const POINTS     = 500;    // about 21 ms at 24,000 points a second: one sweep
@@ -112,6 +112,7 @@ export class RttyTuner {
         this._ctx = this._canvas.getContext('2d');
         this._loadSettings();
         this._showSettings();
+        this._seeded = this._seedFromServer();
 
         // The operator changing Mark or Shift here changes them on the radio
         // too, so the two do not have to be kept in step by hand. Reverse has
@@ -290,6 +291,31 @@ export class RttyTuner {
 
     _saveSettings() { saveRttySettings(this._settings); }
 
+    // The tones the server last ran the tuner on, over this browser's own.
+    // Storage is kept per address - http and https, localhost and 127.0.0.1,
+    // another browser - and one never set holds 2125, which the first start
+    // handed to the shared tuner and every other window then followed (Bruce
+    // VK2RT, Discussion #250). Every start waits for this. Optional: an app
+    // with no such endpoint answers 404, and storage stands.
+    async _seedFromServer() {
+        const abort = new AbortController();
+        const bail  = setTimeout(() => abort.abort(), 2000);
+        try {
+            const res = await fetch('/api/rtty/tuner/tones', { signal: abort.signal });
+            if (res.status !== 200) return;
+            const t = normaliseRttySettings(await res.json());
+            const s = this._settings;
+            if (t.markHz === s.markHz && t.shiftHz === s.shiftHz && t.baud === s.baud && t.reverse === s.reverse) return;
+            if (document.activeElement === this._markEl) return;
+            this._settings = t;
+            const untouched = t.markHz === DEFAULT_RTTY_SETTINGS.markHz && t.shiftHz === DEFAULT_RTTY_SETTINGS.shiftHz;
+            this._radioApplied = untouched ? { ...t } : null;
+            this._showSettings();
+            this._saveSettings();
+        } catch { /* storage stands */ }
+        finally { clearTimeout(bail); }
+    }
+
     // Which shifts this radio can be SET to, taken from the options the host page
     // put in its Shift control. The IC-7300 offers three (170/200/425, CI-V
     // 00 40); another rig offers another set, and neither list belongs in shared
@@ -358,6 +384,7 @@ export class RttyTuner {
     // ── Host ────────────────────────────────────────────────────────────────
 
     async _send(what) {
+        if (what === 'start' && this._seeded) await this._seeded;
         // Remember what we are asking for BEFORE the request goes out. Frames
         // arriving in the meantime still describe the old filters, and
         // _adoptServerSettings must not mistake one of them for somebody else
