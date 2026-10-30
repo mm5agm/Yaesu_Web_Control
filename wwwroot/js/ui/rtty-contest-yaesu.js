@@ -91,7 +91,8 @@ export function startYaesuRttyContest(root, cfg) {
             { id: 'power', label: 'PWR', kind: 'range', min: 5, max: maxPowerW, step: 1, unit: ' W',
               title: 'RF power. Drag and let go, or turn the mouse wheel over it' },
             { id: 'width', label: 'WIDTH', kind: 'list', perReceiver: true,
-              title: 'IF width of the receiver on screen' },
+              title: 'IF width of the receiver on screen',
+              auto: 'The RTTY tuner works the width out for the signal. A width you set on MAIN while the tuner is open is kept for the mode' },
             { id: 'shift', label: 'SHIFT', kind: 'range', perReceiver: true, min: -1000, max: 1000, step: 20, reset: 0,
               format: v => `${v > 0 ? '+' : ''}${v} Hz`,
               title: 'IF shift of the receiver on screen. Double-click to centre it' },
@@ -191,7 +192,8 @@ export function startYaesuRttyContest(root, cfg) {
             if (band) keepPower(band, Math.round(num(value)));
             return post(`/api/cat/power/${rx}`, { Watts: Math.round(num(value)) });
         }
-        if (id === 'width') return post(`/api/cat/ifwidth/${rx}`, { code: String(value) });
+        if (id === 'width' && value === 'auto') return widthToAuto();
+        if (id === 'width') return post(`/api/cat/ifwidth/${rx}`, { code: String(value) }).then(r => { checkKept(); return r; });
         if (id === 'shift') return post(`/api/cat/ifshift/${rx}`, { shiftHz: Math.round(num(value)) });
     }
     // WIDTH's choices change with the mode: in AM or FM there are none.
@@ -199,8 +201,37 @@ export function startYaesuRttyContest(root, cfg) {
     function showWidth(vfo) {
         const opts = ifWidthOptionsFor(cfg.model, modeOf[vfo]) ?? [];
         const code = widthOf[vfo] == null ? null : String(parseInt(widthOf[vfo], 10));
-        view.setControl('width', code, { vfo, options: opts.map(o => ({ id: o.code, label: o.label })) });
+        view.setControl('width', code, { vfo, options: opts.map(o => ({ id: o.code, label: o.label })),
+                                         kept: vfo === 'A' ? keptA : false });
     }
+    // WIDTH's AUTO, MAIN only: lit while the tuner works the width out, dark
+    // while a width set by hand is kept for the mode. Pressing it forgets the
+    // kept width and the tuner sizes the filter again.
+    let keptA = null, keptTimer = 0;
+    function checkKept() {
+        clearTimeout(keptTimer);
+        keptTimer = setTimeout(async () => {
+            try {
+                const r = await fetch('/api/rtty/tuner/width');
+                if (!r.ok) return;
+                const { mode, code } = await r.json();
+                const label = (ifWidthOptionsFor(cfg.model, mode) ?? [])
+                    .find(o => parseInt(o.code, 10) === parseInt(code, 10))?.label ?? code;
+                keptA = code == null ? null
+                    : `WIDTH ${label} is kept for ${mode}, as you set it. Press AUTO for the tuner to work the width out again`;
+                showWidth('A');
+            } catch { /* the key stays as it was */ }
+        }, 300);
+    }
+    async function widthToAuto() {
+        try {
+            const r = await fetch('/api/rtty/tuner/width', { method: 'DELETE' });
+            const body = await r.json().catch(() => null);
+            if (body?.message) console.info('rtty contest:', body.message);
+        } catch (e) { console.warn('rtty contest: WIDTH AUTO', e); }
+        checkKept();
+    }
+    checkKept();
 
     // Which band key is lit follows the frequency, however it got there.
     const bandAt = hz => (BAND_EDGES[bandPlan] ?? BAND_EDGES.Region1).find(e => hz >= e.lo && hz <= e.hi)?.name ?? null;
@@ -244,7 +275,7 @@ export function startYaesuRttyContest(root, cfg) {
     const handlers = {
         FrequencyA: v => { showBand('A', num(v)); if (!stepper.holds('A')) view.setFrequency('A', num(v)); },
         FrequencyB: v => { showBand('B', num(v)); if (!stepper.holds('B')) view.setFrequency('B', num(v)); },
-        ModeA: v => { modeOf.A = String(v ?? ''); view.setMode('A', modeOf.A); showWidth('A'); },
+        ModeA: v => { modeOf.A = String(v ?? ''); view.setMode('A', modeOf.A); showWidth('A'); checkKept(); },
         ModeB: v => { modeOf.B = String(v ?? ''); view.setMode('B', modeOf.B); showWidth('B'); },
         IfWidthA: v => { widthOf.A = v; showWidth('A'); },
         IfWidthB: v => { widthOf.B = v; showWidth('B'); },

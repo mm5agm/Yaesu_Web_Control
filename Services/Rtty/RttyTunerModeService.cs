@@ -140,6 +140,11 @@ namespace Yaesu_Web_Control.Services.Rtty
         // width is his, and closing leaves it where he put it.
         private bool _widthByHand;
 
+        // The tones the tuner last started on, so that AUTO on WIDTH can size
+        // the filter again there and then (ForgetWidthAsync). Unlike
+        // _sizedFor, nothing else clears it.
+        private (double Mark, int Shift, double Baud, bool Reverse)? _lastTones;
+
         public RttyTunerModeService(ICatClient cat,
                                     CatMultiplexerService mux,
                                     RadioStateService state,
@@ -252,6 +257,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 else if (!_widthByHand)
                     sized = await SizeFilterAsync(settings, markHz, shiftHz, baud, reverse, ct);
                 _sizedFor = (markHz, shiftHz, baud, reverse);
+                _lastTones = _sizedFor;
 
                 // What to hold. The mode the radio is in now, if it is the
                 // kind the operator chose - which is either the one just
@@ -403,6 +409,46 @@ namespace Yaesu_Web_Control.Services.Rtty
             settings.RttyTunerWidths[WidthKey(settings, mode)] = code;
             await _settings.SaveSettingsAsync(settings);
             _logger.LogInformation("RTTY tuner: IF width code {Code} set by hand in {Mode}, kept", code, mode);
+        }
+
+        /// <summary>
+        /// The mode MAIN is in, and the width kept for it as an SH code - null
+        /// when the tuner works the width out itself. For WIDTH's AUTO key.
+        /// </summary>
+        public async Task<(string Mode, string? Code)> KeptWidthNowAsync()
+        {
+            var settings = await _settings.GetSettingsAsync();
+            string mode = _state.ModeA ?? "";
+            return (mode, KeptWidth(settings, mode));
+        }
+
+        /// <summary>
+        /// AUTO on WIDTH: forget the width kept for the mode MAIN is in, so the
+        /// tuner works the width out again, and if the tuner is open, size the
+        /// filter now. Closing the tuner then puts back the width from before
+        /// it opened, as it did before a width was set by hand. Returns a line
+        /// for the status bar.
+        /// </summary>
+        public async Task<string> ForgetWidthAsync(CancellationToken ct = default)
+        {
+            var settings = await _settings.GetSettingsAsync();
+            await _gate.WaitAsync(ct);
+            try
+            {
+                string mode = _state.ModeA ?? "";
+                if (settings.RttyTunerWidths.Remove(WidthKey(settings, mode)))
+                    await _settings.SaveSettingsAsync(settings);
+                _widthByHand = false;
+                _sizedFor = null;
+                _logger.LogInformation("RTTY tuner: IF width in {Mode} back to automatic", mode);
+
+                if (_saved is null || _lastTones is not { } t || !_cat.IsConnected)
+                    return "WIDTH is automatic: the tuner works it out when it starts.";
+                var sized = await SizeFilterAsync(settings, t.Mark, t.Shift, t.Baud, t.Reverse, ct);
+                _sizedFor = t;
+                return sized ?? "WIDTH is automatic, and the width it has is right for the signal.";
+            }
+            finally { _gate.Release(); }
         }
 
         private static string WidthKey(ApplicationSettings settings, string? mode) => $"{settings.RadioModel}|{mode}";

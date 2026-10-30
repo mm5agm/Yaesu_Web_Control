@@ -87,6 +87,32 @@ namespace Yaesu_Web_Control.Controllers
             return Ok(new { markHz = t.MarkHz, shiftHz = t.ShiftHz, reverse = t.Reverse, baud = t.Baud });
         }
 
+        /// <summary>
+        /// The width kept for the mode MAIN is in (an SH code), or null when the
+        /// tuner works it out: what WIDTH's AUTO key shows.
+        /// </summary>
+        [HttpGet("tuner/width")]
+        public async Task<IActionResult> KeptWidth([FromServices] RttyTunerModeService tunerMode)
+        {
+            var (mode, code) = await tunerMode.KeptWidthNowAsync();
+            return Ok(new { mode, code });
+        }
+
+        /// <summary>AUTO on WIDTH: forget the kept width, so the tuner sizes the filter again.</summary>
+        [HttpDelete("tuner/width")]
+        public async Task<IActionResult> ForgetWidth([FromServices] RttyTunerModeService tunerMode)
+        {
+            try
+            {
+                return Ok(new { message = await tunerMode.ForgetWidthAsync(HttpContext.RequestAborted) });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to put the RTTY tuner's width back to automatic");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         // Keep the tones a start was given, when they are new. Logged with the
         // page that sent them, so a mark that changes when nobody changed it
         // can be traced to the window that did it.
