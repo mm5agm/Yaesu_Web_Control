@@ -31,7 +31,9 @@ namespace Yaesu_Web_Control.Services
                 try
                 {
                     var settings = await _settings.GetSettingsAsync();
-                    if (!settings.OpenBrowserOnStartup) return;
+                    // A page named on the command line is opened anyway:
+                    // the shortcut asked for it.
+                    if (!settings.OpenBrowserOnStartup && LaunchPage.Path is null) return;
                 }
                 catch
                 {

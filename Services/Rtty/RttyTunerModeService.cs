@@ -133,6 +133,13 @@ namespace Yaesu_Web_Control.Services.Rtty
         // same signal, so a repeat start asks it nothing.
         private (double Mark, int Shift, double Baud, bool Reverse)? _sizedFor;
 
+        // The operator set the IF width by hand while the tuner held the
+        // radio. Bruce VK2RT, Discussion #257: the WIDTH he chose on RTTY
+        // Contest kept being undone, by the sizing on the next start and by
+        // the restore on the way out. From then until the tuner closes the
+        // width is his, and closing leaves it where he put it.
+        private bool _widthByHand;
+
         public RttyTunerModeService(ICatClient cat,
                                     CatMultiplexerService mux,
                                     RadioStateService state,
@@ -236,7 +243,14 @@ namespace Yaesu_Web_Control.Services.Rtty
                 // for the mode the radio is about to leave. The mode change also
                 // brings the radio's own stored RTTY width with it, which is the
                 // width this then judges.
-                var sized = await SizeFilterAsync(settings, markHz, shiftHz, baud, reverse, ct);
+                // A width the operator chose for this mode is used instead of
+                // the one worked out, and a width chosen this session is left
+                // alone altogether.
+                string? sized = null;
+                if (KeptWidth(settings, _state.ModeA) is { } kept)
+                    sized = await PutKeptWidthAsync(settings, kept, ct);
+                else if (!_widthByHand)
+                    sized = await SizeFilterAsync(settings, markHz, shiftHz, baud, reverse, ct);
                 _sizedFor = (markHz, shiftHz, baud, reverse);
 
                 // What to hold. The mode the radio is in now, if it is the
@@ -347,8 +361,9 @@ namespace Yaesu_Web_Control.Services.Rtty
 
                 // Width after mode, and only when it was read: a missing code is
                 // "could not read it", and writing a guess would be inventing a
-                // filter nobody chose.
-                if (int.TryParse(saved.IfWidthCode, out int code))
+                // filter nobody chose. Not when the operator set one by hand
+                // while the tuner was open: that one is theirs to keep.
+                if (!_widthByHand && int.TryParse(saved.IfWidthCode, out int code))
                 {
                     string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
                     await _cat.SendCommandAsync(
@@ -362,10 +377,51 @@ namespace Yaesu_Web_Control.Services.Rtty
                 _saved = null;
                 _sizedFor = null;
                 _heldMode = null;
+                bool byHand = _widthByHand;
+                _widthByHand = false;
                 _logger.LogInformation("RTTY tuner: restored mode {Mode}, IF width code {Code}",
-                                       saved.Mode, saved.IfWidthCode ?? "none");
+                                       saved.Mode, byHand ? "left as set by hand" : saved.IfWidthCode ?? "none");
             }
             finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// The operator has set VFO A's IF width by hand, to the SH code
+        /// <paramref name="code"/>. While the tuner holds the radio that width
+        /// is kept for the mode it was set in, and used each time the tuner
+        /// starts in that mode instead of the width the tuner would work out.
+        /// Outside a tuner session it means nothing here.
+        /// </summary>
+        public async Task WidthSetByHandAsync(string code, CancellationToken ct = default)
+        {
+            if (_saved is null || !int.TryParse(code, out _)) return;
+            string mode = _state.ModeA ?? "";
+            if (_heldMode is not { } held || !SameKind(mode, held)) return;
+
+            _widthByHand = true;
+            var settings = await _settings.GetSettingsAsync();
+            settings.RttyTunerWidths[WidthKey(settings, mode)] = code;
+            await _settings.SaveSettingsAsync(settings);
+            _logger.LogInformation("RTTY tuner: IF width code {Code} set by hand in {Mode}, kept", code, mode);
+        }
+
+        private static string WidthKey(ApplicationSettings settings, string? mode) => $"{settings.RadioModel}|{mode}";
+
+        private static string? KeptWidth(ApplicationSettings settings, string? mode)
+            => settings.RttyTunerWidths.TryGetValue(WidthKey(settings, mode), out var code)
+               && int.TryParse(code, out _) ? code : null;
+
+        private async Task<string?> PutKeptWidthAsync(ApplicationSettings settings, string code, CancellationToken ct)
+        {
+            if (_state.IfWidthA == code) return null;
+            string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
+            await _cat.SendCommandAsync(
+                CatCommands.FormatIfWidth(settings.RadioModel, p1, int.Parse(code)), "RttyTuner", ct);
+            _state.IfWidthA = code;
+            _logger.LogInformation("RTTY tuner: IF width code {Code} put back, as set by hand", code);
+            return WidthHz(settings, _state.ModeA, code) is { } hz
+                ? $"IF filter {hz} Hz, as you set it."
+                : null;
         }
 
         /// <summary>

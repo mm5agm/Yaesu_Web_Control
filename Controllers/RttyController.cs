@@ -64,11 +64,79 @@ namespace Yaesu_Web_Control.Controllers
             {
                 var error = await _tuner.StartAsync(req.MarkHz, req.ShiftHz, req.Reverse, req.Baud, id);
                 if (error != null) return BadRequest(new { error });
+                await KeepTonesAsync(req, id);
                 return Ok(_tuner.Frame(0, id));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to start the RTTY tuner");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// The tones the tuner last ran on, which a tuner opening in any window
+        /// starts from (ApplicationSettings.RttyTunerTones). 204 before the
+        /// tuner has ever run.
+        /// </summary>
+        [HttpGet("tuner/tones")]
+        public async Task<IActionResult> Tones()
+        {
+            var t = (await _settings.GetSettingsAsync()).RttyTunerTones;
+            if (t is null) return NoContent();
+            return Ok(new { markHz = t.MarkHz, shiftHz = t.ShiftHz, reverse = t.Reverse, baud = t.Baud });
+        }
+
+        // Keep the tones a start was given, when they are new. Logged with the
+        // page that sent them, so a mark that changes when nobody changed it
+        // can be traced to the window that did it.
+        private async Task KeepTonesAsync(StartRequest req, string? client)
+        {
+            var settings = await _settings.GetSettingsAsync();
+            var was = settings.RttyTunerTones;
+            if (was is not null && was.MarkHz == req.MarkHz && was.ShiftHz == req.ShiftHz
+                && was.Reverse == req.Reverse && was.Baud == req.Baud) return;
+
+            _logger.LogInformation(
+                "RTTY tuner tones now mark {Mark} Hz, shift {Shift} Hz, {Baud} baud{Rev} (were {Was}), from {Page}, client {Client}",
+                req.MarkHz, req.ShiftHz, req.Baud, req.Reverse ? ", reversed" : "",
+                was is null ? "none" : $"{was.MarkHz}/{was.ShiftHz}",
+                Request.Headers.Referer.ToString(), client ?? "shared");
+            settings.RttyTunerTones = new Models.RttyTones
+            {
+                MarkHz = req.MarkHz, ShiftHz = req.ShiftHz, Reverse = req.Reverse, Baud = req.Baud,
+            };
+            await _settings.SaveSettingsAsync(settings);
+        }
+
+        /// <summary>
+        /// Send the operator's RTTY setup (Settings, <see cref="RttySetupCat"/>)
+        /// for <paramref name="band"/>: the lines for every band, then that
+        /// band's. Refused whole if any command could transmit or write a
+        /// memory, and while the radio is transmitting.
+        /// </summary>
+        [HttpPost("setup")]
+        public async Task<IActionResult> SendSetup([FromQuery] string? band, [FromServices] ICatClient cat)
+        {
+            var settings = await _settings.GetSettingsAsync();
+            var (commands, problems) = RttySetupCat.For(settings.RttySetupCat, band);
+            if (problems.Count > 0)
+                return BadRequest(new { error = "The RTTY setup in Settings was not sent. " + string.Join(". ", problems) + "." });
+            if (commands.Count == 0)
+                return BadRequest(new { error = "There is no RTTY setup" + (band is null ? "" : $" for {band}") + " in Settings." });
+            if (!cat.IsConnected) return StatusCode(503, new { error = "The radio is not connected." });
+            if (_state.IsTransmitting) return Conflict(new { error = "Not while transmitting." });
+
+            try
+            {
+                foreach (var c in commands)
+                    await cat.SendCommandAsync(c + ";", "RttySetup", HttpContext.RequestAborted);
+                _logger.LogInformation("RTTY setup sent for {Band}: {Count} commands", band ?? "no band", commands.Count);
+                return Ok(new { sent = commands.Count });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send the RTTY setup");
                 return StatusCode(500, new { error = ex.Message });
             }
         }

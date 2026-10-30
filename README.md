@@ -11,12 +11,13 @@
 
 > **v2.5.3 brings two new ways of working the radio.** Fabio Valente's (CR7CDC) **Experimental UI** is a dark workspace of panels you can drag, dock, tab together and save as named layouts. The **Radio panel** is laid out like the front of a transceiver, with keys, knobs and a main dial that work, both receivers on the FTdx101, and windows for CW, RTTY, memories and the rest. The Classic page is unchanged and is still where YWC opens. RTTY now prints the text as well as drawing the cross, and its **Auto** button works the settings out from the signal; the CW Reader has an **Auto** button that tunes the station in. Everything is written up in the [v2.5.3 notes](#2026-10-16---v253).
 
-**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release), [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release), [v2.5.4-pre3](#2026-10-26---v254-pre3-pre-release), [v2.5.4-pre4](#2026-10-27---v254-pre4-pre-release), [v2.5.4-pre5](#2026-10-29---v254-pre5-pre-release), [v2.5.4-pre6](#2026-10-29---v254-pre6-pre-release) and [v2.5.4-pre7](#2026-10-30---v254-pre7-pre-release)):
+**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release), [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release), [v2.5.4-pre3](#2026-10-26---v254-pre3-pre-release), [v2.5.4-pre4](#2026-10-27---v254-pre4-pre-release), [v2.5.4-pre5](#2026-10-29---v254-pre5-pre-release), [v2.5.4-pre6](#2026-10-29---v254-pre6-pre-release), [v2.5.4-pre7](#2026-10-30---v254-pre7-pre-release) and [v2.5.4-pre8](#2026-10-30---v254-pre8-pre-release)):
 
 - **RTTY Contest, a new GUI for RTTY contesting** *(pre2 to pre4, still being tested)*. Only what a contest RTTY operator uses, on one screen: the frequency, band keys for MAIN and SUB, the spectrum over the waterfall, and the RTTY tuner docked at the side with its decoded text. Each part pops out into a window of its own, and named layouts put every window back on its own monitor. Bruce VK2RT asked for it. [§5.24](USER_MANUAL.md#524-rtty-contest).
 - **Three changes from Bruce VK2RT's testing** *(pre5)*. **From radio** and **Auto** are in the RTTY Tuner heading, so **Tones only** keeps them. The scope's arms no longer lean when the signal is on tune, so mark and space straighten at the same dial setting (on Bruce's FTdx101D they were 50 Hz apart). And **FIXED** on RTTY Contest holds the spectrum still while the dial moves.
 - **More from Bruce's testing** *(pre6, pre7)*. FIXED fills the spectrum to both edges and holds it until the passband reaches the edge. RTTY Contest has **VIEWS** and **MENU** keys by its title, so Settings is one click away, and the SDR spans include **30 kHz** and **40 kHz**.
 - **The CW Reader has a Save button** *(pre7)* that saves the decoded text to a file.
+- **Your own RTTY setup string, and settings that stay put** *(pre8)*. A SETUP key on RTTY Contest sends the CAT commands you keep in Settings, with lines for each band. PWR is kept for each band and the WIDTH you set is kept by the tuner. A shortcut can open YWC on RTTY Contest.
 - **The Radio panel's CW window has the memory keyer** (M1 to M5, with SAVE), and **BREAK-IN is a key** that steps OFF → SEMI → FULL. The mouse wheel steps SPEED and PITCH. [§5.23](USER_MANUAL.md#523-radio-panel).
 - **The pop-out spectrum window tunes on a click or the mouse wheel**, with a readout of the frequency under the mouse, and has the panel's SCOPE settings on each pane. [§5.23](USER_MANUAL.md#523-radio-panel).
 - **A corner grip scales the Radio panel** to any size.
@@ -345,6 +346,23 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 **Only the version you are installing is listed here.** Earlier releases are in
 [RELEASE_HISTORY.md](RELEASE_HISTORY.md); their installers are still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
+
+## 2026-10-30 - v2.5.4-pre8 (pre-release)
+
+*Bruce VK2RT's next four requests: his own RTTY setup string, PWR and WIDTH that stay where he puts them, a shortcut that opens RTTY Contest, and a fix for the tuner's Mark going back to 2125. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **Your RTTY setup.** Paste your CAT commands into **RTTY setup** in Settings, under RTTY Tuner. A **SETUP** key by MENU sends them. A line starting `20m:` goes only on 20 m, and a switch sends the setup after each band key. Nothing that can transmit or write a memory is sent: TX, MX, VX, KY, KM, PB, LM, AC, AM, BM, MW, MT, QI and PS refuse the whole setup.
+- **PWR is kept for each band**, and a band key puts it back.
+- **WIDTH stays where you put it.** A width set while the tuner is open is kept for that mode and used each time the tuner starts, instead of the one it worked out. Closing the tuner no longer puts the old width back.
+- **Open YWC on RTTY Contest from a shortcut**: add `rtty-contest` after the program in the shortcut's Target. `radio`, `classic`, `experimental` and `settings` work too.
+
+**RTTY Tuner** [§22](USER_MANUAL.md#22-rtty)
+
+- **Mark and Shift are kept by YWC, not only by each browser.** Every window and every address (http or https, localhost or the PC's name) starts from the last tones used, so one that had never been set can't put the Mark back to 2125. If it still happens, YWC's log names the page that changed it.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from RTTY Contest yet.
 
 ## 2026-10-30 - v2.5.4-pre7 (pre-release)
 

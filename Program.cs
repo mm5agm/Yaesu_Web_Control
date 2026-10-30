@@ -21,6 +21,8 @@ using System.Windows.Forms;
 if (OperatingSystem.IsMacOS())
     Environment.SetEnvironmentVariable("OPENCV_AVFOUNDATION_SKIP_AUTH", "1");
 
+LaunchPage.ReadFrom(args);
+
 // ── Single-instance guard ────────────────────────────────────────────────────
 const string MutexName = "Global\\Yaesu_Web_Control_SingleInstance";
 var mutex = new Mutex(initiallyOwned: true, name: MutexName, out bool createdNew);
@@ -39,7 +41,7 @@ if (!createdNew)
     catch { others = Array.Empty<Process>(); }
 
     int existingPort = LoadConfiguredHttpPort();
-    string url = $"http://localhost:{existingPort}";
+    string url = LaunchPage.At($"http://localhost:{existingPort}");
     string who = others.Length > 0
         ? $"(process ID {string.Join(", ", others.Select(p => p.Id))})"
         : "(its window may be minimised to the system tray)";
@@ -942,7 +944,7 @@ try
 
     lifetime.ApplicationStarted.Register(() =>
     {
-        browserLauncher.OpenOnce(portInfo.RootUrl);
+        browserLauncher.OpenOnce(LaunchPage.At(portInfo.RootUrl));
     });
 
 #if !WINDOWS
