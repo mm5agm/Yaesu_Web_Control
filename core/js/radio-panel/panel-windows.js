@@ -26,6 +26,12 @@
 // showPanel to take the panel off the board while it is out, and put it back.
 // A group marked popout gets a ⇱ WINDOW key in its title bar the same way,
 // for the whole window (onPopout with no panel); the app uses close and open.
+// Its panels then get no ⇱ of their own: the app pops such a window out
+// whole whichever key is pressed, so a second key would only repeat
+// ⇱ WINDOW (Colin, 2026-10-29).
+// A launcher key asks the app first (onLaunch), so a window that is out in a
+// browser window of its own is brought to the front rather than drawn on the
+// board as well.
 
 const SAVE_KEY = 'windows';
 
@@ -51,8 +57,11 @@ function h(tag, cls, text) {
  * @param {(groupId:string, panelId:string|null) => void} [o.onPopout]  a panel's ⇱ key,
  *        or a group window's ⇱ WINDOW key (panelId null); only panels and groups
  *        with popout set get one
+ * @param {(groupId:string) => boolean} [o.onLaunch]  a launcher key was pressed;
+ *        true if the app dealt with it (its window is popped out), and the
+ *        board then leaves the window as it is
  */
-export function mountPanelWindows({ board, launcher, groups, store, prefix, onShow, onPopout }) {
+export function mountPanelWindows({ board, launcher, groups, store, prefix, onShow, onPopout, onLaunch }) {
     const defs = Object.fromEntries(groups.map(g => [g.id, g]));
     const saved = load();
     // open: group window showing; shut: panels closed inside it;
@@ -87,7 +96,7 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
         const led = h('span', 'rp-led'), sub = h('span', 'rp-sub', '');
         b.append(led, h('span', 'rp-skey-label', g.key), sub);
         b.title = g.tip ?? `Open or close the ${g.title} window`;
-        b.addEventListener('click', () => open(g.id));
+        b.addEventListener('click', () => { if (!onLaunch?.(g.id)) open(g.id); });
         grid.append(b);
         keys[g.id] = { b, led, sub };
     }
@@ -108,7 +117,7 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
             closeBtn.title = 'Close this panel';
             closeBtn.addEventListener('click', () => closePanel(g.id, p.id));
             ph.append(h('span', 'rp-wpanel-title', p.title));
-            if (p.popout && onPopout) {
+            if (p.popout && !g.popout && onPopout) {
                 const popBtn = h('button', 'rp-wbtn', '⇱');
                 popBtn.type = 'button';
                 popBtn.title = 'Open this panel in a browser window of its own - it can go on another screen';

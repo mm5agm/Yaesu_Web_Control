@@ -42,7 +42,7 @@ import { sMeterFraction, sMeterText, txMeterFraction } from '/js/radio-panel/pan
 import { SMeterHistoryPanel } from '/js/guages/smeter-history-panel.js';
 import { TxTimeout, stepTimeout, timeoutText } from '/js/radio-panel/tx-timeout.js';
 import { PopoutHost, screenShare } from '/js/popout/popout.js';
-import { wheelSteps } from '/js/radio-panel/window-kit.js';
+import { wheelSteps, launchWithPopouts } from '/js/radio-panel/window-kit.js';
 
 const LATER = 'Comes in a later build.';
 
@@ -1089,6 +1089,8 @@ export function startYaesuWindows(windows, ctx) {
             const host = (p && popouts[g + '/' + p]) || popouts[g];
             if (host && !host.open()) alert('The browser blocked the window. Allow pop-ups for this page and press the key again.');
         },
+        /** A launcher key: true if its window is popped out and was dealt with here. */
+        launch: g => launchWithPopouts(popouts, windows, g),
         txTimeout: txTimer.tt,
         /** The TX SETUP window's TUNE, for the panel's own TUNE key. */
         atuTune: () => atuTune(),

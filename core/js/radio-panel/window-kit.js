@@ -149,6 +149,22 @@ export function windowPopouts(kit, groups) {
     return popouts;
 }
 
+/**
+ * A launcher key, with pop-outs in mind. A window that is out whole is
+ * brought to the front, not drawn on the board as well; panels that are out
+ * on their own stay out when the rest of their window opens. Returns true if
+ * it dealt with the key, false to let the board open the window as usual.
+ */
+export function launchWithPopouts(popouts, windows, g) {
+    const whole = popouts[g];
+    if (whole?.isOpen) { whole.focus(); return true; }
+    const out = Object.keys(popouts).filter(k => k.startsWith(g + '/') && popouts[k].isOpen);
+    if (!out.length) return false;
+    windows.open(g);
+    for (const k of out) windows.closePanel(g, k.slice(g.length + 1));
+    return true;
+}
+
 /** A panel's ⇱ key, or a group's (p null): open its browser window. */
 export function openPopout(popouts, g, p) {
     const host = (p && popouts[g + '/' + p]) || popouts[g];

@@ -295,9 +295,12 @@ export function alignBins(bins, offsetHz, spanHz) {
 // null; `wantedHz` is the view offset the pane would have centred
 // (setViewOffset). The screen moves only when there is no held centre, the
 // span changed, or what would be centred has gone more than `edge` of the
-// span from the middle - a band change or a jump along it. Returns the new
-// held centre and the view offset that draws it.
-export function holdView(held, dialHz, wantedHz, spanHz, edge = 0.35) {
+// span from the middle - off the screen, a band change or a jump along it.
+// `edge` is half the span, the screen's own edge, as Bruce asked on #250
+// (2026-10-29); it was 0.35, which moved the picture with the dial in the
+// outer 15%, and his fallback was about 5% in from the edge (0.45). Returns
+// the new held centre and the view offset that draws it.
+export function holdView(held, dialHz, wantedHz, spanHz, edge = 0.5) {
     const dial = Number(dialHz) || 0;
     const span = Number(spanHz) || 0;
     const wanted = dial + (Number(wantedHz) || 0);

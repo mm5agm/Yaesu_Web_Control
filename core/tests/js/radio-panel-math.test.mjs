@@ -252,12 +252,18 @@ test('holdView keeps the screen still until what is wanted nears an edge', async
     h = holdView(h, 14_082_000, 1500, 10_000);
     assert.equal(h.centreHz, 14_081_500);
     assert.equal(h.viewHz, -500);
-    // Further than 0.35 of the span from the middle: it moves.
+    // Out to the edge, half the span from the middle: it still stays.
     h = holdView(h, 14_085_000, 1500, 10_000);
-    assert.equal(h.centreHz, 14_086_500);
+    assert.equal(h.centreHz, 14_081_500);
+    // Past the edge: it moves.
+    h = holdView(h, 14_085_100, 1500, 10_000);
+    assert.equal(h.centreHz, 14_086_600);
     // A new span starts again.
     h = holdView(h, 14_085_500, 1500, 5_000);
     assert.equal(h.centreHz, 14_087_000);
+    // A narrower edge, as an option.
+    h = holdView(h, 14_088_000, 1500, 5_000, 0.45);
+    assert.equal(h.centreHz, 14_089_500);
     // No dial or span yet: whatever is wanted.
     assert.equal(holdView(null, 0, 0, 0).viewHz, 0);
 });

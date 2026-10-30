@@ -174,12 +174,13 @@ export function startYaesuRadioPanel(root, cfg) {
         spectrumPanes: dual
             ? [{ id: 'A', tab: 'Main', name: 'MAIN · SDR A' }, { id: 'B', tab: 'Sub', name: 'SUB · SDR B' }]
             : [{ id: 'A', tab: 'VFO-A', name: 'VFO-A · SDR A' }, { id: 'B', tab: 'VFO-B', name: 'VFO-B · SDR B' }],
-        // The spans Classic offers (SpectrumSpanPlan.ValidSpans).
-        spectrumSpans: [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6].map(hz => ({ hz })),
+        // The SDR's spans (SpectrumSpanPlan.ValidSpans).
+        spectrumSpans: [1e3, 2e3, 5e3, 10e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6].map(hz => ({ hz })),
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         windows: YAESU_WINDOWS,
         onWindowPanel: (g, p, shown) => { win?.onShow(g, p, shown); windowMode(g, p, shown); },
         onWindowPopout: (g, p) => { win?.popout(g, p); windowMode(g, p, true, true); },
+        onWindowLaunch: g => win?.launch(g) ?? false,
         frequencyEntry: true,
         clock: true,
         fullscreenKey: true,

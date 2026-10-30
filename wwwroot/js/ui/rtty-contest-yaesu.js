@@ -33,7 +33,9 @@ import { post, startYaesuSpectrumFeed } from '/js/ui/spectrum-feed-yaesu.js';
 import { BAND_EDGES, getSegments, loadBandPlanFromServer } from '/js/ui/band-plan.js';
 import { ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 
-const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
+// The SDR's spans (SpectrumSpanPlan.ValidSpans): the radio's own, with 30 and
+// 40 kHz between 20 and 50 for Bruce VK2RT (Discussion #257).
+const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
 
 // The bands, as the band keys on the radio panel and Classic have them.
 const HF_BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
@@ -97,6 +99,7 @@ export function startYaesuRttyContest(root, cfg) {
         onControl: (id, value, vfo) => setControl(id, value, vfo),
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
         views: cfg.views ?? [],
+        menu: cfg.menu ?? [],
         tuner: cfg.tuner,
         decode: cfg.decode,
         storagePrefix: 'ywc.rttyContest.',

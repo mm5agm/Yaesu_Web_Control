@@ -15,7 +15,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Display">
     <title>RTTY Contest - Yaesu Web Control</title>
     <link rel="icon" href="~/favicon.ico" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
@@ -97,6 +97,21 @@
                 { label: 'Experimental', href: '/flexui' },
                 { label: 'Radio', href: '/radio' },
                 { label: 'RTTY Contest', href: '/rtty-contest', on: true },
+            ],
+            // The same pages as the Radio panel's MENU.
+            menu: [
+                { group: 'SETUP', items: [
+                    { label: 'Settings', href: '/Settings' },
+                    { label: 'Application Setup', href: '/ApplicationSetup' },
+                    { label: 'Memories', href: '/Memories' },
+                    { label: 'Labels', href: '/Labels' },
+                    { label: 'Meter Calibration', href: '/MeterCalibration' },
+                    { label: 'Diagnostics', href: '/Diagnostics' },
+                ] },
+                { group: 'HELP', items: [
+                    { label: 'User Manual', href: '/UserManual' },
+                    { label: 'About', href: '/About' },
+                ] },
             ],
         });
 

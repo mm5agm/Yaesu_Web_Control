@@ -45,6 +45,8 @@
 //
 // Needs the radio panel's stylesheet (injected here) and its themes.
 
+import { appVersion } from '../radio-panel/app-version.js';
+import { dropKey } from '../radio-panel/drop-key.js';
 import { injectRadioPanelStyle } from '../radio-panel/radio-panel-style.js';
 import { applyTheme, DEFAULT_THEME } from '../radio-panel/radio-panel-themes.js';
 import { SpectrumPane } from '../radio-panel/spectrum-pane.js';
@@ -239,7 +241,9 @@ const CSS = `
 .rc-pop{display:flex;align-items:center;gap:4px}
 .rc-pop[hidden]{display:none}
 body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;border-radius:0 !important}
+.rc-ver{font:500 13px ${SANS};color:var(--rp-legend-dim)}
 .rc-views{font:500 15px ${SANS};min-height:32px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:2px 6px}
+.rc-top .rp-bar{padding:2px}.rc-top .rp-viewbtn{font-size:15px;padding:4px 12px}
 .rc-layouts{max-width:16em}
 .rc-grab{position:absolute;z-index:3;border-radius:4px;touch-action:none}
 .rc-grab:hover,.rc-grab:focus-visible,.rc-grab.drag{background:var(--rp-soft-border);outline:none}
@@ -285,6 +289,8 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  *        changed here; vfo is the receiver on screen for a perReceiver one
  * @param {{id:string, label:string}[]} [opts.meters]  compact bars in the strip, e.g. S, PO, SWR, ALC
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
+ * @param {{group?:string, items:{label:string, href:string, title?:string}[]}[]} [opts.menu]  the main
+ *        page: a MENU key at the end of the strip, the app's other pages, each in a new tab
  * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
  * @param {HTMLElement} [opts.decode]  the decoded text, in a box of its own under the
  *        tuner while DECODE is on, with its own POP OUT
@@ -324,6 +330,13 @@ export function mountContestView(root, opts) {
     root.classList.add('rp-page', 'rc-page');
     const top = h('div', 'rc-top');
     if (isMain) top.append(h('span', 'rc-title', 'RTTY CONTEST'));
+    const version = isMain ? appVersion() : '';
+    if (version) top.append(Object.assign(h('span', 'rc-ver', 'v' + version), { title: 'The version running' }));
+    // The other views, next to the title so a long strip never pushes it
+    // out of sight; reads VIEWS, as on the radio panel.
+    if (isMain && opts.views?.length)
+        top.append(dropKey('Views ▾', 'Choose a view. The one you used last opens when the app starts.',
+            [{ items: opts.views }], { alignLeft: true }));
 
     // The frequency: click it to type one, or turn the wheel over a digit.
     const freqBtn = btn('rc-freq', '', () => editFrequency());
@@ -398,18 +411,12 @@ export function mountContestView(root, opts) {
         top.append(layoutSel);
     }
 
-    if (isMain && opts.views?.length) {
-        const views = h('select', 'rc-views');
-        views.title = 'Views';
-        views.setAttribute('aria-label', 'Views');
-        for (const v of opts.views) {
-            const o = new Option(v.label, v.href);
-            if (v.on) o.selected = true;
-            views.append(o);
-        }
-        views.addEventListener('change', () => { location.href = views.value; });
-        top.append(views);
-    }
+    // MENU: the app's other pages, as on the radio panel, so Settings is one
+    // click away (Bruce VK2RT, Discussion #257, 2026-10-29). Each opens in a
+    // new tab, so the contest page keeps running behind it.
+    if (isMain && opts.menu?.length)
+        top.append(dropKey('MENU', 'Settings, memories, the manual and the other pages, each in a new tab',
+            opts.menu, { newTab: true }));
 
     // The scope row. Each control acts on the receiver on screen.
     const scope = h('div', 'rc-scope');
@@ -433,7 +440,7 @@ export function mountContestView(root, opts) {
     const swapKey = key('WF ON TOP', 'Put the waterfall above the spectrum', () => setOrder(!wfFirst), 'rc-swap');
     // Bruce VK2RT: a station is remembered by where it sits, so the screen
     // can hold still while the dial moves; it moves on only near an edge.
-    const fixedKey = key('FIXED', 'Hold the spectrum still while the dial moves: only the passband and the dial line move, until they near an edge. Off, the spectrum stays centred', () => setFixed(!fixed), 'rc-fixed');
+    const fixedKey = key('FIXED', 'Hold the spectrum still while the dial moves: only the passband and the dial line move, until they reach the edge. Off, the spectrum stays centred', () => setFixed(!fixed), 'rc-fixed');
     const stepSel = h('select', 'rc-step');
     stepSel.title = 'How far one notch of the mouse wheel moves the dial';
     stepSel.setAttribute('aria-label', 'Wheel step');
