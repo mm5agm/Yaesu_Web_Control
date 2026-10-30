@@ -3994,12 +3994,13 @@ The reader decodes at the pitch you are using, because that is the tone you have
 
 ### 20.4 The panel controls
 
-Along the top of the panel are five buttons and two switches. The switches — **Follow** and **Tune** — are easy to miss because they do not look like the buttons beside them, and both are worth knowing about.
+Along the top of the panel are six buttons and two switches. The switches — **Follow** and **Tune** — are easy to miss because they do not look like the buttons beside them, and both are worth knowing about.
 
 | Control | What it does |
 |---|---|
 | **Start / Stop** | Runs the decoder. Stop also restores your radio settings if Reader Mode is on. |
 | **Clear** | Empties the on-screen text. The transcript file on disk is not touched, so this is safe to press when you move to a new station. |
+| **Save** | Saves the text in the panel to a `.txt` file, headed with the UTC time. In Chrome and Edge on the PC running YWC it opens a Save dialog in the folder you saved to last time; in other browsers, or from another PC, the file goes to your browser's download folder. The panel keeps the last 20,000 characters, so for a whole session use the transcript ([§20.7](#207-transcripts)), which YWC writes for you. |
 | **Reader Mode** | Sets the radio up for decoding, and puts your settings back afterwards — see [§20.6](#206-reader-mode). |
 | **Auto** | Finds the station being read, tunes it onto your CW pitch and sets the filter for its speed — see [Auto](#auto-tune-the-station-in-for-you) in §20.6. |
 | **Log QSO** | Opens the log form — see [§20.8](#208-logging-a-qso). |
