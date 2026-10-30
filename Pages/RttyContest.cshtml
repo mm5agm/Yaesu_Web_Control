@@ -67,6 +67,8 @@
             maxHz: @Model.MaxHz,
             bandPlan: '@Model.BandPlan',
             rttyMode: '@Model.RttyMode',
+            setup: @(string.IsNullOrWhiteSpace(settings.RttySetupCat) ? "false" : "true"),
+            setupOnBand: @(settings.RttySetupOnBand ? "true" : "false"),
             tuner: document.getElementById('rttyTunerDialog'),
             decode: document.querySelector('#rttyTunerDialog .rtty-decode'),
             // The tuner's window is the one every GUI pops its tuner out to,

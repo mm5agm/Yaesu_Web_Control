@@ -100,6 +100,8 @@ export function startYaesuRttyContest(root, cfg) {
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
         views: cfg.views ?? [],
         menu: cfg.menu ?? [],
+        keys: cfg.setup ? [{ label: 'SETUP', onClick: key => sendSetup(view.receiver, key),
+            title: 'Send your RTTY setup from Settings to the radio: the lines for every band, then the ones for the band on screen' }] : [],
         tuner: cfg.tuner,
         decode: cfg.decode,
         storagePrefix: 'ywc.rttyContest.',
@@ -140,7 +142,23 @@ export function startYaesuRttyContest(root, cfg) {
         const res = spot
             ? await post(`/api/cat/frequency/${rx}`, { frequencyHz: spot })
             : await post(`/api/cat/band/${rx}`, { band });
-        if (res?.ok) await post(`/api/cat/mode/${rx}`, { mode: RTTY_MODES[rttyMode] });
+        if (res?.ok && (await post(`/api/cat/mode/${rx}`, { mode: RTTY_MODES[rttyMode] }))?.ok) {
+            await putBackPower(vfo, band);
+            if (cfg.setup && cfg.setupOnBand) await sendSetup(vfo, null, band);
+        }
+    }
+    // SETUP: the operator's CAT commands from Settings (Bruce VK2RT,
+    // Discussion #250). The key says how it went for a moment.
+    async function sendSetup(vfo, key, band = bandAt(feed.state.freq[vfo])) {
+        const res = await post(`/api/rtty/setup${band ? `?band=${encodeURIComponent(band)}` : ''}`, {});
+        const body = await res?.json().catch(() => ({})) ?? {};
+        if (!res?.ok) console.warn('RTTY setup:', body.error || res?.status);
+        if (!key) return;
+        const was = key.dataset.label ??= key.textContent;
+        key.textContent = res?.ok ? 'SENT' : 'NOT SENT';
+        key.title = res?.ok ? `Sent ${body.sent} commands${band ? ` for ${band}` : ''}` : (body.error || 'Not sent');
+        clearTimeout(key._back);
+        key._back = setTimeout(() => { key.textContent = was; }, 2500);
     }
     // MODE: kept first, so a running tuner holds the new mode rather than
     // putting the old one back, then written to the receiver on screen.
@@ -150,11 +168,29 @@ export function startYaesuRttyContest(root, cfg) {
         const res = await post('/api/rtty/mode', { mode });
         if (res?.ok) await post(`/api/cat/mode/${vfo.toLowerCase()}`, { mode: RTTY_MODES[mode] });
     }
+    // PWR is kept for each band when it's set here, and put back after a band
+    // key (Bruce VK2RT, Discussion #257). WIDTH is kept by the tuner, which
+    // is what used to undo it (RttyTunerModeService).
+    const KEPT_KEY = 'ywc.rttyContest.power';
+    const readKept = () => { try { return JSON.parse(localStorage.getItem(KEPT_KEY)) || {}; } catch { return {}; } };
+    function keepPower(band, watts) {
+        const kept = readKept();
+        kept[band] = watts;
+        try { localStorage.setItem(KEPT_KEY, JSON.stringify(kept)); } catch { /* private window */ }
+    }
+    async function putBackPower(vfo, band) {
+        const watts = band ? readKept()[band] : null;
+        if (watts != null) await post(`/api/cat/power/${vfo.toLowerCase()}`, { Watts: watts });
+    }
     // PWR, WIDTH and SHIFT. Power has no receiver; the URL names the one on
     // screen, as the Radio panel's knob names the selected one.
     function setControl(id, value, vfo) {
-        const rx = (vfo ?? view.receiver).toLowerCase();
-        if (id === 'power') return post(`/api/cat/power/${rx}`, { Watts: Math.round(num(value)) });
+        vfo = vfo ?? view.receiver;
+        const rx = vfo.toLowerCase(), band = bandAt(feed.state.freq[vfo]);
+        if (id === 'power') {
+            if (band) keepPower(band, Math.round(num(value)));
+            return post(`/api/cat/power/${rx}`, { Watts: Math.round(num(value)) });
+        }
         if (id === 'width') return post(`/api/cat/ifwidth/${rx}`, { code: String(value) });
         if (id === 'shift') return post(`/api/cat/ifshift/${rx}`, { shiftHz: Math.round(num(value)) });
     }

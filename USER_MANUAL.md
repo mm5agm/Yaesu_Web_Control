@@ -1403,7 +1403,7 @@ The Radio panel has none of the screen-reader or voice-control work of the Class
 
 ### 5.24 RTTY Contest
 
-*New in v2.5.4-pre2, with more in v2.5.4-pre3 and v2.5.4-pre4, and still being tested.*
+*New in v2.5.4-pre2, with more in each pre-release since, and still being tested.*
 
 **RTTY Contest** has only what a contest RTTY operator uses, on one screen: the frequency, the spectrum over the waterfall, and the RTTY tuner docked at the side. Pick it from **Views** on the Radio panel ([§5.23](#523-radio-panel)), or go to `http://localhost:8080/rtty-contest`. **VIEWS**, next to the RTTY CONTEST title, goes back to the other GUIs. **MENU**, beside it, has the same pages as the Radio panel's MENU (Settings, Application Setup, Memories, Labels, Meter Calibration, Diagnostics, the User Manual and About), each in a new tab, so the contest page keeps running behind it.
 
@@ -1457,6 +1457,36 @@ The docked tuner starts small, 300 px wide; its grabs make it bigger. Under it i
 - **SHIFT**, IF shift from -1000 to +1000 Hz in 20 Hz steps. Double-click it to centre it.
 
 WIDTH and SHIFT follow the receiver on screen. A slider writes to the radio when you let go of it, or a moment after the last notch of the mouse wheel over it.
+
+**PWR is kept for each band.** Set it on a band and a band key puts it back the next time you go to that band. *New in v2.5.4-pre8.*
+
+**WIDTH is kept too.** A width you set on MAIN while the tuner is open is the one the tuner uses from then on, in that mode, instead of the width it would work out ([§22.8](#228-what-the-tuner-changes-on-your-radio)). Closing the tuner leaves it as you set it. Until v2.5.4-pre8 the tuner put its own width back each time it started. *New in v2.5.4-pre8.*
+
+**Your RTTY setup**
+
+If you keep a string of CAT commands that set the radio up for RTTY (filters, DNR, the scope, menu items), paste it into **RTTY setup** on the Settings page under **RTTY Tuner**. A **SETUP** key then appears next to MENU on RTTY Contest, and sends it to the radio. The key shows **SENT**, or **NOT SENT** with the reason when you hold the mouse over it. *New in v2.5.4-pre8.*
+
+- Commands end with `;`, as in the radio's CAT manual. They can be on one line or several.
+- A line that starts with a band and a colon is sent only on that band, after the lines with no band, which are sent on every band:
+
+  ```
+  NR00;MD08;SH0010;RF02;
+  20m: FA014090000;
+  40m: FA007040000;
+  ```
+
+- **Send it when a band key on RTTY Contest is pressed**, under the box, sends it after each band key, with that band's lines.
+- **Nothing that can transmit or write over what you keep in the radio is sent.** TX, MX, VX, KY, KM, PB, LM, AC, AM, BM, MW, MT, QI and PS are refused. One of them anywhere refuses the whole setup, so the radio is never left half set up. Nothing is sent while you are transmitting.
+
+**Starting on RTTY Contest**
+
+YWC can open on RTTY Contest instead of the page it usually opens. Add `rtty-contest` to the end of the shortcut's **Target**:
+
+```
+"C:\Program Files\MM5AGM\Yaesu Web Control\Yaesu_Web_Control.exe" rtty-contest
+```
+
+The other names are `radio`, `classic`, `experimental` and `settings`. If YWC is already running, the shortcut opens that page in a new tab. With a name given the page opens even when **Open browser automatically on startup** is off. *New in v2.5.4-pre8.*
 
 **Sizes, windows and layouts**
 
@@ -4422,7 +4452,7 @@ Three things, and two of them are put back. Both of the automatic ones can be sw
 
 The reason it does this rather than just warning you is worth knowing: the tuner opens on whatever the radio was last doing, and what the radio was last doing is often CW with a 250 Hz filter. A passband that narrow cannot carry a 170 Hz shift's keying sidebands, let alone a 450 Hz shift's — and the figure then draws a perfectly convincing ellipse out of one tone and the skirt of the other, which looks exactly like a correctly tuned signal. **A tuning indicator that lies is worse than none**, so the conditions it needs are set rather than hoped for.
 
-**The IF filter**, and only ever wider. Changing to RTTY brings your own stored RTTY filter width with it, which is better evidence about your band than any formula, and it is touched only if it is too narrow to have carried the shift you are set to. Narrowing is left to you: a narrow filter is how you dig a signal out of a crowded band, and only you know the band.
+**The IF filter**, and only ever wider. A width you set by hand while the tuner is open is kept instead, for that mode, and left as it is when the tuner closes ([§5.24](#524-rtty-contest)). Changing to RTTY brings your own stored RTTY filter width with it, which is better evidence about your band than any formula, and it is touched only if it is too narrow to have carried the shift you are set to. Narrowing is left to you: a narrow filter is how you dig a signal out of a crowded band, and only you know the band.
 
 > **Where the filter sits.** In RTTY-L the FTdx101MP centres its IF filter on the middle of the tone pair **its own RTTY menu** expects: MARK FREQUENCY plus half the SHIFT FREQUENCY. With the usual 2125 Hz and 170 Hz that is about 2210 Hz. It does not follow the tuner's **Mark** box, only the radio's menu. I proved that on 2026-10-13 on a real station, with the dial left alone: with the menu at 2125/170 the pair around 2208 Hz came through and a pair around 1485 Hz was more than 20 dB down. Changing only the menu to 1275/425 swapped them round.
 >
