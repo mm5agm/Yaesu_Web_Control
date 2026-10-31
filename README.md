@@ -348,6 +348,27 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 [RELEASE_HISTORY.md](RELEASE_HISTORY.md); their installers are still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
 
+## 2026-10-31 - v2.5.4-pre9 (pre-release)
+
+*Bruce VK2RT's tuning dial on RTTY Contest, FIXED spectrums that turn a page at the edge, AUTO beside WIDTH, and three fixes from his testing. Everything in v2.5.4-pre8 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **A tuning dial.** The Radio panel's concentric dial, made smaller, sits under PWR, WIDTH and SHIFT. The outer ring tunes in big steps and the inner knob in small ones: turn the mouse wheel over a part, or drag it round. The step for each part is chosen in a list beside the dial (OUTER starts at 100 Hz, INNER at 10 Hz) and remembered in the browser.
+- **AUTO beside WIDTH** puts the tuner's own width back. It is lit while the tuner works the width out and dark while a width you set is kept. Press it to forget the kept width for MAIN's mode.
+- **A cleared RTTY setup saves.** An empty setup box refused the whole Settings save, so the SETUP key never went away.
+- **WIDTH shows what the radio has after SETUP.** The setup was sent but nothing read the radio back, so an SH line changed the radio's width while the screen kept the old one. Mode, width, shift and power are now read back after the setup is sent.
+
+**RTTY Tuner** [§22](USER_MANUAL.md#22-rtty)
+
+- **The tuner goes to the exact mode you chose.** At start it accepted either sideband, so DATA-U was left as DATA-U when DATA-L was chosen. While the tuner runs, a change to the other sideband is still left alone.
+
+**Spectrum**
+
+- **FIXED turns a page at the edge.** Tune off one edge and the signal comes back near the other, so you carry on tuning the same way instead of the view jumping to centre. A band change, a typed frequency or a spot still centres.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from RTTY Contest yet.
+
 ## 2026-10-30 - v2.5.4-pre8 (pre-release)
 
 *Bruce VK2RT's next four requests: his own RTTY setup string, PWR and WIDTH that stay where he puts them, a shortcut that opens RTTY Contest, and a fix for the tuner's Mark going back to 2125. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
