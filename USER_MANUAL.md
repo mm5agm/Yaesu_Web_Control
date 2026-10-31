@@ -1462,6 +1462,8 @@ WIDTH and SHIFT follow the receiver on screen. A slider writes to the radio when
 
 **WIDTH is kept too.** A width you set on MAIN while the tuner is open is the one the tuner uses from then on, in that mode, instead of the width it would work out ([§22.8](#228-what-the-tuner-changes-on-your-radio)). Closing the tuner leaves it as you set it. Until v2.5.4-pre8 the tuner put its own width back each time it started. *New in v2.5.4-pre8.*
 
+**The tuning dial.** Under those controls is the Radio panel's tuning dial, made smaller. Both parts tune the receiver on screen: the outer ring in big steps and the inner knob in small ones. Turn the mouse wheel over a part, or drag it round. Pick each part's step in the lists beside the dial, **OUTER** (100 Hz to start with) and **INNER** (10 Hz). The steps are kept in this browser. *New in v2.5.4-pre9.*
+
 **AUTO**, at the end of the WIDTH row, is lit while the tuner works the width out itself, and dark while a width you set is kept; hold the mouse over it to see which width and mode. Press it to go back to the tuner's own width for the mode MAIN is in: the kept width is forgotten, the tuner sizes the filter again straight away if it is open, and closing it puts back the width from before it opened. Setting WIDTH by hand while the tuner is open keeps a width again. AUTO is only for MAIN, because the tuner only sets MAIN. *New after v2.5.4-pre8.*
 
 **Your RTTY setup**
