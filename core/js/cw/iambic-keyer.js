@@ -35,6 +35,14 @@ const other = p => (p === DIT ? DAH : DIT);
 // starts no earlier than the space allows.
 const LOOKAHEAD_MS = 8;
 
+// When that wake-up comes late (a browser timer can fire 10-20 ms late, and
+// later while the page is busy), the next element still starts at the end
+// of the space, as long as that is no more than this far in the past. The
+// shack plays elements by their times after a 150 ms buffer, so the spacing
+// on air stays exact; the sidetone here just loses the first few ms of that
+// element. Later than this, the element starts now.
+const LATE_LIMIT_MS = 25;
+
 const defaultClock = {
     now: () => performance.now(),
     setTimeout: (fn, ms) => setTimeout(fn, ms),
@@ -135,8 +143,12 @@ export class IambicKeyer {
         let p = null;
         if (this._memory[opp] || this.isDown(opp)) p = opp;
         else if (this._memory[last] || this.isDown(last)) p = last;
-        if (p) this._start(p, Math.max(this._spaceEnd, this._clock.now()));
-        else this._current = null;
+        if (!p) {
+            this._current = null;
+            return;
+        }
+        const now = this._clock.now();
+        this._start(p, now - this._spaceEnd <= LATE_LIMIT_MS ? this._spaceEnd : now);
     }
 }
 

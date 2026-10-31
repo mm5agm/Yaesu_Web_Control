@@ -12,11 +12,12 @@ import { IambicKeyer, ElementDecoder, DIT, DAH } from '../../js/cw/iambic-keyer.
 import { MORSE } from '../../js/cw/morse-timing.js';
 
 // A clock that only moves when told to, firing timers in order on the way.
-function fakeClock() {
+// late() gives how many ms late each timer fires, as a busy browser's do.
+function fakeClock(late = () => 0) {
     let t = 0, id = 0, timers = [];
     return {
         now: () => t,
-        setTimeout(fn, ms) { const i = ++id; timers.push({ i, at: t + ms, fn }); return i; },
+        setTimeout(fn, ms) { const i = ++id; timers.push({ i, at: t + ms + late(), fn }); return i; },
         clearTimeout(i) { timers = timers.filter(x => x.i !== i); },
         advance(to) {
             for (;;) {
@@ -34,7 +35,7 @@ function fakeClock() {
 
 // A keyer at 20 WPM (60 ms unit) and a script of [time, paddle, down] steps.
 function run(script, opts = {}) {
-    const clock = fakeClock();
+    const clock = fakeClock(opts.late);
     const elements = [], stuck = [];
     const keyer = new IambicKeyer({
         wpm: 20, clock, ...opts,
@@ -76,6 +77,27 @@ test('the other paddle tapped on its own during an element is sent next, in both
     for (const mode of ['A', 'B']) {
         assert.deepEqual(run(script, { mode }).elements, [[DAH, 0, 180], [DIT, 240, 300]], `mode ${mode}`);
     }
+});
+
+test('a timer firing up to 25 ms late does not stretch the spacing', () => {
+    // The browser wakes the keyer 8 ms before each space ends; here every
+    // wake-up is 15 ms late, so 7 ms after the space has ended.
+    const { elements } = run([[0, DIT, true], [300, DIT, false]], { late: () => 15 });
+    assert.deepEqual(elements, [[DIT, 0, 60], [DIT, 120, 180], [DIT, 240, 300]]);
+});
+
+test('a squeeze with timers late by random amounts up to 25 ms comes out as with exact timers', () => {
+    const script = [[0, DIT, true], [5, DAH, true], [2000, DIT, false], [2000, DAH, false]];
+    let seed = 7;
+    const late = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648) * (8 + 25);
+    assert.deepEqual(run(script, { late }).elements, run(script).elements);
+});
+
+test('a timer more than 25 ms late starts the element when it fires', () => {
+    // The wake-up for the second dit is due at 112 and fires at 152: 32 ms
+    // after the space ended, too late to keep, so the dit starts at 152.
+    const { elements } = run([[0, DIT, true], [200, DIT, false]], { late: () => 40 });
+    assert.deepEqual(elements.slice(0, 2), [[DIT, 0, 60], [DIT, 152, 212]]);
 });
 
 test('a press during the space waits for the space to finish', () => {

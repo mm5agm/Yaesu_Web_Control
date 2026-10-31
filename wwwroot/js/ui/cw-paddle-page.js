@@ -94,12 +94,15 @@ function lightKey(start, end) {
 const keyer = new IambicKeyer({
     wpm: settings.wpm, mode: settings.mode, stuckMs: settings.stuckS * 1000,
     onElement: ({ paddle, start, end }) => {
+        const now = performance.now();
         if (settings.tone) sidetone.element(start, end);
         link.element(start, end);
         lightKey(start, end);
         decoder.element(paddle, start, end, keyer.unitMs);
-        log(`keyer  ${paddle === 'dit' ? 'dit' : 'DAH'}  ${(end - start).toFixed(0)} ms` +
-            `${start > performance.now() + 0.5 ? `  (starts in ${(start - performance.now()).toFixed(1)} ms)` : ''}`, start);
+        // "timer N ms late": the keyer woke late but kept the element's proper start.
+        const when = start > now + 0.5 ? `  (starts in ${(start - now).toFixed(1)} ms)`
+                   : start < now - 0.5 ? `  (timer ${(now - start).toFixed(1)} ms late, start kept)` : '';
+        log(`keyer  ${paddle === 'dit' ? 'dit' : 'DAH'}  ${(end - start).toFixed(0)} ms${when}`, start);
     },
     onStop: () => { sidetone.cancel(); link.abort(); $('cwpKeyLamp').classList.remove('on'); },
     onStuck: p => log(`${p} paddle held over ${settings.stuckS} s: treated as let go until it is released`),
@@ -170,7 +173,12 @@ $('cwpVolume').addEventListener('input', () => { settings.volume = Number($('cwp
 $('cwpDevice').addEventListener('change', () => { settings.device = $('cwpDevice').value; save(); paddle.select(settings.device); });
 $('cwpLink').addEventListener('change', () => setLink($('cwpLink').checked));
 $('cwpClearCopy').addEventListener('click', () => { $('cwpCopy').textContent = ''; });
-$('cwpClearLog').addEventListener('click', () => { $('cwpLog').textContent = ''; });
+// A fresh start for the next test: the summary counts start again too.
+$('cwpClearLog').addEventListener('click', () => {
+    $('cwpLog').textContent = '';
+    clearTimeout(burstTimer);
+    burst = null;
+});
 
 $('cwpConnect').addEventListener('click', async () => {
     // Audio may only start from a click, so the sidetone starts here too.
