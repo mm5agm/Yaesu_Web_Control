@@ -52,6 +52,7 @@ import { applyTheme, DEFAULT_THEME } from '../radio-panel/radio-panel-themes.js'
 import { SpectrumPane } from '../radio-panel/spectrum-pane.js';
 import { formatFrequency } from '../radio-panel/panel-math.js';
 import { freqDigits, wheelDigits } from '../radio-panel/freq-digits.js';
+import { turnable } from '../radio-panel/turnable.js';
 import { PopoutHost, popoutPlace, setPopoutPlace } from '../popout/popout.js';
 import { initFlexLayoutsAdmin } from '../flex/flex-layouts-admin.js';
 import { pipDock, pipSupported } from './pip-dock.js';
@@ -221,6 +222,13 @@ const CSS = `
 .rc-crow select{flex:1;min-width:0}
 .rc-crow .rc-num{min-width:4.6em;text-align:right}
 .rc-crow .rc-auto{flex:none;min-height:24px;min-width:0;padding:0 6px;font-size:12px}
+.rc-dialbox{flex-direction:row;align-items:center;gap:12px}
+.rc-dialbox .rp-dial{flex:none;width:150px;height:150px}
+.rc-dialbox .rp-dial-well{width:102px;height:102px}
+.rc-dialbox .rp-dial-knob{width:84px;height:84px}
+.rc-dialbox .rp-dial-knob .rp-dial-inner{width:65px;height:65px}
+.rc-dialbox .rp-dial-knob .rp-dial-dimple{width:18px;height:18px;left:39px;top:11px}
+.rc-dialsteps{flex:1;min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px 6px}
 .rc-dbox{flex:1 1 0;min-height:${DECODE_MIN_H}px;display:flex;flex-direction:column;width:var(--rc-tuner-w,300px)}
 .rc-dbox[hidden]{display:none}
 .rc-dbox.out{flex:none;min-height:0}
@@ -276,6 +284,8 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {(id:string, hz:number) => void} [opts.onTune]  a click on a pane
  * @param {(id:string, hz:number) => number} [opts.tuneTo]  where the dial lands for a click at hz
  * @param {(id:string, dir:number) => void} [opts.onStep]  a mouse wheel notch
+ * @param {(id:string, hz:number) => void} [opts.onNudge]  move the dial by hz: the wheel over a
+ *        digit of the frequency, or a notch of the dial under the tuner
  * @param {(id:string, hz:number) => void} [opts.onFrequencyEntry]  a typed frequency
  * @param {(id:string) => void} [opts.onReceiver]  the operator picked Main or Sub
  * @param {{id:string, label:string}[]} [opts.modes]  the modes the MODE list offers; without
@@ -632,6 +642,57 @@ export function mountContestView(root, opts) {
             ctlBox.append(row);
         }
         side.append(ctlBox);
+    }
+    // The radio panel's dial under the tuner, as Bruce VK2RT asked
+    // (2026-10-31): both parts tune the receiver on screen, the outer ring in
+    // big steps and the inner knob in small ones, each step picked beside it
+    // and kept in this browser. The wheel over a part or a drag round it
+    // tunes, as on the radio panel. The parts are named A (the ring) and B
+    // (the knob) for the radio panel's style, which lights them by those.
+    if (isMain && opts.onNudge) {
+        const dialBox = h('div', 'rc-ctl rc-dialbox');
+        const dial = h('div', 'rp-dial dual');
+        const well = h('div', 'rp-dial-well');
+        const knob = h('div', 'rp-dial-knob');
+        const face = h('div', 'rp-dial-inner');
+        face.append(h('div', 'rp-dial-dimple'));
+        knob.append(face);
+        well.append(knob);
+        dial.append(well);
+        dial.title = 'Tune: mouse wheel or drag. The outer ring moves in big steps, the inner knob in small ones';
+        const dialSteps = {};
+        const stepsBox = h('div', 'rc-dialsteps');
+        for (const [part, label, name, def] of [['A', 'OUTER', 'outer ring', 100], ['B', 'INNER', 'inner knob', 10]]) {
+            const sel = h('select', 'rc-step');
+            sel.title = `How far one notch of the ${name} moves the dial`;
+            sel.setAttribute('aria-label', `Step for the ${name}`);
+            for (const hz of STEP_CHOICES_HZ) sel.append(new Option(hz >= 1000 ? hz / 1000 + ' kHz' : hz + ' Hz', String(hz)));
+            const k = own + (part === 'A' ? 'dialOuterStep' : 'dialInnerStep');
+            const was = Number(store.get(k, String(def)));
+            sel.value = String(STEP_CHOICES_HZ.includes(was) ? was : def);
+            sel.addEventListener('change', () => store.set(k, sel.value));
+            dialSteps[part] = sel;
+            stepsBox.append(h('span', 'rc-lbl', label), sel);
+        }
+        const rot = { A: 0, B: 0 };
+        turnable(dial, {
+            deg: 10,
+            partAt: (x, y) => {
+                const rc = dial.getBoundingClientRect(), kc = knob.getBoundingClientRect();
+                return Math.hypot(x - (rc.left + rc.width / 2), y - (rc.top + rc.height / 2)) <= kc.width / 2 ? 'B' : 'A';
+            },
+            onTurn: (part, d) => {
+                rot[part] = (rot[part] + d) % 360;
+                if (part === 'A') dial.style.setProperty('--rp-ring-rot', rot.A + 'deg');
+                else {
+                    face.style.transform = `rotate(${rot.B}deg)`;
+                    knob.style.setProperty('--rp-knob-rot', rot.B + 'deg');
+                }
+            },
+            onStep: (part, dir) => opts.onNudge(receiver, dir * Number(dialSteps[part].value)),
+        });
+        dialBox.append(dial, stepsBox);
+        side.append(dialBox);
     }
     function drawControls() {
         for (const ctl of Object.values(ctls)) {
