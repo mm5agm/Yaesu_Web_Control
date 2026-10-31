@@ -1,0 +1,160 @@
+name: Branch image - FTDX5000 8-digit fix
+
+# Temporary GHCR image for the FTDX5000 8-digit frequency parsing fix
+# (issue #235). This workflow exists only on this branch and deliberately
+# does not touch :latest or the release/unstable tags.
+#
+# Pull:    docker pull ghcr.io/mm5agm/yaesu_web_control:ftdx5000-8digit
+# Expires: versions carrying a ftdx5000-8digit* tag are deleted once they are
+#          30 days old. The check runs after every build and on a daily
+#          schedule. A new build moves the stable tag to a fresh version, so
+#          the expiry clock restarts on each push.
+#
+# GitHub only runs scheduled workflows from the default branch, so the daily
+# cleanup starts once this file reaches the default branch. Until then the
+# check still runs on every push to this branch.
+
+on:
+  push:
+    branches:
+      - fix/ftdx5000-8-digit-frequency-parsing
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+concurrency:
+  group: branch-docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_TAG: ftdx5000-8digit
+  EXPIRY_DAYS: '30'
+
+jobs:
+  publish:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      actions: write  # docker buildx GHA cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Work out tags and expiry
+        id: prep
+        run: |
+          echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "stamp=${IMAGE_TAG}-$(date -u +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
+          echo "expires=$(date -u -d "+${EXPIRY_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.prep.outputs.image }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ env.IMAGE_TAG }}
+            type=raw,value=${{ steps.prep.outputs.stamp }}
+          labels: |
+            org.opencontainers.image.expires=${{ steps.prep.outputs.expires }}
+            org.opencontainers.image.description=Temporary FTDX5000 8-digit frequency parsing fix (issue #235); removed ${{ env.EXPIRY_DAYS }} days after the last publish.
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            YWC_BUILD_TAG=${{ steps.prep.outputs.stamp }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### Branch image published"
+            echo
+            echo "Pull: \`${{ steps.prep.outputs.image }}:${IMAGE_TAG}\`"
+            echo
+            echo "Also tagged \`${{ steps.prep.outputs.stamp }}\`."
+            echo
+            echo "This build expires on \`${{ steps.prep.outputs.expires }}\` unless it is rebuilt."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  expire:
+    needs: [publish]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Delete expired ftdx5000-8digit versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          package="$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
+          prefix="${IMAGE_TAG}"
+          cutoff="$(date -u -d "${EXPIRY_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)"
+
+          owner_type="$(gh api "repos/${GITHUB_REPOSITORY}" --jq .owner.type)"
+          if [ "${owner_type}" = "Organization" ]; then
+            base="/orgs/${owner}/packages/container/${package}"
+          else
+            base="/users/${owner}/packages/container/${package}"
+          fi
+
+          # Deleting the last version removes the package from GHCR. On a
+          # later scheduled run there is then nothing to expire.
+          if ! gh api "${base}" >/dev/null 2>&1; then
+            echo "Package ${package} does not exist; nothing to expire."
+            exit 0
+          fi
+
+          # The package versions API returns the tags currently on each
+          # version. A rebuild moves the stable tag to a new version and
+          # leaves the previous one with its unique dated tag, so matching
+          # the prefix catches both.
+          jq_filter='.[] | select(((.metadata.container.tags // []) | any(startswith("'"${prefix}"'"))) and (.created_at < "'"${cutoff}"'")) | [.id, .created_at, ((.metadata.container.tags // []) | join(","))] | @tsv'
+
+          versions="$(gh api --paginate "${base}/versions" --jq "${jq_filter}")"
+
+          found=0
+          while IFS=$'\t' read -r id created tags; do
+            if [ -z "${id}" ]; then
+              continue
+            fi
+            found=1
+            echo "Deleting ${package} version ${id} (created ${created}; tags: ${tags})"
+            gh api -X DELETE "${base}/versions/${id}"
+          done <<< "${versions}"
+
+          if [ "${found}" -eq 0 ]; then
+            echo "Nothing older than ${EXPIRY_DAYS} days under ${prefix}*."
+          fi

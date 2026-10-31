@@ -248,6 +248,8 @@ namespace Yaesu_Web_Control.Services
                 if (!string.IsNullOrWhiteSpace(faFreqResponse) && faFreqResponse.StartsWith("FA"))
                 {
                     var freqStr = faFreqResponse.Substring(2).TrimEnd(';');
+                    if (freqStr.Length is 8 or 9)
+                        radioStateService.FrequencyDigits = freqStr.Length;
                     if (int.TryParse(freqStr, out int freqHz))
                     {
                         radioStateService.FrequencyA = freqHz;
@@ -260,6 +262,8 @@ namespace Yaesu_Web_Control.Services
                 if (!string.IsNullOrWhiteSpace(fbFreqResponse) && fbFreqResponse.StartsWith("FB"))
                 {
                     var freqStr = fbFreqResponse.Substring(2).TrimEnd(';');
+                    if (freqStr.Length is 8 or 9)
+                        radioStateService.FrequencyDigits = freqStr.Length;
                     if (int.TryParse(freqStr, out int freqHz))
                     {
                         radioStateService.FrequencyB = freqHz;
