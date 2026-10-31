@@ -137,6 +137,9 @@ namespace Yaesu_Web_Control.Pages
             ModelState.Remove("Settings.AudioRadioRxDevice");
             ModelState.Remove("Settings.AudioRadioTxDevice");
             ModelState.Remove("Settings.HttpsSanHosts");
+            // The RTTY setup may be cleared: empty = nothing for SETUP to send.
+            // Without this an emptied box refused the whole save (Bruce VK2RT, #250).
+            ModelState.Remove("Settings.RttySetupCat");
 
             if (!ModelState.IsValid)
             {
