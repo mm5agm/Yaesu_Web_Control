@@ -163,8 +163,11 @@ namespace Yaesu_Web_Control.Controllers
                 // A set command has no answer, so what the setup changed is read
                 // back for every page to show: the radio had the width from an SH
                 // line while the screen still showed the one before (Bruce VK2RT, #250).
+                // The frequency too: an FA line put the radio on 14.090 while the
+                // screen kept the band key's 14.080, as the FTdx101 doesn't report
+                // a change made over CAT (Bruce VK2RT, #250).
                 var receivers = _state.IsSingleReceiver ? new[] { "A" } : new[] { "A", "B" };
-                var reads = new List<string> { "PC;" };
+                var reads = new List<string> { "PC;", "FA;", "FB;" };
                 foreach (var r in receivers)
                 {
                     string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, r);
