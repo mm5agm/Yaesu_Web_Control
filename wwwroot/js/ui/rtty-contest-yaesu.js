@@ -101,7 +101,7 @@ export function startYaesuRttyContest(root, cfg) {
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
         views: cfg.views ?? [],
         menu: cfg.menu ?? [],
-        keys: cfg.setup ? [{ label: 'SETUP', onClick: key => sendSetup(view.receiver, key),
+        keys: cfg.setup ? [{ label: 'CAT SET', onClick: key => sendSetup(view.receiver, key),
             title: 'Send your RTTY setup from Settings to the radio: the lines for every band, then the ones for the band on screen' }] : [],
         tuner: cfg.tuner,
         decode: cfg.decode,
@@ -148,8 +148,8 @@ export function startYaesuRttyContest(root, cfg) {
             if (cfg.setup && cfg.setupOnBand) await sendSetup(vfo, null, band);
         }
     }
-    // SETUP: the operator's CAT commands from Settings (Bruce VK2RT,
-    // Discussion #250). The key says how it went for a moment.
+    // CAT SET: the operator's CAT commands from Settings (Bruce VK2RT,
+    // Discussion #250). Not SETUP, which the radio's MENU already has. The key says how it went for a moment.
     async function sendSetup(vfo, key, band = bandAt(feed.state.freq[vfo])) {
         const res = await post(`/api/rtty/setup${band ? `?band=${encodeURIComponent(band)}` : ''}`, {});
         const body = await res?.json().catch(() => ({})) ?? {};

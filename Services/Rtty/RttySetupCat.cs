@@ -4,7 +4,7 @@ namespace Yaesu_Web_Control.Services.Rtty
 {
     /// <summary>
     /// The operator's own RTTY setup: CAT commands, typed in Settings, that the
-    /// SETUP key on RTTY Contest sends to the radio - filters, scope, menus,
+    /// CAT SET key on RTTY Contest sends to the radio - filters, scope, menus,
     /// whatever their station wants for RTTY. Bruce VK2RT, Discussion #250,
     /// 2026-10-30, who already keeps such a string for 20 m.
     ///
