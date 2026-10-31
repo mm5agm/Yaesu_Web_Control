@@ -17,6 +17,8 @@
         body { background: #222; color: #eee; padding: 1rem; font-size: 0.95rem; }
         h1 { font-size: 1.3rem; }
         .cwp-dry { background: #3a3000; border: 1px solid #a80; color: #fd6; padding: 0.4rem 0.7rem; border-radius: 4px; margin-bottom: 0.8rem; }
+        .cwp-dry.live { background: #4a0d0d; border-color: #e44; color: #fcc; }
+        .cwp-note { font-size: 0.85rem; color: #bbb; margin-top: 0.4rem; }
         fieldset { border: 1px solid #555; border-radius: 4px; padding: 0.5rem 0.8rem; margin-bottom: 0.8rem; }
         legend { float: none; width: auto; font-size: 0.9rem; padding: 0 0.3rem; margin: 0; color: #aaa; }
         .cwp-row { display: flex; flex-wrap: wrap; gap: 0.6rem 1.2rem; align-items: center; }
@@ -33,7 +35,7 @@
 </head>
 <body>
     <h1>CW Paddle (test)</h1>
-    <div class="cwp-dry">Dry run: nothing is sent to the radio. With Send to the shack PC ticked, YWC plays the keying into its log only; it opens no COM port and keys nothing.</div>
+    <div id="cwpBanner" class="cwp-dry">Dry run: nothing is sent to the radio. With Send to the shack PC ticked, YWC plays the keying into its log only; it opens no COM port and keys nothing.</div>
 
     <fieldset>
         <legend>Paddle (MIDI)</legend>
@@ -45,7 +47,7 @@
             <label>Channel <select id="cwpChannel"></select></label>
             <label><input id="cwpSwap" type="checkbox"> Swap paddles</label>
         </div>
-        <div id="cwpStatus" class="mt-2 text-secondary">Press Connect paddle. The browser will ask to use MIDI devices.</div>
+        <div id="cwpStatus" class="mt-2">Press Connect paddle. The browser will ask to use MIDI devices.</div>
     </fieldset>
 
     <fieldset>
@@ -61,10 +63,20 @@
     </fieldset>
 
     <fieldset>
-        <legend>Shack PC (dry run)</legend>
+        <legend>Shack PC</legend>
         <div class="cwp-row">
             <label><input id="cwpLink" type="checkbox"> Send to the shack PC</label>
-            <span id="cwpLinkStatus" class="text-secondary">Not sending.</span>
+            <span id="cwpLinkStatus">Not sending.</span>
+        </div>
+        <div class="cwp-row mt-2">
+            <label>Key line <select id="cwpKeyPort"><option value="">Dry run: log only</option></select></label>
+            <span id="cwpKeyPortStatus"></span>
+        </div>
+        <div class="cwp-note">
+            Keying the radio uses DTR on its <b>Standard</b> COM port, never the CAT port. On the radio:
+            PC KEYING = DTR (set it on the radio's own MENU; the FTdx101 would not take it by CAT).
+            <b>Choosing a COM port here transmits, even with BREAK-IN off</b> (seen on the FTdx101MP).
+            Use a dummy load or be ready to be on the air. The key line goes back to the dry run whenever YWC restarts.
         </div>
     </fieldset>
 

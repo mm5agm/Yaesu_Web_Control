@@ -11,7 +11,7 @@ import { KeyLink } from '../cw/key-link.js';
 
 const STORE = 'ywc.cwPaddle';
 const DEFAULTS = { device: '', ditNote: 20, dahNote: 21, channel: 0, swap: false,
-                   wpm: 20, mode: 'B', stuckS: 3, tone: true, pitch: 600, volume: 30, link: false };
+                   wpm: 20, mode: 'B', stuckS: 5, tone: true, pitch: 600, volume: 30, link: false };
 let settings = { ...DEFAULTS };
 try { settings = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORE) || '{}') }; } catch { /* keep defaults */ }
 const save = () => localStorage.setItem(STORE, JSON.stringify(settings));
@@ -55,6 +55,7 @@ hub.on('CwKeyReport', r => {
     const late = r.kind === 'key' && r.lateMs > 1 ? `  (${r.lateMs.toFixed(1)} ms late)` : '';
     log(`shack  ${r.kind === 'safety' ? '!! ' : ''}${r.text}${late}`);
     if (r.kind === 'busy') { $('cwpLinkStatus').textContent = 'Another browser has the key: close its tab.'; return; }
+    if (r.kind === 'unsupported') { $('cwpLinkStatus').textContent = 'YWC on this PC cannot key: paddle keying is Windows only for now.'; return; }
     burst ??= { elements: 0, maxErr: 0, maxLate: 0, safety: 0 };
     if (r.kind === 'safety') burst.safety++;
     if (r.kind === 'key') burst.maxLate = Math.max(burst.maxLate, r.lateMs ?? 0);
@@ -68,13 +69,63 @@ hub.on('CwKeyReport', r => {
 function linkStatus() {
     const s = $('cwpLinkStatus');
     if (!settings.link) s.textContent = 'Not sending.';
-    else if (hub.state === signalR.HubConnectionState.Connected) s.textContent = 'Sending to YWC (dry run: it logs, keys nothing).';
+    else if (hub.state === signalR.HubConnectionState.Connected)
+        s.textContent = keyPort ? `Sending to YWC: it keys the radio by DTR on ${keyPort}.` : 'Sending to YWC (dry run: it logs, keys nothing).';
     else s.textContent = `Hub ${hub.state.toLowerCase()}: waiting to send.`;
 }
+
+// The key line: the dry run, or DTR on a COM port of the shack PC. It is
+// YWC's choice, not this page's: it starts as the dry run whenever YWC
+// starts, and this page only shows it and asks to change it.
+let keyPort = null;
+function showKeyLine() {
+    const banner = $('cwpBanner');
+    banner.classList.toggle('live', !!keyPort);
+    banner.textContent = keyPort
+        ? `Keying the radio: DTR on ${keyPort}. The radio transmits, even with BREAK-IN off.`
+        : 'Dry run: nothing is sent to the radio. With Send to the shack PC ticked, YWC plays the keying into its log only; it opens no COM port and keys nothing.';
+    linkStatus();
+}
+async function loadKeyLine() {
+    const sel = $('cwpKeyPort'), status = $('cwpKeyPortStatus');
+    let st;
+    try { st = await hub.invoke('CwKeyLineStatus'); } catch (e) { status.textContent = `Could not ask YWC: ${e.message}`; return; }
+    keyPort = st.keyPort ?? null;
+    // Logged when the page first learns it and whenever it changes, so the
+    // log never says dry run while YWC is keying the radio.
+    if (keyPort !== loggedKeyPort) {
+        log(keyPort ? `key line: DTR on ${keyPort}. The radio transmits.` : 'key line: dry run. Nothing is sent to the radio; the shack PC only logs.');
+        loggedKeyPort = keyPort;
+    }
+    sel.replaceChildren(new Option('Dry run: log only', ''));
+    for (const p of st.ports) {
+        const cat = st.catPort && p.name.toUpperCase() === st.catPort.toUpperCase();
+        const o = new Option(cat ? `${p.description} - the CAT port, not allowed` : p.description, p.name);
+        o.disabled = cat;
+        sel.add(o);
+    }
+    sel.value = keyPort ?? '';
+    sel.disabled = !st.supported;
+    status.textContent = !st.supported ? 'Windows only for now.'
+        : keyPort ? '' : 'Choose the radio\'s Standard COM port to key it.';
+    showKeyLine();
+}
+$('cwpKeyPort').addEventListener('change', async () => {
+    const sel = $('cwpKeyPort'), status = $('cwpKeyPortStatus');
+    const port = sel.value || null;
+    status.textContent = port ? `Opening ${port}...` : '';
+    let err;
+    try { err = await hub.invoke('CwSetKeyLine', port); } catch (e) { err = e.message; }
+    if (err) log(`key line: ${err}`);
+    await loadKeyLine();
+    if (err) status.textContent = err;
+});
+
+function hubUp() { linkStatus(); loadKeyLine(); }
 hub.onreconnecting(linkStatus);
-hub.onreconnected(linkStatus);
+hub.onreconnected(hubUp);
 hub.onclose(linkStatus);
-hub.start().then(linkStatus, e => { log(`Hub did not connect: ${e.message}`); linkStatus(); });
+hub.start().then(hubUp, e => { log(`Hub did not connect: ${e.message}`); linkStatus(); });
 function setLink(on) {
     settings.link = on;
     save();
@@ -105,7 +156,7 @@ const keyer = new IambicKeyer({
         log(`keyer  ${paddle === 'dit' ? 'dit' : 'DAH'}  ${(end - start).toFixed(0)} ms${when}`, start);
     },
     onStop: () => { sidetone.cancel(); link.abort(); $('cwpKeyLamp').classList.remove('on'); },
-    onStuck: p => log(`${p} paddle held over ${settings.stuckS} s: treated as let go until it is released`),
+    onStuck: p => log(`${p} paddle held over ${(keyer.stuckAfterMs / 1000).toFixed(1)} s: treated as let go until it is released`),
 });
 
 setInterval(() => { if (!keyer.busy) decoder.idle(performance.now()); }, 50);
@@ -208,4 +259,4 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => { keyer.stop(); paddle.releaseAll(); link.stop(); });
 
-log('Page open. Dry run: nothing is sent to the radio; the shack PC only logs.');
+log('Page open.');

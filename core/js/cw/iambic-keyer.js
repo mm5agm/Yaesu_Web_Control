@@ -55,7 +55,7 @@ export class IambicKeyer {
     // onStuck(paddle)                    a paddle held longer than stuckMs is
     //                                    treated as let go until it really is
     constructor({
-        wpm = 20, mode = 'B', stuckMs = 3000,
+        wpm = 20, mode = 'B', stuckMs = 5000,
         onElement = () => {}, onStop = () => {}, onStuck = () => {},
         clock = defaultClock,
     } = {}) {
@@ -78,6 +78,11 @@ export class IambicKeyer {
 
     get unitMs() { return 1200 / this.wpm; }
     get busy() { return this._current !== null; }
+
+    // How long a paddle may be held before it is called stuck: stuckMs, but
+    // never less than 24 units, so a slow "0" (five dahs on one paddle, 19
+    // units, 4.6 s at 5 WPM) is never cut short.
+    get stuckAfterMs() { return this.stuckMs > 0 ? Math.max(this.stuckMs, 24 * this.unitMs) : 0; }
     isDown(p) { return this._held[p] && !this._stuck[p]; }
 
     // A paddle pressed (down true) or let go.
@@ -94,7 +99,7 @@ export class IambicKeyer {
             this._stuck[p] = false;
             return;
         }
-        if (this.stuckMs > 0) this._stuckTimer[p] = this._clock.setTimeout(() => this._stuckNow(p), this.stuckMs);
+        if (this.stuckMs > 0) this._stuckTimer[p] = this._clock.setTimeout(() => this._stuckNow(p), this.stuckAfterMs);
         if (this.busy) {
             // The same paddle again counts once its element has finished
             // sounding: a tap in the space is the next element, not a bounce.

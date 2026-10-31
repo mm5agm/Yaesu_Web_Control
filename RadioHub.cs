@@ -52,20 +52,30 @@ namespace Yaesu_Web_Control.Hubs
         }
 
         /// <summary>
+        /// Key events from a paddle keyer running in the browser, played on
+        /// this PC after a jitter buffer. Reports come back on "CwKeyReport".
+        /// The key line is the dry run until CwSetKeyLine chooses a port.
+        /// </summary>
+        public void CwKey(RadioWebControl.Core.Services.Cw.CwKeyPacket packet) =>
+            _cwKeying.Receive(Context.ConnectionId, packet);
+
+        /// <summary>The paddle key line now, the CAT port, and the COM ports, for the test page.</summary>
+        public object CwKeyLineStatus() => _cwKeying.LineStatus();
+
+        /// <summary>
+        /// Chooses the paddle key line: a COM port keyed by DTR (the radio's
+        /// Standard port), or null for the dry run. Returns null when done,
+        /// or why not.
+        /// </summary>
+        public string? CwSetKeyLine(string? port) => _cwKeying.SetKeyPort(port);
+
+        /// <summary>
         /// Ask for the host-side spectrum of the radio's RX audio (the
         /// Filter Function Display's green bars). Returns null when frames
         /// will follow on RadioStateUpdate as property "FilterSpectrum", or
         /// the reason they will not. The capture is opened on the first
         /// subscriber and closed when the last connection drops.
         /// </summary>
-        /// <summary>
-        /// Key events from a paddle keyer running in the browser, played on
-        /// this PC after a jitter buffer. Reports come back on "CwKeyReport".
-        /// Dry run for now: CwKeyingService logs and keys nothing.
-        /// </summary>
-        public void CwKey(RadioWebControl.Core.Services.Cw.CwKeyPacket packet) =>
-            _cwKeying.Receive(Context.ConnectionId, packet);
-
         public async Task<string?> SubscribeFilterSpectrum()
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, FilterSpectrumService.GroupName);

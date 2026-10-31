@@ -144,6 +144,66 @@ namespace RadioWebControl.Core.Tests.Cw
             Assert.DoesNotContain(sim.Reports, r => r.Kind == "safety");
         }
 
+        [Theory]
+        [InlineData(5)]
+        [InlineData(12)]
+        [InlineData(25)]
+        [InlineData(35)]
+        [InlineData(50)]
+        public void Every_speed_plays_exactly_through_jitter(int wpm)
+        {
+            // Random letters at this speed: dits, dahs, element, letter and
+            // word spaces, every packet delayed by 20-140 ms.
+            double u = 1200.0 / wpm, t = 1000;
+            var rnd = new Random(wpm);
+            var keyed = new List<(double Start, double End)>();
+            for (int k = 0; k < 60; k++)
+            {
+                double len = rnd.Next(2) == 0 ? u : 3 * u;
+                keyed.Add((t, t + len));
+                t += len + (k % 7 == 6 ? 7 * u : k % 3 == 2 ? 3 * u : u);
+            }
+            var sim = new Sim();
+            foreach (var (s, e) in keyed) sim.Element(s, e, delay: 20 + rnd.NextDouble() * 120);
+            // The page pings every 100 ms whatever the key is doing: without
+            // them a 720 ms dah at 5 WPM looks like a lost link.
+            sim.Pings(900, t + 1000, delay: 40);
+            sim.Run();
+            var played = sim.Elements();
+            Assert.Equal(keyed.Count, played.Count);
+            for (int k = 0; k < keyed.Count; k++)
+            {
+                Assert.Equal(keyed[k].End - keyed[k].Start, played[k].Up - played[k].Down, 3);
+                if (k == 0) continue;
+                double gap = keyed[k].Start - keyed[k - 1].End, playedGap = played[k].Down - played[k - 1].Up;
+                // Short gaps exactly; a long one within 10%, following the offset.
+                if (gap <= 500) Assert.Equal(gap, playedGap, 3);
+                else Assert.InRange(playedGap, gap * 0.9 - 1e-6, gap * 1.1 + 1e-6);
+            }
+            Assert.DoesNotContain(sim.Reports, r => r.Kind == "safety");
+        }
+
+        [Fact]
+        public void A_long_gap_catches_up_gradually()
+        {
+            // A slow first packet sets the timeline late; a faster one later
+            // moves the offset 100 ms earlier. Each word space gives up at
+            // most 70 ms of its 700, so it takes two to catch up.
+            var sim = new Sim();
+            sim.Element(1000, 1100, delay: 140);
+            sim.Element(1800, 1900, delay: 40);
+            sim.Element(2600, 2700, delay: 40);
+            sim.Element(3400, 3500, delay: 40);
+            sim.Pings(900, 4500, delay: 140);
+            sim.Run();
+            var p = sim.Elements();
+            Assert.Equal(4, p.Count);
+            Assert.Equal(630, p[1].Down - p[0].Up, 3);
+            Assert.Equal(670, p[2].Down - p[1].Up, 3);
+            Assert.Equal(700, p[3].Down - p[2].Up, 3);
+            Assert.All(p, e => Assert.Equal(100, e.Up - e.Down, 3));
+        }
+
         [Fact]
         public void A_packet_later_than_the_buffer_plays_late_but_at_full_length()
         {
@@ -262,7 +322,8 @@ namespace RadioWebControl.Core.Tests.Cw
         {
             // The first packets are slow; a fast one arrives mid-character and
             // lowers the offset. The character keeps its spacing; the timeline
-            // catches up at the next long gap.
+            // catches up at the next long gap, by at most 10% of it: 70 of
+            // the 100 ms it is behind.
             var sim = new Sim();
             sim.Element(1000, 1060, delay: 120);
             sim.Element(1120, 1180, delay: 20);
@@ -272,7 +333,8 @@ namespace RadioWebControl.Core.Tests.Cw
             var p = sim.Elements();
             Assert.Equal(60, p[1].Down - p[0].Up, 6);
             Assert.Equal(60, p[2].Down - p[1].Up, 6);
-            Assert.Equal(2000 + ClockBase + 20 + 150, p[3].Down, 6);
+            Assert.Equal(630, p[3].Down - p[2].Up, 6);
+            Assert.Equal(2000 + ClockBase + 20 + 150 + 30, p[3].Down, 6);
         }
     }
 }

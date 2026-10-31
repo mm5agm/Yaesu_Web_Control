@@ -59,9 +59,17 @@
         /// <summary>
         /// Within a character the browser's spacing is kept exactly, even when
         /// that runs a little behind the buffer. A gap longer than this (a word
-        /// space, a pause) lets the timeline catch up with the buffer again.
+        /// space, a pause) lets the timeline catch up with the buffer again,
+        /// by up to <see cref="CatchUpFraction"/> of the gap.
         /// </summary>
         public double RealignGapMs { get; set; } = 500;
+
+        /// <summary>
+        /// How much a long gap may shrink or grow to follow the offset: a word
+        /// space at 12 WPM (700 ms) plays between 630 and 770 ms, still well
+        /// over a letter space.
+        /// </summary>
+        public double CatchUpFraction { get; set; } = 0.1;
     }
 
     /// <summary>
@@ -225,8 +233,17 @@
         private void Enqueue(CwKeyEvent e)
         {
             double playAt = e.T + OffsetMs!.Value + _o.BufferMs;
-            if (_prevEvent is not null && e.T - _prevEvent.T <= _o.RealignGapMs)
-                playAt = Math.Max(playAt, _prevPlayAt + (e.T - _prevEvent.T));
+            if (_prevEvent is not null)
+            {
+                // Spacing is kept exactly, whichever way the offset moves,
+                // except that a long space (never an element: an up keeps its
+                // down's length) may shrink or grow by a fraction of itself,
+                // for the timeline to follow the offset gradually.
+                double gap = e.T - _prevEvent.T, kept = _prevPlayAt + gap;
+                playAt = gap > _o.RealignGapMs && e.Down
+                    ? Math.Clamp(playAt, kept - gap * _o.CatchUpFraction, kept + gap * _o.CatchUpFraction)
+                    : kept;
+            }
             // An up whose down has already played (it came in a later packet)
             // still gets the element's full length.
             if (!e.Down && _downPlayed is not null && ReferenceEquals(_prevEvent, _downPlayed))

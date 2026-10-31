@@ -128,6 +128,19 @@ test('stop() cuts off the element being sent', () => {
     assert.equal(keyer.busy, false, 'a stopped keyer does not carry on with the held paddle');
 });
 
+test('a slow "0" is not called stuck, though it takes longer than stuckMs', () => {
+    // Five dahs at 5 WPM: the dah paddle held 4.6 s, with stuckMs 3000.
+    const { elements, stuck } = run([[0, DAH, true], [4300, DAH, false]], { wpm: 5, stuckMs: 3000 });
+    assert.deepEqual(stuck, []);
+    assert.equal(elements.length, 5);
+    assert.deepEqual(elements.at(-1), [DAH, 3840, 4560]);
+});
+
+test('at 20 WPM a paddle is still called stuck after stuckMs', () => {
+    const { stuck } = run([[0, DAH, true], [5000, DAH, false]], { stuckMs: 3000 });
+    assert.deepEqual(stuck, [[DAH, 3000]]);
+});
+
 test('speed sets the unit', () => {
     const { elements } = run([[0, DIT, true], [5, DIT, false]], { wpm: 40 });
     assert.deepEqual(elements, [[DIT, 0, 30]]);
@@ -165,6 +178,44 @@ for (const [text, wpm] of [['TEST', 20], ['CQ CQ DE MM5AGM K', 25], ['PARIS PARI
         clock.advance(clock.now() + 2000);
         decoder.idle(clock.now());
         assert.equal(copy.trim(), text);
+    });
+}
+
+for (const wpm of [5, 12, 25, 35, 50]) {
+    test(`at ${wpm} WPM a squeeze with timers late by up to 25 ms is exact to the unit`, () => {
+        const u = 1200 / wpm;
+        const script = [[0, DIT, true], [1, DAH, true], [22 * u, DIT, false], [22 * u, DAH, false]];
+        let seed = wpm;
+        const late = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648) * (8 + 25);
+        const { elements, stuck } = run(script, { wpm, late, until: 60 * u });
+        assert.deepEqual(stuck, []);
+        assert.ok(elements.length >= 7);
+        let t = 0;
+        elements.forEach(([p, start, end], k) => {
+            assert.equal(p, k % 2 === 0 ? DIT : DAH, `element ${k}`);
+            assert.ok(Math.abs(start - t) < 1e-9, `element ${k} starts at ${start}, not ${t}`);
+            const len = (p === DIT ? 1 : 3) * u;
+            assert.ok(Math.abs(end - start - len) < 1e-9, `element ${k} is ${end - start} ms, not ${len}`);
+            t = end + u;
+        });
+    });
+
+    test(`at ${wpm} WPM the emulator's taps with late timers still come out right`, () => {
+        let seed = wpm + 100;
+        const late = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648) * (8 + 25);
+        const clock = fakeClock(late);
+        let copy = '';
+        const decoder = new ElementDecoder(s => { copy += s; });
+        const keyer = new IambicKeyer({
+            wpm, clock, onElement: e => decoder.element(e.paddle, e.start, e.end, keyer.unitMs),
+        });
+        for (const [at, p, down] of emulatorTaps('CQ DE MM5AGM', wpm)) {
+            clock.advance(at);
+            keyer.paddle(p, down);
+        }
+        clock.advance(clock.now() + 20 * 1200 / wpm);
+        decoder.idle(clock.now());
+        assert.equal(copy.trim(), 'CQ DE MM5AGM');
     });
 }
 
