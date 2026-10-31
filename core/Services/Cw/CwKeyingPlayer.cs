@@ -110,7 +110,10 @@
         private readonly LinkedList<Pending> _queue = new();
         private readonly Queue<(double At, double Offset)> _offsets = new();
         private long _lastSeq = -1;
-        private bool _waitForDown;
+        // True from the start too: the first packet a new player hears repeats
+        // events the browser sent before it (to a YWC since restarted, say),
+        // and those must not play minutes late.
+        private bool _waitForDown = true;
         private double _lastPacketAt = double.NegativeInfinity;
         private double _keyDownAt;
         // The last event queued, for keeping the spacing between events.
@@ -168,9 +171,10 @@
                 _lastSeq = e.Seq;
                 if (_waitForDown)
                 {
-                    // Start again at a key down that can still play on time:
-                    // older ones (repeats that arrived after a loss) would
-                    // play back to back with their gaps squeezed out.
+                    // Start (again) at a key down that can still play on time:
+                    // older ones (repeats that arrived after a loss, or that
+                    // were sent before this player existed) would play late,
+                    // back to back with their gaps squeezed out.
                     if (!e.Down || e.T + OffsetMs!.Value + _o.BufferMs < now) continue;
                     _waitForDown = false;
                 }
@@ -218,7 +222,7 @@
             _offsets.Clear();
             OffsetMs = null;
             _lastSeq = -1;
-            _waitForDown = false;
+            _waitForDown = true;
             _prevEvent = null;
             _downPlayed = null;
         }

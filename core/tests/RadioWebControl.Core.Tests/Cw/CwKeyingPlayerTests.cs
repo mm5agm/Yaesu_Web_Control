@@ -318,6 +318,34 @@ namespace RadioWebControl.Core.Tests.Cw
         }
 
         [Fact]
+        public void A_new_player_does_not_play_repeats_of_events_sent_before_it()
+        {
+            // YWC restarted while the page stayed open: the first ping it hears
+            // repeats elements keyed minutes ago. Seen 2026-10-31, played 637 s late.
+            var sim = new Sim();
+            var old = new List<CwKeyEvent>();
+            for (int k = 0; k < 4; k++)
+            {
+                old.Add(new CwKeyEvent { Seq = 220 + 2 * k, Down = true, T = 1000 + 240 * k });
+                old.Add(new CwKeyEvent { Seq = 221 + 2 * k, Down = false, T = 1180 + 240 * k });
+            }
+            sim.Send(600_000, 40, old);
+            sim.Pings(600_100, 601_000, 40);
+            sim.Run();
+            Assert.Empty(sim.Line.Changes);
+
+            // The next element keyed plays as usual.
+            sim.Send(601_050, 40, old.Append(new CwKeyEvent { Seq = 228, Down = true, T = 601_050 })
+                                     .Append(new CwKeyEvent { Seq = 229, Down = false, T = 601_110 }).TakeLast(8).ToList());
+            sim.Pings(601_150, 602_000, 40);
+            sim.Run();
+            var p = sim.Elements();
+            Assert.Single(p);
+            Assert.Equal(601_050 + ClockBase + 40 + 150, p[0].Down, 6);
+            Assert.Equal(60, p[0].Up - p[0].Down, 6);
+        }
+
+        [Fact]
         public void A_faster_packet_later_does_not_squeeze_a_character()
         {
             // The first packets are slow; a fast one arrives mid-character and

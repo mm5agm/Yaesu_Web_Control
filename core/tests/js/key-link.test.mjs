@@ -40,6 +40,23 @@ test('packets carry only the latest events, and pings repeat them', () => {
     l.stop();
 });
 
+test('events are repeated for keepMs, then dropped', () => {
+    // A YWC restarted later must not be handed old events to play.
+    const { l, sent, at } = link();
+    l.start();
+    l.element(1000, 1060);
+    at(1900);
+    l.ping();
+    assert.deepEqual(sent.at(-1).events.map(e => e.seq), [0, 1]);
+    at(2030);
+    l.ping();
+    assert.deepEqual(sent.at(-1).events.map(e => e.seq), [1]);
+    at(2100);
+    l.ping();
+    assert.deepEqual(sent.at(-1).events, []);
+    l.stop();
+});
+
 test('abort sends no events and later pings do not repeat old ones', () => {
     const { l, sent } = link();
     l.start();

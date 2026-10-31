@@ -8,8 +8,8 @@
 // events (key down at its start, key up at its end) with sequence numbers
 // that run on without gaps, so the shack can tell when one is lost.
 //
-// Every packet repeats the last few events, so one lost packet costs nothing;
-// the shack drops events it already has. A ping goes every 100 ms whether or
+// Every packet repeats the last few events of the last second, so one lost
+// packet costs nothing; the shack drops events it already has. A ping goes every 100 ms whether or
 // not anything is keyed: the shack lets go of the key if it hears nothing for
 // 0.8 s while the key is down. abort() tells it to let go now.
 //
@@ -23,11 +23,13 @@ export class KeyLink {
      * @param {(packet: object) => void} o.send   delivers one packet; must not throw
      * @param {number} [o.repeat=8]  events carried in each packet
      * @param {number} [o.pingMs=100]
+     * @param {number} [o.keepMs=1000]  how long an event is repeated for
      * @param {() => number} [o.clock]  defaults to performance.now
      */
-    constructor({ send, repeat = 8, pingMs = 100, clock = () => performance.now() }) {
+    constructor({ send, repeat = 8, pingMs = 100, keepMs = 1000, clock = () => performance.now() }) {
         this._send = send;
         this._repeat = repeat;
+        this._keepMs = keepMs;
         this._pingMs = pingMs;
         this._clock = clock;
         this._seq = 0;
@@ -75,6 +77,11 @@ export class KeyLink {
     }
 
     _packet(abort) {
-        this._send({ now: this._clock(), events: abort ? [] : this._recent.slice(), abort });
+        // Events are repeated only while a repeat could still help: after
+        // that they would only reach a shack that never had them (a YWC
+        // restarted since), which must not play them late.
+        const now = this._clock();
+        this._recent = this._recent.filter(e => now - e.t < this._keepMs);
+        this._send({ now, events: abort ? [] : this._recent.slice(), abort });
     }
 }
