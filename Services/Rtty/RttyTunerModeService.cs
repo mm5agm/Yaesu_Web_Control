@@ -27,8 +27,8 @@ namespace Yaesu_Web_Control.Services.Rtty
     /// equivalent:</para>
     ///
     /// <para>1. <i>Opening the tuner puts the radio in the operator's RTTY
-    /// mode</i> (<see cref="ApplicationSettings.RttyTunerMode"/>) from any mode
-    /// that is not already of the same kind - see <see cref="NeedsSwitching"/>.
+    /// mode</i> (<see cref="ApplicationSettings.RttyTunerMode"/>) from any other
+    /// mode - see <see cref="NeedsSwitching"/>.
     /// Until 2026-10-13 SSB and DATA were left alone for AFSK; Colin asked for
     /// RTTY on open, and an AFSK operator who wants the radio left alone turns
     /// <see cref="ApplicationSettings.RttyTunerSetMode"/> off. Since 2026-10-26
@@ -536,8 +536,12 @@ namespace Yaesu_Web_Control.Services.Rtty
 
         /// <summary>
         /// Whether the tuner needs to change the radio's mode to
-        /// <paramref name="target"/>: when it is not already of the same kind
-        /// (<see cref="SameKind"/>).
+        /// <paramref name="target"/> when it starts: whenever it is not that
+        /// mode. Until 2026-10-31 the other sideband of the same kind was left
+        /// alone (<see cref="SameKind"/>), from before the operator could choose
+        /// the sideband; Bruce VK2RT, in DATA-L, came back from the Radio panel
+        /// in DATA-U and it stayed there (#250). While the tuner runs, the hold
+        /// still accepts either sideband.
         ///
         /// <para>For RTTY that is every mode but RTTY and RTTY-R: CW, because its
         /// filters go down to 50 Hz and an operator who was just using CW is very
@@ -547,7 +551,7 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// is every mode but DATA-L and DATA-U.</para>
         /// </summary>
         public static bool NeedsSwitching(string? mode, string target) =>
-            !SameKind(mode, target);
+            !string.Equals(mode?.Trim(), target, StringComparison.OrdinalIgnoreCase);
 
         // ---- the radio -----------------------------------------------------
 

@@ -41,20 +41,19 @@ namespace YaesuWebControl.Tests
         }
 
         [Theory]
-        // RTTY chosen: either FSK mode is left alone, as before.
+        // The mode chosen, exactly: the other sideband is switched too (#250).
         [InlineData("RTTY-L", "RTTY-L", false)]
-        [InlineData("RTTY-U", "RTTY-L", false)]
+        [InlineData("RTTY-U", "RTTY-L", true)]
         [InlineData("DATA-L", "RTTY-L", true)]
         [InlineData("USB", "RTTY-L", true)]
         [InlineData("CW-U", "RTTY-L", true)]
-        // DATA chosen: either DATA mode is left alone, and RTTY is switched.
         [InlineData("DATA-L", "DATA-L", false)]
-        [InlineData("DATA-U", "DATA-L", false)]
+        [InlineData("DATA-U", "DATA-L", true)]
         [InlineData("RTTY-L", "DATA-L", true)]
         [InlineData("LSB", "DATA-L", true)]
         [InlineData("DATA-FM", "DATA-U", true)]
         [InlineData(null, "DATA-L", true)]
-        public void SwitchesOnlyOutOfAnotherKind(string? mode, string target, bool switches)
+        public void SwitchesToTheModeChosen(string? mode, string target, bool switches)
         {
             Assert.Equal(switches, RttyTunerModeService.NeedsSwitching(mode, target));
         }
