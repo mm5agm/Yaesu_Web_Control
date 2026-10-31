@@ -146,7 +146,7 @@ test('speed sets the unit', () => {
     assert.deepEqual(elements, [[DIT, 0, 30]]);
 });
 
-// The paddle emulator's tap mode (esp32-paddle firmware): each element's
+// The paddle emulator's tap mode (YWC_IWC_PADDLE firmware): each element's
 // paddle is pressed at the start of its slot and let go half a dit later.
 function emulatorTaps(text, wpm, t0 = 50) {
     const u = 1200 / wpm, steps = [];
