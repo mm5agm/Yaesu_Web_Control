@@ -155,8 +155,10 @@ namespace Yaesu_Web_Control.Controllers
 
             try
             {
+                // Not waited on: a set command has no answer, and waiting 150 ms
+                // for each made a band change slow (Bruce VK2RT, #250).
                 foreach (var c in commands)
-                    await cat.SendCommandAsync(c + ";", "RttySetup", HttpContext.RequestAborted);
+                    await cat.SendWithoutReplyAsync(c + ";", "RttySetup", HttpContext.RequestAborted);
                 _logger.LogInformation("RTTY setup sent for {Band}: {Count} commands", band ?? "no band", commands.Count);
                 // A set command has no answer, so what the setup changed is read
                 // back for every page to show: the radio had the width from an SH

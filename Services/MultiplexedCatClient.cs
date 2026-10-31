@@ -52,6 +52,12 @@ namespace Yaesu_Web_Control.Services
             return _multiplexer.SendCommandAndDispatchAsync(command, clientId, cancellationToken);
         }
 
+        public Task SendWithoutReplyAsync(string command, string clientId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("[sent, no reply] {Command}", command.Trim());
+            return _multiplexer.SendWithoutReplyAsync(command, cancellationToken);
+        }
+
         // Overload for legacy code (optional)
         public Task<string> SendCommandAsync(string command, CancellationToken cancellationToken = default)
             => SendCommandAsync(command, DefaultClientId, cancellationToken);
