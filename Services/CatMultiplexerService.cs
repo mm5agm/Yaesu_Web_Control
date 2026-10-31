@@ -277,6 +277,20 @@ namespace Yaesu_Web_Control.Services
             }
         }
 
+        // A set command: written, and nothing waits for a reply. SendCommandAsync
+        // waits up to its timeout for an answer a set never gives, so a list of
+        // them took 150 ms each (Bruce VK2RT, #250: a band change with his RTTY
+        // setup was slow beside FLrig). It also took over the reply slot of any
+        // read with the same two letters while it waited. A reply that does come,
+        // such as the radio's "?;", goes to the dispatcher like any unasked one.
+        // SendToSerialPortAsync still leaves 15 ms after each write.
+        public Task SendWithoutReplyAsync(string command, CancellationToken cancellationToken = default)
+        {
+            if (_serialPort?.IsOpen != true)
+                return Task.CompletedTask;
+            return SendToSerialPortAsync(command, cancellationToken);
+        }
+
         // The key that pairs a reply with the read waiting for it. Most commands
         // are keyed on their two letters, but the meter reads share theirs: RM0,
         // RM5 and RM7 all start "RM", SM0 and SM1 both start "SM". Keyed on two

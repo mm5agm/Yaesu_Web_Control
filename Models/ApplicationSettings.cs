@@ -323,7 +323,7 @@
         // tuner has run.
         public RttyTones? RttyTunerTones { get; set; }
 
-        // The operator's RTTY setup, CAT commands sent by the SETUP key on RTTY
+        // The operator's RTTY setup, CAT commands sent by the CAT SET key on RTTY
         // Contest; a line starting "20m:" is for that band only. See
         // RttySetupCat. Bruce VK2RT, Discussion #250.
         public string RttySetupCat { get; set; } = "";

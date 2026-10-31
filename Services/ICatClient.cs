@@ -19,6 +19,13 @@ namespace Yaesu_Web_Control.Services
         /// </summary>
         Task SendCommandAndDispatchAsync(string command, string clientId, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Send a set command and don't wait for an answer: a set command
+        /// gives none, so SendCommandAsync waits its whole timeout for nothing.
+        /// Anything the radio does send back goes to the message dispatcher.
+        /// </summary>
+        Task SendWithoutReplyAsync(string command, string clientId, CancellationToken cancellationToken = default);
+
         // VFO-A (Main) Methods
         Task<long> ReadFrequencyAsync();
         Task<long> ReadFrequencyAAsync();

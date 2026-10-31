@@ -1468,7 +1468,7 @@ WIDTH and SHIFT follow the receiver on screen. A slider writes to the radio when
 
 **Your RTTY setup**
 
-If you keep a string of CAT commands that set the radio up for RTTY (filters, DNR, the scope, menu items), paste it into **RTTY setup** on the Settings page under **RTTY Tuner**. A **SETUP** key then appears next to MENU on RTTY Contest, and sends it to the radio. The key shows **SENT**, or **NOT SENT** with the reason when you hold the mouse over it. *New in v2.5.4-pre8.*
+If you keep a string of CAT commands that set the radio up for RTTY (filters, DNR, the scope, menu items), paste it into **RTTY setup** on the Settings page under **RTTY Tuner**. A **CAT SET** key then appears next to MENU on RTTY Contest, and sends it to the radio. The key shows **SENT**, or **NOT SENT** with the reason when you hold the mouse over it. *New in v2.5.4-pre8; called SETUP until v2.5.4-pre9, renamed so it isn't confused with SETUP in the radio's MENU.*
 
 - Commands end with `;`, as in the radio's CAT manual. They can be on one line or several.
 - A line that starts with a band and a colon is sent only on that band, after the lines with no band, which are sent on every band:
