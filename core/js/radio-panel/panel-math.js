@@ -300,12 +300,21 @@ export function alignBins(bins, offsetHz, spanHz) {
 // (2026-10-29); it was 0.35, which moved the picture with the dial in the
 // outer 15%, and his fallback was about 5% in from the edge (0.45). Returns
 // the new held centre and the view offset that draws it.
-export function holdView(held, dialHz, wantedHz, spanHz, edge = 0.5) {
+//
+// Tuned off an edge, the screen turns a page rather than re-centring: the
+// dial comes back in at the opposite side, `lead` of the span in from it, so
+// tuning up the band carries on from left to right (Bruce VK2RT, #250,
+// 2026-10-31). A jump of more than a span past the edge - a band change, a
+// typed frequency, a spot - is not tuning, and centres as before.
+export function holdView(held, dialHz, wantedHz, spanHz, edge = 0.5, lead = 0.1) {
     const dial = Number(dialHz) || 0;
     const span = Number(spanHz) || 0;
     const wanted = dial + (Number(wantedHz) || 0);
-    const keep = held && span > 0 && held.spanHz === span && Math.abs(wanted - held.centreHz) <= edge * span;
-    const centreHz = keep ? held.centreHz : wanted;
+    const same = held && span > 0 && held.spanHz === span;
+    const away = same ? wanted - held.centreHz : 0;
+    let centreHz = wanted;
+    if (same && Math.abs(away) <= edge * span) centreHz = held.centreHz;
+    else if (same && Math.abs(away) <= (edge + 1) * span) centreHz = wanted + Math.sign(away) * Math.max(0, edge - lead) * span;
     return { centreHz, spanHz: span, viewHz: centreHz - dial };
 }
 
