@@ -158,6 +158,21 @@ namespace Yaesu_Web_Control.Controllers
                 foreach (var c in commands)
                     await cat.SendCommandAsync(c + ";", "RttySetup", HttpContext.RequestAborted);
                 _logger.LogInformation("RTTY setup sent for {Band}: {Count} commands", band ?? "no band", commands.Count);
+                // A set command has no answer, so what the setup changed is read
+                // back for every page to show: the radio had the width from an SH
+                // line while the screen still showed the one before (Bruce VK2RT, #250).
+                var receivers = _state.IsSingleReceiver ? new[] { "A" } : new[] { "A", "B" };
+                var reads = new List<string> { "PC;" };
+                foreach (var r in receivers)
+                {
+                    string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, r);
+                    reads.AddRange([$"MD{RadioCapabilities.ModeP1(r)};", $"SH{p1};", $"IS{p1};"]);
+                }
+                foreach (var q in reads)
+                {
+                    try { await cat.SendCommandAndDispatchAsync(q, "RttySetup", HttpContext.RequestAborted); }
+                    catch (Exception ex) { _logger.LogDebug(ex, "RTTY setup: reading {Command} back failed", q); }
+                }
                 return Ok(new { sent = commands.Count });
             }
             catch (Exception ex)
