@@ -1933,6 +1933,17 @@
                             </div>
                             <span asp-validation-for="Settings.BaudRate" class="text-danger"></span>
                         </div>
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" asp-for="Settings.PowerOffAtExit" />
+                            <label class="form-check-label" asp-for="Settings.PowerOffAtExit">
+                                Turn the radio off when Yaesu Web Control closes
+                            </label>
+                            <div class="form-text">
+                                Off by default. Switches the radio off when you choose Exit from the tray icon, or when
+                                the app exits by itself after the last browser closes. Restart Now leaves the radio on.
+                                The radio is always switched on when Yaesu Web Control starts.
+                            </div>
+                        </div>
                         <div class="mb-3">
                             <label asp-for="Settings.MeterPollIntervalMs" class="form-label">Meter Poll Interval (ms)</label>
                             <input asp-for="Settings.MeterPollIntervalMs" class="form-control" type="number" min="50" max="1000" />
