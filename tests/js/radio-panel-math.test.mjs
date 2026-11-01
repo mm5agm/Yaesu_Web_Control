@@ -255,15 +255,26 @@ test('holdView keeps the screen still until what is wanted nears an edge', async
     // Out to the edge, half the span from the middle: it still stays.
     h = holdView(h, 14_085_000, 1500, 10_000);
     assert.equal(h.centreHz, 14_081_500);
-    // Past the edge: it moves.
+    // Past the right edge: a page turn, what is wanted (the passband) back
+    // in 10% from the left edge.
     h = holdView(h, 14_085_100, 1500, 10_000);
-    assert.equal(h.centreHz, 14_086_600);
+    assert.equal(h.centreHz, 14_090_600);
+    assert.equal(14_085_100 + 1500 - (h.centreHz - 5_000), 1_000);
+    // And it holds still again from there.
+    h = holdView(h, 14_088_000, 1500, 10_000);
+    assert.equal(h.centreHz, 14_090_600);
+    // Back off the left edge: the page turns the other way.
+    h = holdView(h, 14_084_000, 1500, 10_000);
+    assert.equal(h.centreHz, 14_081_500);
+    // A jump of more than a span past the edge centres, as before.
+    h = holdView(h, 14_200_000, 1500, 10_000);
+    assert.equal(h.centreHz, 14_201_500);
     // A new span starts again.
     h = holdView(h, 14_085_500, 1500, 5_000);
     assert.equal(h.centreHz, 14_087_000);
-    // A narrower edge, as an option.
+    // A narrower edge, as an option: the page turn lands lead inside it.
     h = holdView(h, 14_088_000, 1500, 5_000, 0.45);
-    assert.equal(h.centreHz, 14_089_500);
+    assert.equal(h.centreHz, 14_091_250);
     // No dial or span yet: whatever is wanted.
     assert.equal(holdView(null, 0, 0, 0).viewHz, 0);
 });
