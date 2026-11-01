@@ -1051,9 +1051,21 @@
          SDR is configured for either VFO. -->
     <div id="spectrumContainer" class="row mt-3" style="display:none;">
         <div class="col-12">
-            <!-- Toggles row: VFO selector + layout (stacked vs side-by-side).
-                 Both hidden when only one side is configured. -->
-            <div id="spectrumModeToggle" class="d-flex justify-content-end align-items-center gap-2 mb-2" style="display:none;">
+            <!-- Bar above the panels: the spectrum fold on the left, the VFO
+                 selector + layout toggles (both configured only) on the right.
+                 It sits outside #spectrumPanels, which is what folds, so the
+                 way back always stays on screen. The panels also fold by
+                 themselves while no configured SDR is streaming, so a
+                 disconnected SDR doesn't leave a dead panel taking the page;
+                 the note says why. -->
+            <div id="spectrumBar" class="d-flex justify-content-between align-items-center gap-2 mb-2">
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" id="spectrumFoldBtn" class="btn btn-sm btn-outline-secondary fold-btn" aria-controls="spectrumPanels">
+                    <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">Hide spectrum</span>
+                </button>
+                <span id="spectrumFoldNote" class="small text-muted"></span>
+            </div>
+            <div id="spectrumModeToggle" class="d-flex align-items-center gap-2" style="display:none;">
                 <div class="btn-group btn-group-sm" role="group" aria-label="Spectrum panel layout">
                     <button type="button" class="btn btn-outline-secondary spectrum-layout-btn active" data-layout="stacked" title="Stack panels vertically">Stacked</button>
                     <button type="button" class="btn btn-outline-secondary spectrum-layout-btn" data-layout="side" title="Place panels side by side">Side&nbsp;by&nbsp;side</button>
@@ -1063,6 +1075,7 @@
                     <button type="button" class="btn btn-outline-secondary spectrum-mode-btn" data-mode="B">VFO B</button>
                     <button type="button" class="btn btn-outline-secondary spectrum-mode-btn active" data-mode="Multi">Both</button>
                 </div>
+            </div>
             </div>
 
             <!-- Inner flex container — direction set by JS based on layout toggle.
@@ -2820,8 +2833,14 @@
             {
                 const vfoRow   = document.getElementById('vfoRow');
                 const specBox  = document.getElementById('spectrumContainer');
+                const specPans = document.getElementById('spectrumPanels');
                 const btnB     = document.getElementById('vfoFoldBtnB');
-                const specOn   = () => !!specBox && getComputedStyle(specBox).display !== 'none';
+                // Both, because the fold buttons are inside #spectrumPanels,
+                // which folds on its own while #spectrumContainer (and its
+                // bar) stays; a hidden ancestor doesn't change a child's
+                // computed display, so the panels alone can't answer either.
+                const specOn   = () => !!specBox && getComputedStyle(specBox).display !== 'none'
+                                    && !!specPans && getComputedStyle(specPans).display !== 'none';
                 const shown    = { text: 'VFOs', title: 'Hide the VFO A and VFO B panels, leaving the spectrum', aria: 'Hide the VFO panels' };
                 const hidden   = { text: 'VFOs', title: 'Show the VFO A and VFO B panels again', aria: 'Show the VFO panels' };
                 let fold = null;
@@ -2856,8 +2875,9 @@
                     btnB?.setAttribute('aria-controls', 'vfoRow');
                     btnB?.addEventListener('click', () => fold.toggle());
                     // The spectrum shows and hides as the SDRs come and go.
-                    if (specBox) new MutationObserver(() => sync(fold.folded))
-                        .observe(specBox, { attributes: true, attributeFilter: ['style', 'class'] });
+                    const specWatch = new MutationObserver(() => sync(fold.folded));
+                    for (const el of [specBox, specPans])
+                        if (el) specWatch.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
                 }
             }
 
@@ -3005,25 +3025,75 @@
             }
 
             // Per-VFO status routing — drives the panel state + small badge in the header.
+            const statusLabels = {
+                unconfigured: ['secondary', 'No SDR'],
+                connecting:   ['warning',   'Connecting…'],
+                streaming:    ['success',   'Live'],
+                disconnected: ['danger',    'Disconnected'],
+                nodll:        ['danger',    'No SoapySDR'],
+                noft4222:     ['danger',    'No FTDI driver'],
+                scopeplacement: ['warning', 'Check radio scope'],
+            };
             function setStatusBadge(vfo, status) {
                 const badge = document.getElementById('spectrumStatusBadge' + vfo);
                 if (!badge) return;
-                const labels = {
-                    unconfigured: ['secondary', 'No SDR'],
-                    connecting:   ['warning',   'Connecting…'],
-                    streaming:    ['success',   'Live'],
-                    disconnected: ['danger',    'Disconnected'],
-                    nodll:        ['danger',    'No SoapySDR'],
-                    noft4222:     ['danger',    'No FTDI driver'],
-                    scopeplacement: ['warning', 'Check radio scope'],
-                };
-                const [colour, text] = labels[status] ?? ['secondary', status];
+                const [colour, text] = statusLabels[status] ?? ['secondary', status];
                 badge.className = `badge bg-${colour} small`;
                 badge.textContent = text;
             }
             // Track per-VFO configured/streaming state so we can show or hide the
             // outer spectrumContainer and the Mono/Multi toggle as appropriate.
             const sdrState = { A: 'unconfigured', B: 'unconfigured' };
+
+            // Spectrum fold. The panels fold while no configured SDR is
+            // streaming (connecting, disconnected, no driver...), when the
+            // panel would be a dead box, and come back by themselves on the
+            // first frame. The button folds them by choice too, and that is
+            // remembered. Show while nothing streams opens them for this page
+            // only, to read the reason on the panel; it isn't remembered.
+            const SPECTRUM_FOLD_KEY = 'foldPanel_spectrum';
+            const spectrumPanelsEl = document.getElementById('spectrumPanels');
+            const spectrumFoldBtn  = document.getElementById('spectrumFoldBtn');
+            const spectrumFoldNote = document.getElementById('spectrumFoldNote');
+            let spectrumUserFolded = false;
+            try { spectrumUserFolded = localStorage.getItem(SPECTRUM_FOLD_KEY) === '1'; } catch { }
+            let spectrumPeek = false;
+            let spectrumFolded = false;
+            function applySpectrumFold(configured) {
+                const live = configured.some(v => sdrState[v] === 'streaming');
+                const folded = spectrumUserFolded || (!live && !spectrumPeek);
+                const was = spectrumFolded;
+                spectrumFolded = folded;
+                // d-flex is display:flex !important, which beats [hidden].
+                if (folded) spectrumPanelsEl?.style.setProperty('display', 'none', 'important');
+                else spectrumPanelsEl?.style.removeProperty('display');
+                if (spectrumFoldBtn) {
+                    spectrumFoldBtn.querySelector('.fold-text').textContent = folded ? 'Show spectrum' : 'Hide spectrum';
+                    spectrumFoldBtn.title = folded ? 'Show the spectrum and waterfall' : 'Hide the spectrum and waterfall';
+                    spectrumFoldBtn.setAttribute('aria-label', spectrumFoldBtn.title);
+                    spectrumFoldBtn.setAttribute('aria-expanded', String(!folded));
+                    const icon = spectrumFoldBtn.querySelector('.bi');
+                    icon?.classList.toggle('bi-chevron-up', !folded);
+                    icon?.classList.toggle('bi-chevron-down', folded);
+                }
+                // Folded, the badges in the panel headers are gone: say here
+                // what each SDR is doing.
+                if (spectrumFoldNote) {
+                    spectrumFoldNote.textContent = folded
+                        ? configured.map(v => `VFO ${v}: ${statusLabels[sdrState[v]]?.[1] ?? sdrState[v]}`).join(' · ')
+                        : '';
+                }
+                // The canvases size to their box, which was 0 while folded.
+                if (was && !folded) window.dispatchEvent(new Event('resize'));
+                return folded;
+            }
+            spectrumFoldBtn?.addEventListener('click', () => {
+                spectrumUserFolded = !spectrumFolded;
+                spectrumPeek = !spectrumUserFolded;
+                try { localStorage.setItem(SPECTRUM_FOLD_KEY, spectrumUserFolded ? '1' : '0'); } catch { }
+                updateContainerVisibility();
+            });
+
             function updateContainerVisibility() {
                 if (!window.ywcIsWindowsHost) {
                     const c = document.getElementById('spectrumContainer');
@@ -3057,9 +3127,14 @@
                 // setProperty with priority='important' to actually win.
                 // For the show case, just remove the inline override and
                 // let d-flex take over.
+                const configured = [];
+                if (aConfigured) configured.push('A');
+                if (bConfigured) configured.push('B');
+                const folded = applySpectrumFold(configured);
+
                 const toggleEl = document.getElementById('spectrumModeToggle');
                 if (toggleEl) {
-                    if (aConfigured && bConfigured) {
+                    if (aConfigured && bConfigured && !folded) {
                         toggleEl.style.removeProperty('display');
                     } else {
                         toggleEl.style.setProperty('display', 'none', 'important');
