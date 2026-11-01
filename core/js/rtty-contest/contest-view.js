@@ -247,6 +247,7 @@ const CSS = `
 .rc-tbar .rp-spop-key:disabled{opacity:.45;cursor:default}
 .rc-tnote{width:var(--rc-tuner-w,300px);box-sizing:border-box;padding:14px;font:500 16px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
 .rc-tnote[hidden]{display:none}
+.rc-app-key[hidden]{display:none}
 .rc-pop{display:flex;align-items:center;gap:4px}
 .rc-pop[hidden]{display:none}
 body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;border-radius:0 !important}
@@ -305,8 +306,9 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
  * @param {{group?:string, items:{label:string, href:string, title?:string}[]}[]} [opts.menu]  the main
  *        page: a MENU key at the end of the strip, the app's other pages, each in a new tab
- * @param {{label:string, title?:string, onClick:(key:HTMLButtonElement) => void}[]} [opts.keys]  the
- *        main page: keys of the app's own before MENU, e.g. one that sends the operator's setup
+ * @param {{label:string, title?:string, id?:string, hidden?:boolean, onClick:(key:HTMLButtonElement) => void}[]} [opts.keys]  the
+ *        main page: keys of the app's own before MENU, e.g. one that sends the operator's setup.
+ *        The app can hide or show one later by its id
  * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
  * @param {HTMLElement} [opts.decode]  the decoded text, in a box of its own under the
  *        tuner while DECODE is on, with its own POP OUT
@@ -431,6 +433,8 @@ export function mountContestView(root, opts) {
     if (isMain) for (const k of opts.keys ?? []) {
         const b = btn('rp-spop-key rc-app-key', k.label, () => k.onClick(b));
         if (k.title) b.title = k.title;
+        if (k.id) b.id = k.id;
+        b.hidden = !!k.hidden;
         top.append(b);
     }
 
