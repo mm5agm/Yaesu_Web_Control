@@ -370,6 +370,7 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 - **IDD and VDD meters on every model.** The FTdx10, FT-710 and FTDX5000 had them hidden. The FTDX5000 gets the 40-55 V VDD dial.
 - **Voice control no longer clips the first word after a pause.** The mic level now follows the loudest part of what you say, so a pause doesn't wind it up.
 - **Memories recalled to SUB on the FTdx101 set SUB's filter**, AGC, NB, NR and antenna, not MAIN's.
+- **Hide spectrum on the Classic page.** A button above the spectrum folds the spectrum and waterfall away, and the choice is kept. They also fold by themselves while no SDR is streaming, with a note of what each SDR is doing, and come back when it starts ([§5.4](USER_MANUAL.md#54-spectrum-display)).
 - **radio_state.json is not rewritten when nothing has changed**, which saves writes to a Raspberry Pi's SD card.
 
 RTTY Contest is receive only: transmit from your logger, or from MMTTY.
