@@ -49,9 +49,9 @@
         const pauseTuner = msg => tuner?.setPaused(tunerState.out || tunerState.modePaused, msg);
 
         // The reader in the tuner's Decode section, which the view shows in a
-        // box of its own under the tuner, only with DECODE on. It reads only
-        // then, and only while the text is here: in the text's own window,
-        // that window's reader shows it.
+        // box of its own under the tuner, in the VFO wheel's place, with
+        // DECODE. It reads only while the text is here: in the text's own
+        // window, that window's reader shows it.
         const reader = new RttyReader();
         reader.init();
         const pauseReader = () => reader.setPaused(tunerState.decodeOut || tunerState.modePaused || !tunerState.decode);
@@ -86,8 +86,9 @@
                 tunerState.decodeOut = out;
                 pauseReader();
             },
-            // DECODE: off stops the decoder too, so none is left running on
-            // the server with nothing showing it.
+            // The decoded text began or stopped showing, here or in its
+            // window: stopped, the decoder stops too, so none is left running
+            // on the server with nothing showing it.
             onDecode: on => {
                 tunerState.decode = on;
                 document.getElementById('rttyTunerDialog').classList.toggle('rtty-decoding', on);
