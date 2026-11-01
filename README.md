@@ -357,7 +357,7 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 **RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
 
-- **MEM, next to BANDS**, opens a list of your memories. Click one to tune the receiver on screen, MAIN or SUB, to it; the memory it is on is lit. The list stays open while you work, and **EDIT** opens the Memories page in a new tab.
+- **MEM, next to BANDS**, opens a list of your memories. Click one to tune the receiver on screen, MAIN or SUB, to it; the memory it is on is lit. The list stays open while you work, and **EDIT** opens the Memories page in a new tab. To keep a set just for the contest, save it as a memory bank and load it before the contest ([§8.5](USER_MANUAL.md#85-memory-banks)).
 - **The tuning dial has a heading, VFO WHEEL, and its own POP OUT**, so it can go to a window of its own, on another monitor.
 - **DECODE swaps the dial for the decoded text**, in the same place under the tuner, and starts the decoder. The key then reads **VFO WHEEL**, to swap back. Either can be in a window while the other has the place.
 - **No DOCK left on the page.** While the tuner, the dial or the decoded text is in a window, its place on the page has only a note. **DOCK** or **Reattach** in the window puts it back.
