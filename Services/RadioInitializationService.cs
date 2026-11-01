@@ -19,18 +19,26 @@ namespace Yaesu_Web_Control.Services
         private readonly CatMultiplexerService _multiplexer;
         private readonly HttpPortInfo _portInfo;
 
+        // The shutdown sends start the moment the host starts stopping. By the
+        // time StopAsync runs, the other services have often used up the 2 s
+        // shutdown cap, and a send made from there gets a cancelled token.
+        private Task? _shutdownSends;
+
         public RadioInitializationService(
             IServiceProvider serviceProvider,
             IHubContext<RadioHub> hubContext,
             BrowserLauncher browserLauncher,
             CatMultiplexerService multiplexer,
-            HttpPortInfo portInfo)
+            HttpPortInfo portInfo,
+            IHostApplicationLifetime lifetime)
         {
             _serviceProvider = serviceProvider;
             _hubContext = hubContext;
             _browserLauncher = browserLauncher;
             _multiplexer = multiplexer;
             _portInfo = portInfo;
+
+            lifetime.ApplicationStopping.Register(() => _shutdownSends = Task.Run(ShutdownSendsAsync));
         }
 
         public async Task InitializeRadioAsync()
@@ -648,15 +656,34 @@ namespace Yaesu_Web_Control.Services
             var logger = scopeForLogger.ServiceProvider.GetService<ILogger<RadioInitializationService>>();
             logger?.LogInformation("[RadioInit] StopAsync entered");
 
+            // Normally already running since ApplicationStopping; let it finish
+            // before the port closes.
+            await (_shutdownSends ?? ShutdownSendsAsync());
+
+            logger?.LogInformation("[RadioInit] Disconnecting multiplexer");
+            await _multiplexer.DisconnectAsync();
+            logger?.LogInformation("[RadioInit] Multiplexer disconnected, calling base.StopAsync");
+            await base.StopAsync(cancellationToken);
+            logger?.LogInformation("[RadioInit] StopAsync complete");
+        }
+
+        /// <summary>
+        /// The last CAT YWC sends: TX0;, the FTdx101 meter restore, then PS0;
+        /// if the operator has PowerOffAtExit set. Each is best-effort with
+        /// its own 1 s timeout so a hung send can't stall host shutdown.
+        /// </summary>
+        private async Task ShutdownSendsAsync()
+        {
+            using var scopeForLogger = _serviceProvider.CreateScope();
+            var logger = scopeForLogger.ServiceProvider.GetService<ILogger<RadioInitializationService>>();
+
             // Safety: send TX0; before disconnecting so YWC never leaves the
             // radio in transmit. Some Yaesu firmwares preserve MOX/TX state
             // across power cycles, so a shutdown mid-transmit could otherwise
-            // result in the radio coming back up still keying. Best-effort
-            // with a 1 s timeout so a hung send can't stall host shutdown.
+            // result in the radio coming back up still keying.
             try
             {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                cts.CancelAfter(TimeSpan.FromSeconds(1));
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
                 await _multiplexer.SendCommandAsync("TX0;", "RadioInit-Shutdown", cts.Token);
                 logger?.LogInformation("[RadioInit] TX0; safety RX-enforce sent on shutdown");
             }
@@ -676,21 +703,19 @@ namespace Yaesu_Web_Control.Services
             // default POW + ALC pair otherwise — which is what this always sent
             // before the selection was tracked.
             //
-            // Best-effort with a 1 s timeout so a hung send (e.g. radio
-            // powered off, COM cable yanked) can't stall host shutdown.
             // Only FTdx101MP/D borrow the meters; other radios never touch MS.
+            ApplicationSettings? settings = null;
+            var radioStateService = scopeForLogger.ServiceProvider.GetRequiredService<RadioStateService>();
             try
             {
                 var settingsService = scopeForLogger.ServiceProvider.GetRequiredService<ISettingsService>();
-                var settings = await settingsService.GetSettingsAsync();
+                settings = await settingsService.GetSettingsAsync();
                 if (settings.RadioModel is "FTdx101MP" or "FTdx101D")
                 {
-                    var radioStateService = scopeForLogger.ServiceProvider.GetRequiredService<RadioStateService>();
                     var restore = radioStateService.RadioMeterSelection
                                   ?? CatCommands.DefaultFtdx101MeterSelection;
                     logger?.LogInformation("[RadioInit] Sending MS{Restore} to restore FTdx101 front-panel meters", restore);
-                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    cts.CancelAfter(TimeSpan.FromSeconds(1));
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
                     await _multiplexer.SendCommandAsync(
                         $"MS{restore};", "RadioInit-Shutdown", cts.Token);
                     logger?.LogInformation("[RadioInit] Meter restore send completed");
@@ -701,11 +726,22 @@ namespace Yaesu_Web_Control.Services
                 logger?.LogWarning(ex, "[RadioInit] Meter restore send failed — non-fatal");
             }
 
-            logger?.LogInformation("[RadioInit] Disconnecting multiplexer");
-            await _multiplexer.DisconnectAsync();
-            logger?.LogInformation("[RadioInit] Multiplexer disconnected, calling base.StopAsync");
-            await base.StopAsync(cancellationToken);
-            logger?.LogInformation("[RadioInit] StopAsync complete");
+            // PowerOffAtExit: switch the radio off last, after TX0; and the
+            // meter restore. Not for Settings' Restart Now, which relaunches.
+            if (settings?.PowerOffAtExit == true && !AppLifecycle.RestartRequested && radioStateService.IsConnected)
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                    await _multiplexer.SendCommandAsync("PS0;", "RadioInit-Shutdown", cts.Token);
+                    radioStateService.RadioPowerOn = false;
+                    logger?.LogInformation("[RadioInit] PS0; sent - radio switched off on exit");
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogWarning(ex, "[RadioInit] PS0; on exit failed — non-fatal");
+                }
+            }
         }
     }
 }

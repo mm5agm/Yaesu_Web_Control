@@ -26,6 +26,13 @@
         public bool AutoShutdownWhenNoBrowsers { get; set; } = true;
 
         /// <summary>
+        /// When true, YWC sends PS0; as it closes (tray Exit or the no-browser
+        /// auto-shutdown), switching the radio off. Settings' Restart Now leaves
+        /// it on. Off by default.
+        /// </summary>
+        public bool PowerOffAtExit { get; set; } = false;
+
+        /// <summary>
         /// When true, the SDR workers stop about 3 s after the last browser
         /// disconnects, so another program can open the SDR straight away,
         /// and start again when a browser reconnects. Default false: the SDRs
