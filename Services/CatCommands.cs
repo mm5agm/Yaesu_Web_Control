@@ -118,15 +118,24 @@
 
         public static long ParseFrequency(string response)
         {
+            if (string.IsNullOrEmpty(response)) return 0;
+
             // Remove trailing semicolon if present
             var trimmed = response.TrimEnd(';');
-            // Ensure the response is at least 11 characters (e.g., "FA007100000")
-            if (trimmed.Length >= 11 && (trimmed.StartsWith("FA") || trimmed.StartsWith("FB")))
+            if (trimmed.Length < 3
+                || !(trimmed.StartsWith("FA", StringComparison.Ordinal)
+                     || trimmed.StartsWith("FB", StringComparison.Ordinal)))
             {
-                var freqStr = trimmed.Substring(2, 9);
-                if (long.TryParse(freqStr, out var freq))
-                    return freq;
+                return 0;
             }
+
+            // The FTDX3000 and FTDX5000 report 8 digits; every other supported
+            // model reports 9. Taking the body to the end handles both — a
+            // hard-coded Substring(2, 9) throws on the 8-digit radios.
+            var freqStr = trimmed[2..];
+            if (freqStr.Length is 8 or 9 && long.TryParse(freqStr, out var freq))
+                return freq;
+
             return 0;
         }
 
