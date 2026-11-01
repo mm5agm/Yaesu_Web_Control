@@ -693,7 +693,7 @@ export function mountContestView(root, opts) {
         knob.append(face);
         well.append(knob);
         dial.append(well);
-        dial.title = 'Tune: mouse wheel or drag. The outer ring moves in big steps, the inner knob in small ones';
+        dial.title = 'Tune: mouse wheel or drag. The outer ring moves in big steps, the inner knob in small ones. Spin it fast to go further';
         const stepsBox = h('div', 'rc-dialsteps');
         for (const [part, label, name, def] of [['A', 'OUTER', 'outer ring', 100], ['B', 'INNER', 'inner knob', 10]]) {
             const sel = h('select', 'rc-step');
@@ -710,6 +710,7 @@ export function mountContestView(root, opts) {
         const rot = { A: 0, B: 0 };
         turnable(dial, {
             deg: 10,
+            spin: true,
             partAt: (x, y) => {
                 const rc = dial.getBoundingClientRect(), kc = knob.getBoundingClientRect();
                 return Math.hypot(x - (rc.left + rc.width / 2), y - (rc.top + rc.height / 2)) <= kc.width / 2 ? 'B' : 'A';
@@ -718,7 +719,7 @@ export function mountContestView(root, opts) {
                 rot[part] = (rot[part] + d) % 360;
                 if (part === 'A') dial.style.setProperty('--rp-ring-rot', rot.A + 'deg');
                 else {
-                    face.style.transform = `rotate(${rot.B}deg)`;
+                    face.style.setProperty('--rp-face-rot', rot.B + 'deg');
                     knob.style.setProperty('--rp-knob-rot', rot.B + 'deg');
                 }
             },
