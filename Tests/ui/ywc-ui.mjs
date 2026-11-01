@@ -856,6 +856,40 @@ test('/radio: the mode keys include RTTY-U and DATA-L, and write MD 9 and 8', as
     } finally { await page.close(); }
 });
 
+test('/radio: the dial spun fast runs on when let go, but not while transmitting', async () => {
+    const page = await open('/radio', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the hub handler' });
+        await page.state('FrequencyA', 14_080_000);
+        await page.eval(`document.querySelector('.rp-dial').setPointerCapture = () => {}`);
+        const last = async () => (await page.writes()).filter(x => x.path === '/api/cat/frequency/a').at(-1)?.body?.frequencyHz ?? 0;
+        // A turn of the outer ring in about a fifth of a second, let go; returns
+        // the frequency last written at the release and 900 ms later.
+        const spin = async () => {
+            await page.clearWrites();
+            await page.eval(`(async () => {
+                const d = document.querySelector('.rp-dial'), rc = d.getBoundingClientRect(), k = d.querySelector('.rp-dial-knob')?.getBoundingClientRect();
+                const cx = rc.left + rc.width / 2, cy = rc.top + rc.height / 2, r = (rc.width / 2 + (k ? k.width / 2 : 0)) / 2;
+                const at = (type, a) => d.dispatchEvent(new PointerEvent(type, { pointerId: 7, button: 0, bubbles: true, cancelable: true,
+                    clientX: cx + r * Math.cos(a * Math.PI / 180), clientY: cy + r * Math.sin(a * Math.PI / 180) }));
+                at('pointerdown', 0);
+                for (let i = 1; i <= 12; i++) { await new Promise(f => setTimeout(f, 16)); at('pointermove', i * 30); }
+                at('pointerup', 360);
+            })()`);
+            const atRelease = await last();
+            await sleep(900);
+            return [atRelease, await last()];
+        };
+        const [end, later] = await spin();
+        expect(end > 14_080_000 && later > end, `receiving, a fast spin went ${end} -> ${later}`);
+        await page.state('IsTransmitting', true);
+        const [txEnd, txLater] = await spin();
+        expect(txEnd > 0 && txLater === txEnd, `transmitting, a fast spin ran on: ${txEnd} -> ${txLater}`);
+        await page.state('IsTransmitting', false);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 // Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
 // The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
 // dial 1500 Hz above it, and the mark lands on 1415.
@@ -1221,6 +1255,52 @@ test('/rtty-contest: the VFO wheel pops out to a window of its own that tunes, a
         for (const p of [page, ...wins]) expect(p.exceptions.length === 0, `uncaught exceptions:\n${p.exceptions.join('\n')}`);
     } finally {
         for (const p of wins) await p.close().catch(() => {});
+        await page.close();
+    }
+});
+
+test('/rtty-contest: the VFO wheel is one step per 10 degrees turned slowly, more spun fast, and runs on when let go mid-spin', async () => {
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the hub handler' });
+        await page.state('FrequencyA', 14_080_000);
+        await page.eval(`(s => { s.value = '10'; s.dispatchEvent(new Event('change')); })(document.querySelectorAll('.rc-dialsteps .rc-step')[1])`);
+        // The test's pointers aren't real ones, so the browser won't capture them.
+        await page.eval(`document.querySelector('.rc-wbox .rp-dial').setPointerCapture = () => {}`);
+        // Drags the inner knob round by `step` degrees every `ms`, `n` times, and
+        // lets go; returns the frequency shown at the release and `afterMs` later.
+        const spin = (step, ms, n, afterMs) => page.eval(`(async () => {
+            const d = document.querySelector('.rc-wbox .rp-dial'), k = d.querySelector('.rp-dial-knob').getBoundingClientRect();
+            const cx = k.left + k.width / 2, cy = k.top + k.height / 2, r = k.width / 4;
+            const shown = () => Number(document.querySelector('.rc-freq').textContent.replace(/[^0-9]/g, ''));
+            const at = (type, a) => d.dispatchEvent(new PointerEvent(type, { pointerId: 7, button: 0, bubbles: true, cancelable: true,
+                clientX: cx + r * Math.cos(a * Math.PI / 180), clientY: cy + r * Math.sin(a * Math.PI / 180) }));
+            const wait = t => new Promise(f => setTimeout(f, t));
+            at('pointerdown', 0);
+            for (let i = 1; i <= ${n}; i++) { await wait(${ms}); at('pointermove', i * ${step}); }
+            at('pointerup', ${n} * ${step});
+            const atRelease = shown();
+            await wait(${afterMs});
+            return [atRelease, shown()];
+        })()`);
+        const start = Number((await page.eval(`document.querySelector('.rc-freq').textContent`)).replace(/\D/g, ''));
+        // A quarter turn in a second: nine 10 Hz steps, and it stops dead.
+        const [slowEnd, slowLater] = await spin(9, 100, 10, 600);
+        expect(slowEnd - start === 90 && slowLater === slowEnd, `a slow quarter turn went ${start} -> ${slowEnd} -> ${slowLater}`);
+        // A turn in about a fifth of a second goes well past 36 steps, and runs on.
+        const [fastEnd, fastLater] = await spin(30, 16, 12, 900);
+        expect(fastEnd - slowLater > 720, `a fast turn moved only ${fastEnd - slowLater} Hz`);
+        expect(fastLater > fastEnd, `it did not run on when let go mid-spin: ${fastEnd} -> ${fastLater}`);
+        // A click stops a run-on.
+        const [, ranTo] = await spin(30, 16, 12, 0);
+        await page.eval(`(d => d.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 8, button: 0, bubbles: true, clientX: 1, clientY: 1 })))(document.querySelector('.rc-wbox .rp-dial'))`);
+        const held = Number((await page.eval(`document.querySelector('.rc-freq').textContent`)).replace(/\D/g, ''));
+        await sleep(500);
+        const still = Number((await page.eval(`document.querySelector('.rc-freq').textContent`)).replace(/\D/g, ''));
+        expect(held >= ranTo && still === held, `a click did not stop the run-on: ${held} -> ${still}`);
+        await page.eval(`document.querySelector('.rc-wbox .rp-dial').dispatchEvent(new PointerEvent('pointerup', { pointerId: 8, bubbles: true }))`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally {
         await page.close();
     }
 });

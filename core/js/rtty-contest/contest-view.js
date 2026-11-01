@@ -693,7 +693,7 @@ export function mountContestView(root, opts) {
         knob.append(face);
         well.append(knob);
         dial.append(well);
-        dial.title = 'Tune: mouse wheel or drag. The outer ring moves in big steps, the inner knob in small ones';
+        dial.title = 'Tune: mouse wheel or drag. The outer ring moves in big steps, the inner knob in small ones. Spin it fast to go further';
         const stepsBox = h('div', 'rc-dialsteps');
         for (const [part, label, name, def] of [['A', 'OUTER', 'outer ring', 100], ['B', 'INNER', 'inner knob', 10]]) {
             const sel = h('select', 'rc-step');
@@ -707,20 +707,22 @@ export function mountContestView(root, opts) {
             dialSteps[part] = sel;
             stepsBox.append(h('span', 'rc-lbl', label), sel);
         }
-        const rot = { A: 0, B: 0 };
+        const rot = { A: 0, B: 0, face: 0 };
         turnable(dial, {
             deg: 10,
+            spin: true,
             partAt: (x, y) => {
                 const rc = dial.getBoundingClientRect(), kc = knob.getBoundingClientRect();
                 return Math.hypot(x - (rc.left + rc.width / 2), y - (rc.top + rc.height / 2)) <= kc.width / 2 ? 'B' : 'A';
             },
+            // The silver face turns with either part, so the wheel is seen to
+            // move whichever step it is tuning in.
             onTurn: (part, d) => {
                 rot[part] = (rot[part] + d) % 360;
+                rot.face = (rot.face + d) % 360;
+                face.style.setProperty('--rp-face-rot', rot.face + 'deg');
                 if (part === 'A') dial.style.setProperty('--rp-ring-rot', rot.A + 'deg');
-                else {
-                    face.style.transform = `rotate(${rot.B}deg)`;
-                    knob.style.setProperty('--rp-knob-rot', rot.B + 'deg');
-                }
+                else knob.style.setProperty('--rp-knob-rot', rot.B + 'deg');
             },
             onStep: (part, dir) => opts.onNudge(receiver, dir * Number(dialSteps[part].value)),
         });
