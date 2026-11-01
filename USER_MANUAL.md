@@ -1427,6 +1427,8 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 
 **BANDS**, in the scope row, opens a box with a tick for each band key on each row, and a **Show SUB** tick. Untick the bands you don't work and their keys go. Hiding SUB takes away its tab and its band row, and puts the page back on MAIN. The choices are kept in this browser; they are not part of a layout.
 
+**MEM**, next to BANDS, opens a list of your memories, the same ones the Memories page keeps. Click one to tune the receiver on screen, MAIN or SUB, to it. The memory that receiver is on is lit. The list stays open while you work, so you can hop between your spots. **EDIT** opens the Memories page in a new tab, to add, change or delete them; the list catches up when you come back. **×**, Escape or MEM again closes it. *New in v2.5.4-pre13, as Bruce VK2RT asked.*
+
 **The scope row**
 
 - **REF** moves the bottom of the trace up or down from the noise floor. **AUTO** lets the floor follow the noise; off, it stays where it is.
@@ -1436,6 +1438,7 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 - **STEP** is how far one notch of the mouse wheel moves the dial over the spectrum, 1 Hz to 1 kHz.
 - **TRACE** is how thick the spectrum's line is: 0.5, 0.8 (the start), 1.2 or 2.
 - **BANDS** chooses the band keys and whether SUB shows (above).
+- **MEM** lists your memories, to tune to one (above).
 - **POP OUT** opens the spectrum, the waterfall, or both, in a window of their own.
 
 **Tuning**
@@ -1449,7 +1452,7 @@ In **DATA-L** and **DATA-U** the spectrum is centred on the middle of the DATA p
 The RTTY tuner ([§22](#22-rtty)) is docked at the right, as in Contest Mode ([§22.7](#227-contest-mode-the-tuner-on-its-own)). The keys on its bar:
 
 - **DECODE** puts the decoded text in the tuning dial's place, under the tuner, and starts the decoder. The key then reads **VFO WHEEL**: press it to put the dial back, which stops the decoder. The text box has its own **POP OUT** (see *The tuning dial* below for how the two windows behave).
-- **POP OUT** moves the tuner into a window of its own, the same window every GUI pops its tuner out to.
+- **POP OUT** moves the tuner into a window of its own, the same window every GUI pops its tuner out to. While it is out, the key goes and a note keeps the tuner's place; **Reattach** in the window puts it back. *No DOCK on the page since v2.5.4-pre13.*
 - **ON TOP** puts it in a small window that stays above other programs, such as your logger, where the browser allows it (Chrome and Edge do).
 
 The docked tuner starts small, 300 px wide; its grabs make it bigger. Under it is a box with the three controls a contest operator reaches for most:
@@ -1466,7 +1469,7 @@ WIDTH and SHIFT follow the receiver on screen. A slider writes to the radio when
 
 **The tuning dial.** Under those controls is the Radio panel's tuning dial, made smaller, in a box headed **VFO WHEEL**. Both parts tune the receiver on screen: the outer ring in big steps and the inner knob in small ones. Turn the mouse wheel over a part, or drag it round. Pick each part's step in the lists beside the dial, **OUTER** (100 Hz to start with) and **INNER** (10 Hz). The steps are kept in this browser. *New in v2.5.4-pre9.* Dragged fast it speeds up, and runs on when let go mid-spin, as the Radio panel's dial does (section 5.23). *New in v2.5.4-pre13.*
 
-The dial and the decoded text share that place, one at a time: **DECODE** on the tuner's bar shows the text, and **VFO WHEEL** shows the dial again. Each has its own **POP OUT**, so either can go to a window of its own, on another monitor if you like, and the other then has the place to itself. A window stays out whichever is showing on the page. **DOCK** in a window puts it back on the page if its place is showing there; if the other one is showing, DOCK just closes the window. The decoder runs while the text is showing, on the page or in its window. *Heading, POP OUT and the swap new in v2.5.4-pre13, as Bruce VK2RT asked.*
+The dial and the decoded text share that place, one at a time: **DECODE** on the tuner's bar shows the text, and **VFO WHEEL** shows the dial again. Each has its own **POP OUT**, so either can go to a window of its own, on another monitor if you like, and the other then has the place to itself. A window stays out whichever is showing on the page. While it is out, its box on the page has no POP OUT, just a note saying where it went: putting it back is done from the window. **DOCK** in the dial's window, or **Reattach** in the text's, puts it back on the page if its place is showing there; if the other one is showing, it just closes the window. The decoder runs while the text is showing, on the page or in its window. *Heading, POP OUT and the swap new in v2.5.4-pre13, as Bruce VK2RT asked.*
 
 **AUTO**, at the end of the WIDTH row, is lit while the tuner works the width out itself, and dark while a width you set is kept; hold the mouse over it to see which width and band. Press it to go back to the band's starting width on the band MAIN is on: the width kept for that band is forgotten and, if your RTTY setup in Settings has an SH command, that width goes back on straight away. With no SH in the setup, the tuner sizes the filter again straight away if it is open, and closing it puts back the width from before it opened. Setting WIDTH by hand while the tuner is open keeps a width again. AUTO is only for MAIN, because the tuner only sets MAIN. *New in v2.5.4-pre9; AUTO goes back to the setup's SH width since v2.5.4-pre13.*
 
@@ -1498,7 +1501,7 @@ The other names are `radio`, `classic`, `experimental` and `settings`. If YWC is
 
 **Sizes, windows and layouts**
 
-Drag the right edge, the bottom edge or the bottom-right corner of the spectrum, or of the docked tuner, to size it. A box you haven't sized fills the room it has. Each part that pops out leaves the page, and comes back with **DOCK** in its window, or when its window closes.
+Drag the right edge, the bottom edge or the bottom-right corner of the spectrum, or of the docked tuner, to size it. A box you haven't sized fills the room it has. Each part that pops out leaves the page, and comes back with **DOCK** (or **Reattach**) in its window, or when its window closes.
 
 **LAYOUT** saves all of this by name, on the computer running YWC: the sizes, the choices above, which parts are in windows of their own, and where each window is. Recalling a layout puts every window back where it was, so each can go on its own monitor. If the browser blocks some of the windows, a bar says so with a key for each: one click opens one window.
 

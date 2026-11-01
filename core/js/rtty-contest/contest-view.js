@@ -29,7 +29,8 @@
 // Under the strip, a row of band keys for each receiver (opts.bandRows and
 // opts.bands): the app decides where a band key lands. BANDS picks which keys
 // each row shows, and can hide the second receiver (its tab and the band row
-// of the same id), kept in this browser. The wheel over a
+// of the same id), kept in this browser. MEM beside it (opts.memories) lists
+// the app's memories, a click on one tuning there. The wheel over a
 // digit of the frequency moves the dial by what that digit is worth
 // (opts.onNudge), as on the radio panel; a click on it types one. Arrows at
 // the edges of the spectrum (or of the waterfall, on top) move the dial one
@@ -286,6 +287,14 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
 .rc-bandrow{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:6px 10px 8px;border:1px solid var(--rp-key-border);border-radius:6px}
 .rc-bandrow legend{font:600 13px ${SANS};letter-spacing:.08em;color:var(--rp-legend-dim);padding:0 4px}
 .rc-tick{display:inline-flex;align-items:center;gap:5px;font:600 14px ${SANS};cursor:pointer}
+.rc-mem{position:fixed;top:64px;right:16px;left:auto;margin:0;z-index:20;width:min(560px,95vw)}
+.rc-mem-head-keys{display:flex;gap:6px}
+.rc-mem-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.rc-mem-tile{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:0;padding:4px 8px;text-align:left}
+.rc-mem-tile .t{font:600 14px ${SANS}}
+.rc-mem-tile .f{font:600 15px ${MONO}}
+.rc-mem-tile .m{font:500 12px ${SANS};opacity:.75}
+.rc-mem-note{font:500 14px ${SANS};opacity:.8}
 .rc-brow[hidden],.rc-bands[hidden],.rc-brow .rp-spop-key[hidden],.rp-spop-tabs[hidden],.rp-spop-tab[hidden]{display:none}
 `;
 
@@ -344,6 +353,10 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {(on:boolean) => void} [opts.onDecode]  the main page: the decoded text began or
  *        stopped showing, here or in its window, or at the start: the decoder runs while it
  *        shows. Without it there is no DECODE
+ * @param {{list:() => Promise<{id:any, label?:string, frequencyHz:number, mode?:string}[]|null>,
+ *          recall:(m:object) => void, editHref?:string}} [opts.memories]  the main page: a MEM
+ *        key beside BANDS opens the memories, a click on one recalls it and EDIT opens
+ *        editHref in a new tab (Bruce VK2RT, #250 2026-11-01). Without it there is no MEM
  */
 export function mountContestView(root, opts) {
     injectRadioPanelStyle(document, opts.fontBase);
@@ -508,6 +521,8 @@ export function mountContestView(root, opts) {
             ? `Choose the band keys each row shows, and whether ${opts.receivers[1].tab.toUpperCase()} shows`
             : 'Choose the band keys that show', () => chooseBands(), 'rc-bandset-key'));
     }
+    if (isMain && opts.memories)
+        scope.append(key('MEM', 'Your memories: click one to tune the receiver there', () => openMemories(), 'rc-mem-key'));
 
     // The pop-out keys: each opens its part in a window, or docks it again.
     const popGrp = h('span', 'rc-pop');
@@ -672,7 +687,7 @@ export function mountContestView(root, opts) {
     // for DECODE to swap it with the decoded text. Its window is this view
     // with part 'wheel', showing the strip and the wheel.
     const wheelSlot = h('div', 'rc-ctl rc-wbox');
-    const wheelNote = h('div', 'rc-wnote', 'The VFO wheel is in a window of its own. DOCK puts it back here.');
+    const wheelNote = h('div', 'rc-wnote', 'The VFO wheel is in a window of its own. DOCK in that window puts it back here.');
     wheelNote.hidden = true;
     let wheelPop = null, dialBox = null;
     const dialSteps = {};
@@ -1040,13 +1055,14 @@ export function mountContestView(root, opts) {
             opts.tuner.hidden = out.tuner && !pip;
             tunerNote.hidden = !(out.tuner || pip);
             tunerNote.textContent = pip ? 'The tuner is on top, in its own window. Close that window to put it back here.'
-                : 'The tuner is in a window of its own. DOCK puts it back here.';
+                : 'The tuner is in a window of its own. Reattach in that window puts it back here.';
             for (const g of tunerGrabs) g.hidden = out.tuner || !!pip;
         }
         if (tunerPop) {
-            tunerPop.classList.toggle('on', out.tuner);
-            tunerPop.textContent = out.tuner ? 'DOCK' : POPOUT_LABELS.tuner;
-            tunerPop.title = out.tuner ? 'Put the tuner back here and close its window' : 'Open the tuner in a window of its own, for another monitor';
+            // Out, no DOCK here either: Reattach in the window puts it back,
+            // as for the wheel and the decoded text.
+            tunerPop.hidden = out.tuner;
+            tunerPop.title = 'Open the tuner in a window of its own, for another monitor';
             tunerPop.disabled = !!pip;
         }
         if (onTopKey) {
@@ -1060,10 +1076,11 @@ export function mountContestView(root, opts) {
             dialBox.hidden = out.wheel;
             wheelNote.hidden = !out.wheel;
         }
+        // Out, the box keeps no DOCK of its own: the window has one (Bruce
+        // VK2RT, #250 2026-11-01), so POP OUT just goes.
         if (wheelPop) {
-            wheelPop.classList.toggle('on', out.wheel);
-            wheelPop.textContent = out.wheel ? 'DOCK' : POPOUT_LABELS.wheel;
-            wheelPop.title = out.wheel ? 'Put the VFO wheel back here and close its window' : 'Open the VFO wheel in a window of its own, for another monitor';
+            wheelPop.hidden = out.wheel;
+            wheelPop.title = 'Open the VFO wheel in a window of its own, for another monitor';
         }
         if (decodeSlot.parentNode) {
             // Shown only with DECODE on, in the wheel's place. Out, the box
@@ -1073,12 +1090,11 @@ export function mountContestView(root, opts) {
             side.classList.toggle('decoding', decoding && !out.decode);
             opts.decode.hidden = out.decode;
             decodeNote.hidden = !out.decode;
-            decodeNote.textContent = 'The decoded text is in a window of its own. DOCK puts it back here.';
+            decodeNote.textContent = 'The decoded text is in a window of its own. Reattach in that window puts it back here.';
         }
         if (decodePop) {
-            decodePop.classList.toggle('on', out.decode);
-            decodePop.textContent = out.decode ? 'DOCK' : POPOUT_LABELS.decode;
-            decodePop.title = out.decode ? 'Put the decoded text back here and close its window' : 'Open the decoded text in a window of its own, for another monitor';
+            decodePop.hidden = out.decode;
+            decodePop.title = 'Open the decoded text in a window of its own, for another monitor';
         }
     }
     // A part is in one window at a time: BOTH takes the single ones back, and
@@ -1203,6 +1219,7 @@ export function mountContestView(root, opts) {
         drawStrip();
         drawScope();
         drawControls();
+        markMemories();
         if (byUser) opts.onReceiver?.(id);
     }
     function setShowSpots(on) {
@@ -1424,6 +1441,60 @@ export function mountContestView(root, opts) {
         bandsDlg.showModal();
     }
 
+    // MEM: the app's memories, beside the spectrum rather than over it, so
+    // the band can still be watched while one is picked. It stays open until
+    // closed, and reads the list again each time it opens and when the page
+    // comes back into view, after an edit in the Memories tab.
+    let memDlg = null, memTiles = null, memList = [];
+    const memHz = hz => {
+        const s = String(Math.round(Number(hz) || 0)).padStart(7, '0');
+        return `${s.slice(0, -6)}.${s.slice(-6, -3)}.${s.slice(-3)}`;
+    };
+    function markMemories() {
+        if (!memDlg?.open) return;
+        const hz = shown[receiver]?.hz ?? 0;
+        for (const t of memTiles.children) {
+            const m = memList.find(x => String(x.id) === t.dataset.memId);
+            t.classList.toggle('on', !!m && Number(m.frequencyHz) === hz);
+        }
+    }
+    async function loadMemories() {
+        let got = null;
+        try { got = await opts.memories.list(); } catch { got = null; }
+        memTiles.replaceChildren();
+        if (!got) { memTiles.append(h('div', 'rc-mem-note', 'Could not read the memories.')); return; }
+        memList = [...got].sort((a, b) => Number(a.frequencyHz) - Number(b.frequencyHz));
+        if (!memList.length) { memTiles.append(h('div', 'rc-mem-note', 'No memories yet. EDIT opens the Memories page.')); return; }
+        for (const m of memList) {
+            const t = btn('rp-spop-key rc-mem-tile', '', () => opts.memories.recall(m));
+            t.dataset.memId = String(m.id);
+            t.title = 'Tune the receiver here';
+            t.append(h('span', 't', m.label || ('Mem ' + m.id)), h('span', 'f', memHz(m.frequencyHz)), h('span', 'm', m.mode ?? ''));
+            memTiles.append(t);
+        }
+        markMemories();
+    }
+    function openMemories() {
+        if (!memDlg) {
+            memDlg = h('dialog', 'rc-manage rc-mem');
+            const head = h('div', 'rc-manage-head');
+            const keys = h('div', 'rc-mem-head-keys');
+            if (opts.memories.editHref)
+                keys.append(key('EDIT', 'Add, change or delete memories, in a new tab',
+                    () => window.open(opts.memories.editHref, '_blank'), 'rc-mem-edit'));
+            keys.append(key('×', 'Close', () => memDlg.close(), 'rc-pm'));
+            head.append(h('span', null, 'MEMORIES'), keys);
+            memTiles = h('div', 'rc-manage-body rc-mem-tiles');
+            memDlg.append(head, memTiles);
+            memDlg.addEventListener('keydown', e => { if (e.key === 'Escape') memDlg.close(); });
+            document.addEventListener('visibilitychange', () => { if (!document.hidden && memDlg.open) loadMemories(); });
+            root.append(memDlg);
+        }
+        if (memDlg.open) { memDlg.close(); return; }
+        memDlg.show();
+        loadMemories();
+    }
+
     function setTheme() {
         const t = applyTheme(root, store.get(themePrefix + 'theme', DEFAULT_THEME));
         for (const p of Object.values(panes)) p.setTheme(t);
@@ -1449,7 +1520,7 @@ export function mountContestView(root, opts) {
         setFrequency(id, hz) {
             if (!shown[id]) return;
             shown[id].hz = Number(hz) || 0;
-            if (id === receiver) drawStrip();
+            if (id === receiver) { drawStrip(); markMemories(); }
         },
         setMode(id, mode) {
             if (!shown[id]) return;

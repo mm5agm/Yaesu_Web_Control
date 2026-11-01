@@ -86,18 +86,28 @@ namespace Yaesu_Web_Control.Controllers
 
         // ── Recall (tune the active VFO to a memory) ────────────────────────
 
+        // vfo ("A" or "B") names the receiver to tune, for a page with
+        // receiver tabs of its own (RTTY Contest's MEM); left out, the radio's
+        // active VFO, as before.
         [HttpPost("{id:int}/recall")]
-        public async Task<IActionResult> Recall(int id)
+        public async Task<IActionResult> Recall(int id, [FromQuery] string? vfo = null)
         {
             var memory = _memoryService.GetById(id);
             if (memory == null) return NotFound();
 
             var settings = await _settingsService.GetSettingsAsync();
             bool useCf = settings.RadioModel is "FTdx10" or "FT-710";
-            bool targetB = RadioCapabilities.VfoIsB(
-                _radioStateService.IsSingleReceiver,
-                _radioStateService.ActiveVfo,
-                "A");
+            bool targetB = vfo is "A" or "B"
+                ? vfo == "B"
+                : RadioCapabilities.VfoIsB(
+                    _radioStateService.IsSingleReceiver,
+                    _radioStateService.ActiveVfo,
+                    "A");
+            // P1 for the receive controls below (AN, SH, IS, RF, NB, NL, NR,
+            // GT): 1 for SUB on a two-receiver radio, else 0, as the rest of
+            // the app sends them. They were all sent with 0, so recalling to
+            // SUB changed MAIN's filter, AGC and the rest.
+            string p1 = RadioCapabilities.VfoP1(_radioStateService.IsSingleReceiver, targetB ? "B" : "A");
 
             // Set mode before frequency so the radio applies any pitch/carrier offset
             // (e.g. CW sidetone offset) before the VFO is tuned — prevents ~700 Hz landing error.
@@ -146,20 +156,20 @@ namespace Yaesu_Web_Control.Controllers
             // Each field is applied only if non-null. Null = leave radio alone.
             if (!string.IsNullOrEmpty(memory.Antenna))
             {
-                await _catClient.SendCommandAsync($"AN0{memory.Antenna};", "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync($"AN{p1}{memory.Antenna};", "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.AntennaB = memory.Antenna;
                 else _radioStateService.AntennaA = memory.Antenna;
             }
             if (!string.IsNullOrEmpty(memory.IfWidthCode) && int.TryParse(memory.IfWidthCode, out int ifw))
             {
-                await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "0", ifw), "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, p1, ifw), "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.IfWidthB = memory.IfWidthCode;
                 else _radioStateService.IfWidthA = memory.IfWidthCode;
             }
             if (memory.IfShiftHz.HasValue)
             {
                 int shift = memory.IfShiftHz.Value;
-                await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, "0", shift), "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, p1, shift), "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.IfShiftB = shift;
                 else _radioStateService.IfShiftA = shift;
             }
@@ -168,14 +178,14 @@ namespace Yaesu_Web_Control.Controllers
                 // FTdx10/FT-710 have no CAT roofing filter control; skip silently.
                 if (settings.RadioModel is not ("FTdx10" or "FT-710"))
                 {
-                    await _catClient.SendCommandAsync($"RF0{memory.RoofingCode};", "MemRecall", CancellationToken.None);
+                    await _catClient.SendCommandAsync($"RF{p1}{memory.RoofingCode};", "MemRecall", CancellationToken.None);
                     if (targetB) _radioStateService.RoofingFilterB = memory.RoofingCode;
                     else _radioStateService.RoofingFilterA = memory.RoofingCode;
                 }
             }
             if (memory.NbOn.HasValue)
             {
-                await _catClient.SendCommandAsync($"NB0{(memory.NbOn.Value ? 1 : 0)};", "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync($"NB{p1}{(memory.NbOn.Value ? 1 : 0)};", "MemRecall", CancellationToken.None);
                 string nbVal = memory.NbOn.Value ? "1" : "0";
                 if (targetB) _radioStateService.NbB = nbVal;
                 else _radioStateService.NbA = nbVal;
@@ -183,19 +193,19 @@ namespace Yaesu_Web_Control.Controllers
             if (memory.NbLevel.HasValue)
             {
                 int nbl = Math.Clamp(memory.NbLevel.Value, 1, 20);
-                await _catClient.SendCommandAsync($"NL0{nbl:D3};", "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync($"NL{p1}{nbl:D3};", "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.NbLevelB = nbl;
                 else _radioStateService.NbLevelA = nbl;
             }
             if (!string.IsNullOrEmpty(memory.NrLevel))
             {
-                await _catClient.SendCommandAsync($"NR0{memory.NrLevel};", "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync($"NR{p1}{memory.NrLevel};", "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.NrB = memory.NrLevel;
                 else _radioStateService.NrA = memory.NrLevel;
             }
             if (!string.IsNullOrEmpty(memory.AgcMode))
             {
-                await _catClient.SendCommandAsync($"GT0{memory.AgcMode};", "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync($"GT{p1}{memory.AgcMode};", "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.AgcB = memory.AgcMode;
                 else _radioStateService.AgcA = memory.AgcMode;
             }
