@@ -9,7 +9,7 @@ namespace Yaesu_Web_Control.Services
     /// </summary>
     public class CatMultiplexerService : IDisposable
     {
-        private SerialPort? _serialPort;
+        private ICatTransport? _link;
         private readonly SemaphoreSlim _serialSemaphore = new(1, 1);
         private readonly ILogger<CatMultiplexerService> _logger;
         private readonly ConcurrentQueue<CatRequest> _commandQueue = new();
@@ -35,7 +35,7 @@ namespace Yaesu_Web_Control.Services
         private CancellationTokenSource? _vsRequeryCts;
         private const int VsRequerySettleMs = 500;
 
-        public bool IsConnected => _serialPort?.IsOpen ?? false;
+        public bool IsConnected => _link?.IsOpen ?? false;
 
         public CatMultiplexerService(
             ILogger<CatMultiplexerService> logger,
@@ -129,10 +129,10 @@ namespace Yaesu_Web_Control.Services
             }
             try
             {
-                if (_serialPort?.IsOpen == true)
+                if (_link?.IsOpen == true)
                 {
-                    if (string.Equals(_serialPort.PortName, portName, StringComparison.OrdinalIgnoreCase)
-                        && _serialPort.BaudRate == baudRate)
+                    if (string.Equals(_link.PortName, portName, StringComparison.OrdinalIgnoreCase)
+                        && _link.BaudRate == baudRate)
                     {
                         _logger.LogInformation("Port {PortName} already connected", portName);
                         return true;
@@ -146,45 +146,40 @@ namespace Yaesu_Web_Control.Services
                     // one actually gets opened below.
                     _logger.LogInformation(
                         "Serial settings changed ({OldPort}@{OldBaud} → {NewPort}@{NewBaud}) — reconnecting",
-                        _serialPort.PortName, _serialPort.BaudRate, portName, baudRate);
+                        _link.PortName, _link.BaudRate, portName, baudRate);
                     await CloseSerialPortAsync();
                 }
 
-                var availablePorts = SerialPort.GetPortNames();
-                _logger.LogInformation("Available COM ports: {Ports}", string.Join(", ", availablePorts));
-
-                if (!availablePorts.Contains(portName))
+                if (StubRadio.Enabled)
                 {
-                    _logger.LogError("Port {PortName} not found", portName);
-                    return false;
+                    // No COM port is opened at all, so the configured one may
+                    // be missing or belong to another program.
+                    _link = new StubRadio(_radioStateService.RadioModel, portName, baudRate);
+                    _logger.LogWarning("STUB RADIO: {Variable}=1, so CAT goes to a simulated {Model}, not {PortName}",
+                        StubRadio.EnvironmentVariable, _radioStateService.RadioModel, portName);
+                }
+                else
+                {
+                    var availablePorts = SerialPort.GetPortNames();
+                    _logger.LogInformation("Available COM ports: {Ports}", string.Join(", ", availablePorts));
+
+                    if (!availablePorts.Contains(portName))
+                    {
+                        _logger.LogError("Port {PortName} not found", portName);
+                        return false;
+                    }
+
+                    _link = new SerialCatTransport(portName, baudRate);
                 }
 
-                _serialPort = new SerialPort
-                {
-                    PortName = portName,
-                    BaudRate = baudRate,
-                    DataBits = 8,
-                    Parity = Parity.None,
-                    StopBits = StopBits.Two,
-                    Handshake = Handshake.None,
-                    ReadTimeout = 500,
-                    WriteTimeout = 500,
-                    DtrEnable = true,
-                    RtsEnable = true
-                };
-
-                _serialPort.Open();
+                _link.DataReceived += data => _messageBuffer.AppendData(data);
+                _link.Open();
                 await Task.Delay(50);
 
                 _logger.LogInformation("✓ Connected to {PortName} at {BaudRate} baud, 8-N-2", portName, baudRate);
 
                 // Start processing queue
                 _processingTask = Task.Run(() => ProcessCommandQueueAsync(_cancellationTokenSource.Token));
-
-                _serialPort.DataReceived += (s, e) => {
-                    var data = _serialPort.ReadExisting();
-                    _messageBuffer.AppendData(data);
-                };
 
                 return true;
             }
@@ -286,7 +281,7 @@ namespace Yaesu_Web_Control.Services
         // SendToSerialPortAsync still leaves 15 ms after each write.
         public Task SendWithoutReplyAsync(string command, CancellationToken cancellationToken = default)
         {
-            if (_serialPort?.IsOpen != true)
+            if (_link?.IsOpen != true)
                 return Task.CompletedTask;
             return SendToSerialPortAsync(command, cancellationToken);
         }
@@ -310,7 +305,7 @@ namespace Yaesu_Web_Control.Services
 
         public async Task<string?> SendCommandAsync(string command, string clientId, CancellationToken cancellationToken = default, int timeoutMs = 150)
         {
-            if (_serialPort?.IsOpen != true)
+            if (_link?.IsOpen != true)
                 return null;
 
             var prefix = ReplyKey(command);
@@ -369,7 +364,7 @@ namespace Yaesu_Web_Control.Services
         {
             try
             {
-                if (_serialPort?.IsOpen != true)
+                if (_link?.IsOpen != true)
                 {
                     _logger.LogError("[{ClientId}] Command #{RequestId} failed: Serial port not open", request.ClientId, request.RequestId);
                     request.CompletionSource.SetResult(string.Empty);
@@ -387,9 +382,9 @@ namespace Yaesu_Web_Control.Services
                 // over a slower virtual serial port (e.g. VSPE) it doesn't,
                 // reported by iu1teu on #74 as FTDX3000 frequency updates
                 // never arriving over a VSPE-routed connection.
-                if (_serialPort.BytesToRead > 0)
+                if (_link.BytesToRead > 0)
                 {
-                    var pending = _serialPort.ReadExisting();
+                    var pending = _link.ReadExisting();
                     _messageBuffer.AppendData(pending);
                 }
 
@@ -399,7 +394,7 @@ namespace Yaesu_Web_Control.Services
 
                 _logger.LogDebug("[{ClientId}] >>> #{RequestId}: {Command}", request.ClientId, request.RequestId, fullCommand.TrimEnd(';'));
 
-                _serialPort.Write(commandBytes, 0, commandBytes.Length);
+                _link.Write(commandBytes, 0, commandBytes.Length);
 
                 _logger.LogDebug("[{ClientId}] <<< #{RequestId}: (response will be handled asynchronously)", request.ClientId, request.RequestId);
             }
@@ -459,29 +454,25 @@ namespace Yaesu_Web_Control.Services
                 await _processingTask;
             }
 
-            if (_serialPort?.IsOpen == true)
+            if (_link?.IsOpen == true)
             {
                 if (_autoInformationEnabled)
                 {
                     try
                     {
                         var cmdBytes = Encoding.ASCII.GetBytes("AI0;");
-                        _serialPort.Write(cmdBytes, 0, cmdBytes.Length);
+                        _link.Write(cmdBytes, 0, cmdBytes.Length);
                         await Task.Delay(100);
                     }
                     catch { /* Ignore errors during disconnect */ }
                 }
 
-                _serialPort.DtrEnable = false;
-                _serialPort.RtsEnable = false;
-                _serialPort.DiscardInBuffer();
-                _serialPort.DiscardOutBuffer();
-                _serialPort.Close();
+                _link.Close();
                 _logger.LogInformation("Disconnected from serial port");
             }
 
-            _serialPort?.Dispose();
-            _serialPort = null;
+            _link?.Dispose();
+            _link = null;
             _autoInformationEnabled = false;
 
             // Recreate so the next ConnectAsync's command-queue processor
@@ -533,7 +524,7 @@ namespace Yaesu_Web_Control.Services
 
         private async Task SendInitializationCommandsFastAsync(string[] commands)
         {
-            if (_serialPort?.IsOpen != true)
+            if (_link?.IsOpen != true)
                 throw new InvalidOperationException("Serial port is not open.");
 
             const int batchSize = 10;
@@ -546,7 +537,7 @@ namespace Yaesu_Web_Control.Services
                 var fullCommand = cmd.EndsWith(";") ? cmd : cmd + ";";
                 var commandBytes = Encoding.ASCII.GetBytes(fullCommand);
 
-                _serialPort.Write(commandBytes, 0, commandBytes.Length);
+                _link.Write(commandBytes, 0, commandBytes.Length);
 
                 await Task.Delay(interCommandDelayMs);
 
@@ -591,7 +582,7 @@ namespace Yaesu_Web_Control.Services
             // We only want the dispatcher path: DT0 response → HandleInitialization
             // → SignalInitializationComplete → _initializationCompletionSource.
             var dt0Bytes = Encoding.ASCII.GetBytes("DT0;");
-            _serialPort!.Write(dt0Bytes, 0, dt0Bytes.Length);
+            _link!.Write(dt0Bytes, 0, dt0Bytes.Length);
 
             _logger.LogInformation("[CatMultiplexerService] Waiting for DT0 response...");
 
@@ -633,14 +624,14 @@ namespace Yaesu_Web_Control.Services
 
         private async Task SendToSerialPortAsync(string command, CancellationToken cancellationToken)
         {
-            if (_serialPort?.IsOpen != true)
+            if (_link?.IsOpen != true)
                 throw new InvalidOperationException("Serial port is not open.");
 
             var fullCommand = command.EndsWith(";") ? command : command + ";";
             fullCommand = NormalizeFrequencyWidth(fullCommand);
             var commandBytes = Encoding.ASCII.GetBytes(fullCommand);
 
-            _serialPort.Write(commandBytes, 0, commandBytes.Length);
+            _link.Write(commandBytes, 0, commandBytes.Length);
             await Task.Delay(15, cancellationToken);
         }
     }
