@@ -928,7 +928,9 @@ test('/rtty-contest: in DATA-L with Mark 1415 / 170 a click puts the dial 1500 H
         settleMs: 1500,
         // The tuner's status is faked too: a page left open on the real app
         // runs the shared tuner host, and this page would join it on its tones.
+        // The tones the server holds come first, over this browser's own.
         before: `try { localStorage.setItem('rttyTuner', JSON.stringify({ markHz: 1415, shiftHz: 170, reverse: false })); } catch {}
+            __rwcTest.getOverrides['/api/rtty/tuner/tones'] = { markHz: 1415, shiftHz: 170, reverse: false, baud: 45.45 };
             __rwcTest.getOverrides['/api/rtty/tuner?'] = { running: false, hostRunning: false, points: [] };`,
     });
     try {
@@ -962,6 +964,7 @@ test('/rtty-contest: in DATA-U with Mark 2125 / 200 a click puts the dial 2225 H
     const page = await open('/rtty-contest', {
         settleMs: 1500,
         before: `try { localStorage.setItem('rttyTuner', JSON.stringify({ markHz: 2125, shiftHz: 200, reverse: false })); } catch {}
+            __rwcTest.getOverrides['/api/rtty/tuner/tones'] = { markHz: 2125, shiftHz: 200, reverse: false, baud: 45.45 };
             __rwcTest.getOverrides['/api/rtty/tuner?'] = { running: false, hostRunning: false, points: [] };`,
     });
     try {
@@ -1035,6 +1038,11 @@ test('/rtty-contest: a part in its own window leaves the page, and comes back wh
     const main = await open('/rtty-contest', { settleMs: 1500 });
     const wins = [];
     try {
+        // The docked tuner runs only in an RTTY or data mode, and the radio
+        // behind the app may be in another.
+        await main.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await modeA(main, 'RTTY-L');
+        await main.waitFor(`__rwcTest.writes.some(w => w.path.startsWith('/api/rtty/tuner/start'))`, { what: 'the docked tuner to start' });
         const shown = async () => (await main.eval(`[...document.querySelectorAll('.rp-pane')].map(p => p.hidden ? 'hidden' : p.classList.contains('no-wf') ? 'spectrum' : p.classList.contains('no-spec') ? 'waterfall' : 'both').join(',')`)).split(',');
         expect((await shown()).every(x => x === 'both'), `at the start the panes are ${await shown()}`);
 
@@ -1078,7 +1086,10 @@ test('/rtty-contest: grabs size the spectrum and the tuner, the tuner scope stay
         window.prompt = () => 'Mine';`;
     const page = await open('/rtty-contest', { before, settleMs: 1500 });
     try {
-        await page.cdp.send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false });
+        // Tall enough for the tuner to grow: its height stops where the VFO
+        // wheel and the controls under it begin, and since the wheel gained
+        // its heading a 900-high page leaves it no room to grow into.
+        await page.cdp.send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1300, deviceScaleFactor: 1, mobile: false });
         await sleep(400);
         expect(await page.eval(`!document.querySelector('.rc-strip')`), 'STRIP is still there');
         const box = sel => page.eval(`(r => ({ x: Math.round(r.left), w: Math.round(r.width), h: Math.round(r.height) }))(document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect())`);
