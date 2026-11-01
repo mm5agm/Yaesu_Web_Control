@@ -92,7 +92,7 @@ export function startYaesuRttyContest(root, cfg) {
               title: 'RF power. Drag and let go, or turn the mouse wheel over it' },
             { id: 'width', label: 'WIDTH', kind: 'list', perReceiver: true,
               title: 'IF width of the receiver on screen',
-              auto: 'The RTTY tuner works the width out for the signal. A width you set on MAIN while the tuner is open is kept for the mode' },
+              auto: 'The RTTY tuner works the width out for the signal. A width you set on MAIN in your RTTY mode is kept for the band, until you press AUTO or CAT SET' },
             { id: 'shift', label: 'SHIFT', kind: 'range', perReceiver: true, min: -1000, max: 1000, step: 20, reset: 0,
               format: v => `${v > 0 ? '+' : ''}${v} Hz`,
               title: 'IF shift of the receiver on screen. Double-click to centre it' },
@@ -101,8 +101,8 @@ export function startYaesuRttyContest(root, cfg) {
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
         views: cfg.views ?? [],
         menu: cfg.menu ?? [],
-        keys: cfg.setup ? [{ label: 'CAT SET', onClick: key => sendSetup(view.receiver, key),
-            title: 'Send your RTTY setup from Settings to the radio: the lines for every band, then the ones for the band on screen' }] : [],
+        keys: [{ label: 'CAT SET', id: 'rcCatSet', hidden: !cfg.setup, onClick: key => sendSetup(view.receiver, key, undefined, true),
+            title: 'Send your RTTY setup from Settings to the radio: the lines for every band, then the ones for the band on screen. Widths kept for each band are forgotten' }],
         tuner: cfg.tuner,
         decode: cfg.decode,
         storagePrefix: 'ywc.rttyContest.',
@@ -137,30 +137,61 @@ export function startYaesuRttyContest(root, cfg) {
     });
 
     // A band key: to the band's RTTY spot, or the radio's band memory, then the RTTY mode.
+    // WIDTH holds still until it's done: the radio passes through its own
+    // width for the band and the mode on the way (Bruce VK2RT, #250).
     async function toBand(vfo, band) {
         const rx = vfo.toLowerCase();
         const spot = getSegments(bandPlan, band)?.RTTY?.freq ?? RTTY_SPOTS[band];
-        const res = spot
-            ? await post(`/api/cat/frequency/${rx}`, { frequencyHz: spot })
-            : await post(`/api/cat/band/${rx}`, { band });
-        if (res?.ok && (await post(`/api/cat/mode/${rx}`, { mode: RTTY_MODES[rttyMode] }))?.ok) {
-            await putBackPower(vfo, band);
-            if (cfg.setup && cfg.setupOnBand) await sendSetup(vfo, null, band);
+        holdWidth[vfo] = true;
+        try {
+            const res = spot
+                ? await post(`/api/cat/frequency/${rx}`, { frequencyHz: spot })
+                : await post(`/api/cat/band/${rx}`, { band });
+            if (res?.ok && (await post(`/api/cat/mode/${rx}`, { mode: RTTY_MODES[rttyMode] }))?.ok) {
+                await putBackPower(vfo, band);
+                // The setup puts the band's kept width back itself.
+                // Nothing sent for this band still puts its kept width back.
+                const sent = cfg.setup && cfg.setupOnBand && await sendSetup(vfo, null, band);
+                if (!sent && vfo === 'A') await post('/api/rtty/tuner/band', {});
+            }
+        } finally {
+            // The width read back after the band change comes a moment later.
+            setTimeout(() => { holdWidth[vfo] = false; showWidth(vfo); if (vfo === 'A') checkKept(); }, 400);
         }
     }
     // CAT SET: the operator's CAT commands from Settings (Bruce VK2RT,
     // Discussion #250). Not SETUP, which the radio's MENU already has. The key says how it went for a moment.
-    async function sendSetup(vfo, key, band = bandAt(feed.state.freq[vfo])) {
-        const res = await post(`/api/rtty/setup${band ? `?band=${encodeURIComponent(band)}` : ''}`, {});
+    // CAT SET also forgets the widths kept for each band (reset).
+    async function sendSetup(vfo, key, band = bandAt(feed.state.freq[vfo]), reset = false) {
+        const q = new URLSearchParams();
+        if (band) q.set('band', band);
+        if (reset) q.set('reset', 'true');
+        const res = await post(`/api/rtty/setup${q.size ? `?${q}` : ''}`, {});
         const body = await res?.json().catch(() => ({})) ?? {};
         if (!res?.ok) console.warn('RTTY setup:', body.error || res?.status);
-        if (!key) return;
+        if (!key) return !!res?.ok;
         const was = key.dataset.label ??= key.textContent;
         key.textContent = res?.ok ? 'SENT' : 'NOT SENT';
         key.title = res?.ok ? `Sent ${body.sent} commands${band ? ` for ${band}` : ''}` : (body.error || 'Not sent');
         clearTimeout(key._back);
         key._back = setTimeout(() => { key.textContent = was; }, 2500);
+        return !!res?.ok;
     }
+    // Settings opens in a new tab from MENU, so this page looks again at the
+    // setup when it's back in view: emptied there, CAT SET goes (Bruce VK2RT, #250).
+    async function checkSetup() {
+        try {
+            const r = await fetch('/api/rtty/setup');
+            if (!r.ok) return;
+            const { any, onBand } = await r.json();
+            cfg.setup = !!any;
+            cfg.setupOnBand = !!onBand;
+            const key = document.getElementById('rcCatSet');
+            if (key) key.hidden = !cfg.setup;
+        } catch { /* stays as it was */ }
+    }
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkSetup(); });
+    window.addEventListener('pageshow', e => { if (e.persisted) checkSetup(); });
     // MODE: kept first, so a running tuner holds the new mode rather than
     // putting the old one back, then written to the receiver on screen.
     async function chooseMode(vfo, mode) {
@@ -170,8 +201,8 @@ export function startYaesuRttyContest(root, cfg) {
         if (res?.ok) await post(`/api/cat/mode/${vfo.toLowerCase()}`, { mode: RTTY_MODES[mode] });
     }
     // PWR is kept for each band when it's set here, and put back after a band
-    // key (Bruce VK2RT, Discussion #257). WIDTH is kept by the tuner, which
-    // is what used to undo it (RttyTunerModeService).
+    // key (Bruce VK2RT, Discussion #257). WIDTH is kept for each band by the
+    // tuner, which is what used to undo it (RttyTunerModeService).
     const KEPT_KEY = 'ywc.rttyContest.power';
     const readKept = () => { try { return JSON.parse(localStorage.getItem(KEPT_KEY)) || {}; } catch { return {}; } };
     function keepPower(band, watts) {
@@ -197,15 +228,16 @@ export function startYaesuRttyContest(root, cfg) {
         if (id === 'shift') return post(`/api/cat/ifshift/${rx}`, { shiftHz: Math.round(num(value)) });
     }
     // WIDTH's choices change with the mode: in AM or FM there are none.
-    const widthOf = { A: null, B: null }, modeOf = { A: '', B: '' };
+    const widthOf = { A: null, B: null }, modeOf = { A: '', B: '' }, holdWidth = { A: false, B: false };
     function showWidth(vfo) {
+        if (holdWidth[vfo]) return;
         const opts = ifWidthOptionsFor(cfg.model, modeOf[vfo]) ?? [];
         const code = widthOf[vfo] == null ? null : String(parseInt(widthOf[vfo], 10));
         view.setControl('width', code, { vfo, options: opts.map(o => ({ id: o.code, label: o.label })),
                                          kept: vfo === 'A' ? keptA : false });
     }
     // WIDTH's AUTO, MAIN only: lit while the tuner works the width out, dark
-    // while a width set by hand is kept for the mode. Pressing it forgets the
+    // while a width set by hand is kept for the band. Pressing it forgets the
     // kept width and the tuner sizes the filter again.
     let keptA = null, keptTimer = 0;
     function checkKept() {
@@ -218,7 +250,7 @@ export function startYaesuRttyContest(root, cfg) {
                 const label = (ifWidthOptionsFor(cfg.model, mode) ?? [])
                     .find(o => parseInt(o.code, 10) === parseInt(code, 10))?.label ?? code;
                 keptA = code == null ? null
-                    : `WIDTH ${label} is kept for ${mode}, as you set it. Press AUTO for the tuner to work the width out again`;
+                    : `WIDTH ${label} is kept for ${bandAt(feed.state.freq.A) ?? 'this band'}, as you set it. Press AUTO for the tuner to work the width out again`;
                 showWidth('A');
             } catch { /* the key stays as it was */ }
         }, 300);

@@ -57,5 +57,24 @@ namespace YaesuWebControl.Tests
         {
             Assert.Equal(switches, RttyTunerModeService.NeedsSwitching(mode, target));
         }
+
+        // WIDTH set by hand is kept for each band (Bruce VK2RT, #250 2026-11-01).
+        [Fact]
+        public void AKeptWidthBelongsToItsBand()
+        {
+            var s = new ApplicationSettings { RadioModel = "FTDX101" };
+            s.RttyTunerWidths["FTDX101|RTTY-L|20m"] = "07";
+            Assert.Equal("07", RttyTunerModeService.KeptWidth(s, "RTTY-L", "20m"));
+            Assert.Null(RttyTunerModeService.KeptWidth(s, "RTTY-L", "40m"));
+            Assert.Null(RttyTunerModeService.KeptWidth(s, "DATA-L", "20m"));
+        }
+
+        [Fact]
+        public void AWidthKeptBeforeBandsIsNotRead()
+        {
+            var s = new ApplicationSettings { RadioModel = "FTDX101" };
+            s.RttyTunerWidths["FTDX101|RTTY-L"] = "07";
+            Assert.Null(RttyTunerModeService.KeptWidth(s, "RTTY-L", "20m"));
+        }
     }
 }

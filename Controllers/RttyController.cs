@@ -88,7 +88,7 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         /// <summary>
-        /// The width kept for the mode MAIN is in (an SH code), or null when the
+        /// The width kept for MAIN's mode on the band it's on (an SH code), or null when the
         /// tuner works it out: what WIDTH's AUTO key shows.
         /// </summary>
         [HttpGet("tuner/width")]
@@ -136,13 +136,30 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         /// <summary>
+        /// Whether there's an RTTY setup in Settings, and whether a band key
+        /// sends it: the contest page asks when it's back in view, so CAT SET
+        /// goes once the setup is emptied in Settings (Bruce VK2RT, #250).
+        /// </summary>
+        [HttpGet("setup")]
+        public async Task<IActionResult> SetupState()
+        {
+            var settings = await _settings.GetSettingsAsync();
+            return Ok(new { any = !string.IsNullOrWhiteSpace(settings.RttySetupCat), onBand = settings.RttySetupOnBand });
+        }
+
+        /// <summary>
         /// Send the operator's RTTY setup (Settings, <see cref="RttySetupCat"/>)
         /// for <paramref name="band"/>: the lines for every band, then that
         /// band's. Refused whole if any command could transmit or write a
-        /// memory, and while the radio is transmitting.
+        /// memory, and while the radio is transmitting. <paramref name="reset"/>
+        /// is the CAT SET key: the widths kept for each band are forgotten
+        /// first, so every band goes back to the setup's width (Bruce VK2RT,
+        /// #250). After the setup, the width kept for the band goes back on.
         /// </summary>
         [HttpPost("setup")]
-        public async Task<IActionResult> SendSetup([FromQuery] string? band, [FromServices] ICatClient cat)
+        public async Task<IActionResult> SendSetup([FromQuery] string? band, [FromQuery] bool reset,
+                                                   [FromServices] ICatClient cat,
+                                                   [FromServices] RttyTunerModeService tunerMode)
         {
             var settings = await _settings.GetSettingsAsync();
             var (commands, problems) = RttySetupCat.For(settings.RttySetupCat, band);
@@ -160,6 +177,12 @@ namespace Yaesu_Web_Control.Controllers
                 foreach (var c in commands)
                     await cat.SendWithoutReplyAsync(c + ";", "RttySetup", HttpContext.RequestAborted);
                 _logger.LogInformation("RTTY setup sent for {Band}: {Count} commands", band ?? "no band", commands.Count);
+                if (reset) await tunerMode.ForgetAllWidthsAsync();
+                // After the setup, so a width set by hand on this band wins over
+                // an SH line in it, and before the read-back, so the screen shows
+                // the width the radio ends up with.
+                try { await tunerMode.BandChangedAsync(commands.Any(c => c.StartsWith("SH", StringComparison.Ordinal)), HttpContext.RequestAborted); }
+                catch (Exception ex) { _logger.LogWarning(ex, "RTTY setup: putting the band's width back failed"); }
                 // A set command has no answer, so what the setup changed is read
                 // back for every page to show: the radio had the width from an SH
                 // line while the screen still showed the one before (Bruce VK2RT, #250).
@@ -183,6 +206,30 @@ namespace Yaesu_Web_Control.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to send the RTTY setup");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// A band key on RTTY Contest with no setup sent after it: put back the
+        /// width kept for the new band, or let the tuner size the filter, and
+        /// read the width back for the screen (Bruce VK2RT, #250 2026-11-01).
+        /// </summary>
+        [HttpPost("tuner/band")]
+        public async Task<IActionResult> BandChanged([FromServices] RttyTunerModeService tunerMode, [FromServices] ICatClient cat)
+        {
+            if (!cat.IsConnected) return StatusCode(503, new { error = "The radio is not connected." });
+            try
+            {
+                var message = await tunerMode.BandChangedAsync(setupSetWidth: false, HttpContext.RequestAborted);
+                string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
+                try { await cat.SendCommandAndDispatchAsync($"SH{p1};", "RttyTuner", HttpContext.RequestAborted); }
+                catch (Exception ex) { _logger.LogDebug(ex, "RTTY band change: reading the width back failed"); }
+                return Ok(new { message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to put the band's width back");
                 return StatusCode(500, new { error = ex.Message });
             }
         }
