@@ -181,14 +181,12 @@ public static class RadioCapabilities
     /// supply; the FTdx101D runs from the 13.8 V DC input, and the Technical
     /// Supplement's "VDD Meter Adjustment" sets the TFT reading to 50.0 V on
     /// the MP and 13.8 V on the D. The FTDX3000, FTdx10 and FT-710 are 13.8 V
-    /// radios too. The FTDX5000 pair falls through to 13.8 V without a
-    /// source; its VDD gauge is hidden on the main page, so nothing reads
-    /// this for it yet — check the FTDX5000 Technical Supplement before
-    /// showing it.
+    /// radios too. The FTDX5000's 200 W final is "MOSFET devices operating at
+    /// 50 Volts" (its Operating Manual), so it gets the 50 V dial.
     /// </summary>
     public static double PaSupplyVolts(string radioModel) => radioModel switch
     {
-        "FTdx101MP" => 50.0,
+        "FTdx101MP" or "FTDX5000MP" or "FTDX5000D" => 50.0,
         _           => 13.8
     };
 

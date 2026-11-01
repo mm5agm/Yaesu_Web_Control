@@ -209,7 +209,7 @@ The application was written for operators who want a large, clean, touchscreen-f
 
 - Large, readable frequency displays with digit-by-digit mouse-wheel tuning and an on-screen frequency keyboard
 - Full dual-receiver control (VFO A and VFO B)
-- Live S-meter, power, SWR, ALC, and compression meters (plus PA temperature, IDD, and VDD on FTdx101MP, FTdx101D, and FTDX3000, and IDD and VDD on the FT-991A)
+- Live S-meter, power, SWR, ALC, and compression meters (plus IDD and VDD on every model, and PA temperature on the FTdx101MP, FTdx101D and FTDX3000)
 - Real-time two-way sync — changes on the radio front panel appear immediately in the app, and vice versa
 - Band and segment selectors for fast QSY to CW, FT8, SSB, or RTTY
 - **Per-band memory** for IF Width, IF Shift, and Mode — switching to a band automatically restores your preferred filter and mode for that band
@@ -502,17 +502,17 @@ A scrollable row of meters is displayed above the VFO panels. The leftmost slots
 | ALC | Automatic Level Control voltage — only active during transmit |
 | Temp | PA temperature in °C |
 | IDD | PA drain current in amps |
-| VDD | PA supply voltage in volts. The dial is 40–55 V on the FTdx101MP, whose 200 W final runs from an internal 50 V supply, and 10–16 V on the FTdx101D and FTDX3000, which run from 13.8 V |
+| VDD | PA supply voltage in volts. The dial is 40–55 V on the FTdx101MP and FTDX5000, whose 200 W finals run from 50 V, and 10–16 V on the FTdx101D, FTDX3000, FTdx10, FT-710 and FT-991A, which run from 13.8 V |
 
 > **Why the radio's own front-panel meter is stuck on COMP/SWR while YWC is running.** On the FTdx101MP and FTdx101D, the radio's documented CAT command for reading SWR directly returns stale or wrong values, so YWC works around it by repeatedly telling the radio to display Compression and SWR on its own meter and reading both at once — about twice a second, for as long as YWC is connected. This is what YWC needs to show you an accurate SWR reading, but it also means you can't pick a different meter pair from the radio's own front panel while YWC is running; whatever you select gets overridden within half a second. This is expected behaviour, not a fault — there's no radio-side setting that avoids it.
 
 **FTDX3000** — single S-meter (VFO A) plus the same seven TX meters — FTDX3000 is a single-receiver radio, so there is no VFO B S-meter.
 
-**FTdx10, FT-710** — single S-meter (VFO A) plus four TX meters (SWR, Power, Compression, ALC). The Temp, IDD, and VDD meters are not shown because those radios have a different power amplifier design that runs on 13.8 V; the high-voltage PA meters do not apply.
+**FTdx10, FT-710** — single S-meter (VFO A) plus SWR, Power, Compression, ALC, IDD and VDD. There is no Temp meter, because neither radio has a temperature reading over CAT. Their IDD and VDD scales are not yet calibrated against a real radio; if yours reads wrong, the Meter Calibration page can correct it.
 
 **FT-991A** - single S-meter (VFO A) plus SWR, Power, Compression, ALC, IDD and VDD. There is no Temp meter, because the FT-991A has no temperature reading over CAT.
 
-All meters update in real time — about five times a second at the default 200 ms **Meter Poll Interval** (Settings → Radio Connection). Not everything is read on every cycle: the S-meter(s) and transmit state are, while PA temperature, IDD, VDD and the antenna selection are read every two seconds, because they change slowly and reading them costs bus time the meters need. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
+All meters update in real time — about five times a second at the default 200 ms **Meter Poll Interval** (Settings → Radio Connection). Not everything is read on every cycle: the S-meter(s) and transmit state are, while PA temperature, VDD and the antenna selection are read every two seconds, because they change slowly and reading them costs bus time the meters need. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
 
 > **Reading the SWR meter above 3:1.** The SWR dial is marked 1.0 to 3.0, so the
 > needle stops climbing once the SWR passes 3:1 — a 3:1 match and a 10:1 match

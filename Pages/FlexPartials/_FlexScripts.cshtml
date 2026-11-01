@@ -2,6 +2,13 @@
 @{
     var maxPowerWatts = Model.View.MaxPowerWatts;
     var isSingleReceiver = Model.View.IsSingleReceiver;
+    // VDD dial, per model as on the classic page (#155): 40–55 V for a 50 V PA
+    // supply, 10–16 V for the 13.8 V radios. Without it this page drew the
+    // FTdx101MP's dial and dropped every 13.8 V reading. Invariant culture so
+    // a German-locale host does not render 13,8 into the JavaScript.
+    var vddDial = Yaesu_Web_Control.Services.RadioCapabilities.VddGaugeRange(Model.RadioModel);
+    string paSupplyVolts = Yaesu_Web_Control.Services.RadioCapabilities.PaSupplyVolts(Model.RadioModel)
+        .ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 }
 
     <script>
@@ -350,14 +357,15 @@
                 alcLinear:         { type: 'alcLinear',         canvasId: 'alcLinearCanvas' },
                 tempLinear:        { type: 'tempLinear',        canvasId: 'tempLinearCanvas' },
                 iddLinear:         { type: 'iddLinear',         canvasId: 'iddLinearCanvas' },
-                vddLinear:         { type: 'vddLinear',         canvasId: 'vddLinearCanvas' },
+                vddLinear:         { type: 'vddLinear',         canvasId: 'vddLinearCanvas', minValue: @vddDial.Min, maxValue: @vddDial.Max, nominal: @paSupplyVolts },
                 // Per-VFO linear S-meters (between frequency and RF gain). Present
                 // on both single- and dual-receiver layouts — inactive greying for
                 // single-receiver is CSS via applyVfoActiveStyling.
                 smeterLinearA:     { type: 'smeterLinear', canvasId: 'sMeterLinearCanvasA', gaugeTitleId: 'sMeterLinearValueA' },
                 smeterLinearB:     { type: 'smeterLinear', canvasId: 'sMeterLinearCanvasB', gaugeTitleId: 'sMeterLinearValueB' }
             });
-            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts);
+            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts,
+                { min: @vddDial.Min, max: @vddDial.Max, nominal: @paSupplyVolts });
 
             // ── Spectrum display (dual-VFO, v2.3.0+) ─────────────────────────
             // One SpectrumPanel per VFO. SdrSpectrumPipeline routes by sdrId.

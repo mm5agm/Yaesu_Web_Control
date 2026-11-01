@@ -35,7 +35,7 @@
             maxHz: @Model.MaxHz,
             scopeCat: @(Model.HasScopeCat ? "true" : "false"),
             bandPlan: '@Model.BandPlan',
-            vdd: @(Model.HasVdd ? Html.Raw($"{{ min: {Model.VddDial.Min}, max: {Model.VddDial.Max} }}") : Html.Raw("null")),
+            vdd: { min: @Model.VddDial.Min, max: @Model.VddDial.Max },
             paTemp: @(Model.HasPaTemp ? "true" : "false"),
             antennas: @(Model.HasAntennaSelector ? Html.Raw("['1', '2', '3']") : Html.Raw("[]")),
             roofing: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RoofingChoices.Select(o => new { code = o.Code, label = o.Label }))),
