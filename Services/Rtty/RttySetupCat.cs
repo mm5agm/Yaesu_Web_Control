@@ -74,5 +74,28 @@ namespace Yaesu_Web_Control.Services.Rtty
             common.AddRange(banded);
             return (common, problems);
         }
+
+        /// <summary>
+        /// The IF width the setup gives <paramref name="band"/> for the receiver
+        /// <paramref name="p1"/>, as an SH code ("10"), from the last SH line that
+        /// would be sent there; null when there is none, or the setup would not
+        /// be sent. A band starts on this width until one is set by hand, and
+        /// AUTO on WIDTH goes back to it (Bruce VK2RT, #250 2026-11-01: AUTO gave
+        /// the tuner's 300 Hz where his setup has 500 Hz).
+        /// </summary>
+        public static string? WidthCode(string? text, string? band, string? radioModel, string p1)
+        {
+            var (commands, problems) = For(text, band);
+            if (problems.Count > 0) return null;
+            string prefix = CatCommands.FormatIfWidth(radioModel, p1, 0)[..^3];
+            for (int i = commands.Count - 1; i >= 0; i--)
+            {
+                var c = commands[i];
+                if (c.Length == prefix.Length + 2 && c.StartsWith(prefix, StringComparison.Ordinal)
+                    && char.IsAsciiDigit(c[^1]) && char.IsAsciiDigit(c[^2]))
+                    return c[^2..];
+            }
+            return null;
+        }
     }
 }
