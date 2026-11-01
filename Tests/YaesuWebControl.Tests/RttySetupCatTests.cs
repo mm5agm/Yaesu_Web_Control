@@ -59,6 +59,36 @@ namespace YaesuWebControl.Tests
             var (_, problems) = RttySetupCat.For("MD08; 12AB; FA0140#;", null);
             Assert.Equal(2, problems.Count);
         }
+
+        // AUTO on WIDTH goes back to this width, not the tuner's own (Bruce
+        // VK2RT, #250 2026-11-01: 300 Hz where his setup has SH0010, 500 Hz).
+        [Fact]
+        public void The_setup_width_is_Bruces_SH_code_for_MAIN()
+        {
+            Assert.Equal("10", RttySetupCat.WidthCode(Bruce20m, "20m", "FTdx101MP", "0"));
+            Assert.Null(RttySetupCat.WidthCode(Bruce20m, "20m", "FTdx101MP", "1"));
+        }
+
+        [Fact]
+        public void The_last_SH_for_the_band_wins_and_no_SH_means_no_setup_width()
+        {
+            const string text = "SH0010;\n20m: SH0007;";
+            Assert.Equal("07", RttySetupCat.WidthCode(text, "20m", "FTdx101MP", "0"));
+            Assert.Equal("10", RttySetupCat.WidthCode(text, "40m", "FTdx101MP", "0"));
+            Assert.Null(RttySetupCat.WidthCode("MD08;", "20m", "FTdx101MP", "0"));
+            Assert.Null(RttySetupCat.WidthCode(null, "20m", "FTdx101MP", "0"));
+        }
+
+        [Fact]
+        public void A_setup_that_would_not_be_sent_gives_no_width()
+            => Assert.Null(RttySetupCat.WidthCode("SH0010; TX1;", "20m", "FTdx101MP", "0"));
+
+        [Fact]
+        public void The_FT991A_SH_has_no_fixed_zero()
+        {
+            Assert.Equal("10", RttySetupCat.WidthCode("SH010;", "20m", "FT-991A", "0"));
+            Assert.Null(RttySetupCat.WidthCode("SH0010;", "20m", "FT-991A", "0"));
+        }
     }
 
     public class LaunchPageTests
