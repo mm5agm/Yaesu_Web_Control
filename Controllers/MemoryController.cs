@@ -86,18 +86,23 @@ namespace Yaesu_Web_Control.Controllers
 
         // ── Recall (tune the active VFO to a memory) ────────────────────────
 
+        // vfo ("A" or "B") names the receiver to tune, for a page with
+        // receiver tabs of its own (RTTY Contest's MEM); left out, the radio's
+        // active VFO, as before.
         [HttpPost("{id:int}/recall")]
-        public async Task<IActionResult> Recall(int id)
+        public async Task<IActionResult> Recall(int id, [FromQuery] string? vfo = null)
         {
             var memory = _memoryService.GetById(id);
             if (memory == null) return NotFound();
 
             var settings = await _settingsService.GetSettingsAsync();
             bool useCf = settings.RadioModel is "FTdx10" or "FT-710";
-            bool targetB = RadioCapabilities.VfoIsB(
-                _radioStateService.IsSingleReceiver,
-                _radioStateService.ActiveVfo,
-                "A");
+            bool targetB = vfo is "A" or "B"
+                ? vfo == "B"
+                : RadioCapabilities.VfoIsB(
+                    _radioStateService.IsSingleReceiver,
+                    _radioStateService.ActiveVfo,
+                    "A");
 
             // Set mode before frequency so the radio applies any pitch/carrier offset
             // (e.g. CW sidetone offset) before the VFO is tuned — prevents ~700 Hz landing error.

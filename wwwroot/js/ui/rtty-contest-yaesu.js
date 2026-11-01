@@ -92,7 +92,7 @@ export function startYaesuRttyContest(root, cfg) {
               title: 'RF power. Drag and let go, or turn the mouse wheel over it' },
             { id: 'width', label: 'WIDTH', kind: 'list', perReceiver: true,
               title: 'IF width of the receiver on screen',
-              auto: 'The RTTY tuner works the width out for the signal. A width you set on MAIN in your RTTY mode is kept for the band, until you press AUTO or CAT SET' },
+              auto: 'Each band starts on the width an SH command in your RTTY setup gives it, or with none, the RTTY tuner works the width out for the signal. A width you set on MAIN in your RTTY mode is kept for the band, until you press AUTO or CAT SET' },
             { id: 'shift', label: 'SHIFT', kind: 'range', perReceiver: true, min: -1000, max: 1000, step: 20, reset: 0,
               format: v => `${v > 0 ? '+' : ''}${v} Hz`,
               title: 'IF shift of the receiver on screen. Double-click to centre it' },
@@ -103,6 +103,13 @@ export function startYaesuRttyContest(root, cfg) {
         menu: cfg.menu ?? [],
         keys: [{ label: 'CAT SET', id: 'rcCatSet', hidden: !cfg.setup, onClick: key => sendSetup(view.receiver, key, undefined, true),
             title: 'Send your RTTY setup from Settings to the radio: the lines for every band, then the ones for the band on screen. Widths kept for each band are forgotten' }],
+        // MEM beside BANDS: YWC's memories, the ones the Mem panel has
+        // (Bruce VK2RT, #250 2026-11-01), recalled on the receiver on screen.
+        memories: {
+            list: async () => { const r = await fetch('/api/memory'); return r.ok ? r.json() : null; },
+            recall: m => post(`/api/memory/${m.id}/recall?vfo=${view.receiver}`),
+            editHref: '/Memories',
+        },
         tuner: cfg.tuner,
         decode: cfg.decode,
         storagePrefix: 'ywc.rttyContest.',
