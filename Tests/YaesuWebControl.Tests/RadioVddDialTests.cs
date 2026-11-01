@@ -9,11 +9,16 @@ namespace YaesuWebControl.Tests;
 // here is silent in exactly the same way: a plausible dial that never moves.
 public sealed class RadioVddDialTests
 {
-    [Fact]
-    public void FTdx101MP_RunsIts200WFinalFrom50V()
+    // The FTDX5000's final is "MOSFET devices operating at 50 Volts" (its
+    // Operating Manual), like the FTdx101MP's.
+    [Theory]
+    [InlineData("FTdx101MP")]
+    [InlineData("FTDX5000MP")]
+    [InlineData("FTDX5000D")]
+    public void FiftyVoltFinals_GetTheHighVoltageDial(string model)
     {
-        Assert.Equal(50.0, RadioCapabilities.PaSupplyVolts("FTdx101MP"));
-        Assert.Equal((40, 55), RadioCapabilities.VddGaugeRange("FTdx101MP"));
+        Assert.Equal(50.0, RadioCapabilities.PaSupplyVolts(model));
+        Assert.Equal((40, 55), RadioCapabilities.VddGaugeRange(model));
     }
 
     [Theory]

@@ -675,30 +675,28 @@
                                 <canvas id="alcMeterCanvas" role="img" aria-hidden="true" aria-label="ALC meter" data-a11y-key="meters.alc"></canvas>
                             </div>
                         </div>
-                        @if (!isFtdx10 && !isFt710 && !isFtdx5000) {
                         @if (hasPaTemp) {
-                        <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board).
-                             FTDX5000 excluded: no temperature read-code in its RM meter set.
-                             FT-991A excluded: it has RM7 (ID) and RM8 (VDD) but no RM9. -->
+                        <!-- PA Temperature Meter — FTdx101/FTDX3000 only. The FTdx10,
+                             FT-710, FTDX5000 and FT-991A have no RM9 in their CAT manuals. -->
                         <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
                             </div>
                         </div>
                         }
-                        <!-- IDD Meter — FTdx101/FTDX3000 only -->
+                        <!-- IDD and VDD Meters — every model: all their CAT manuals list
+                             RM7 (ID) and RM8 (VDD). They were hidden on the FTdx10, FT-710
+                             and FTDX5000 until Fabio found his FTdx10 answers both. -->
                         <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="iddMeterCanvas" role="img" aria-hidden="true" aria-label="Drain current meter" data-a11y-key="meters.idd"></canvas>
                             </div>
                         </div>
-                        <!-- VDD Meter — FTdx101/FTDX3000 only -->
                         <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="vddMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier supply voltage meter" data-a11y-key="meters.vdd"></canvas>
                             </div>
                         </div>
-                        }
                     </div>
                     <!-- Power and MIC Gain on one row.
                          padding-left: 260px reserves the same width as the
