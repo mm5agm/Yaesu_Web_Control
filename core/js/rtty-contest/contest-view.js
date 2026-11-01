@@ -1055,13 +1055,14 @@ export function mountContestView(root, opts) {
             opts.tuner.hidden = out.tuner && !pip;
             tunerNote.hidden = !(out.tuner || pip);
             tunerNote.textContent = pip ? 'The tuner is on top, in its own window. Close that window to put it back here.'
-                : 'The tuner is in a window of its own. DOCK puts it back here.';
+                : 'The tuner is in a window of its own. Reattach in that window puts it back here.';
             for (const g of tunerGrabs) g.hidden = out.tuner || !!pip;
         }
         if (tunerPop) {
-            tunerPop.classList.toggle('on', out.tuner);
-            tunerPop.textContent = out.tuner ? 'DOCK' : POPOUT_LABELS.tuner;
-            tunerPop.title = out.tuner ? 'Put the tuner back here and close its window' : 'Open the tuner in a window of its own, for another monitor';
+            // Out, no DOCK here either: Reattach in the window puts it back,
+            // as for the wheel and the decoded text.
+            tunerPop.hidden = out.tuner;
+            tunerPop.title = 'Open the tuner in a window of its own, for another monitor';
             tunerPop.disabled = !!pip;
         }
         if (onTopKey) {

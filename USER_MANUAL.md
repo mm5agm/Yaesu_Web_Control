@@ -1452,7 +1452,7 @@ In **DATA-L** and **DATA-U** the spectrum is centred on the middle of the DATA p
 The RTTY tuner ([§22](#22-rtty)) is docked at the right, as in Contest Mode ([§22.7](#227-contest-mode-the-tuner-on-its-own)). The keys on its bar:
 
 - **DECODE** puts the decoded text in the tuning dial's place, under the tuner, and starts the decoder. The key then reads **VFO WHEEL**: press it to put the dial back, which stops the decoder. The text box has its own **POP OUT** (see *The tuning dial* below for how the two windows behave).
-- **POP OUT** moves the tuner into a window of its own, the same window every GUI pops its tuner out to.
+- **POP OUT** moves the tuner into a window of its own, the same window every GUI pops its tuner out to. While it is out, the key goes and a note keeps the tuner's place; **Reattach** in the window puts it back. *No DOCK on the page since v2.5.4-pre13.*
 - **ON TOP** puts it in a small window that stays above other programs, such as your logger, where the browser allows it (Chrome and Edge do).
 
 The docked tuner starts small, 300 px wide; its grabs make it bigger. Under it is a box with the three controls a contest operator reaches for most:
@@ -1501,7 +1501,7 @@ The other names are `radio`, `classic`, `experimental` and `settings`. If YWC is
 
 **Sizes, windows and layouts**
 
-Drag the right edge, the bottom edge or the bottom-right corner of the spectrum, or of the docked tuner, to size it. A box you haven't sized fills the room it has. Each part that pops out leaves the page, and comes back with **DOCK** in its window, or when its window closes.
+Drag the right edge, the bottom edge or the bottom-right corner of the spectrum, or of the docked tuner, to size it. A box you haven't sized fills the room it has. Each part that pops out leaves the page, and comes back with **DOCK** (or **Reattach**) in its window, or when its window closes.
 
 **LAYOUT** saves all of this by name, on the computer running YWC: the sizes, the choices above, which parts are in windows of their own, and where each window is. Recalling a layout puts every window back where it was, so each can go on its own monitor. If the browser blocks some of the windows, a bar says so with a key for each: one click opens one window.
 
