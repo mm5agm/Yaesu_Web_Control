@@ -3379,6 +3379,14 @@
             return items.filter(it => wanted(it) !== it.raw);
         }
 
+        // Items a radio is known to ignore when set by CAT, though it answers
+        // without an error; the radio's own MENU sets them.
+        function catHint(it) {
+            return it.function === 'PC KEYING'
+                ? ' The FTDX101 does not take PC KEYING by CAT: set it on the radio\'s own MENU.'
+                : '';
+        }
+
         function refresh() {
             let invalid = 0;
             for (const it of items) {
@@ -3389,8 +3397,8 @@
                     invalid++;
                     it.note.textContent = `Not a setting the radio offers. It takes ${it.choices[0].label} to ${it.choices[it.choices.length - 1].label}.`;
                     it.note.className = 'small text-danger';
-                } else if (isChanged) {
-                    it.note.textContent = `Was ${it.shown}. Not sent yet.`;
+                } else if (isChanged && !it.result) {
+                    it.note.textContent = `Was ${it.shown}. Not sent yet.${catHint(it)}`;
                     it.note.className = 'small';
                 } else if (!it.result) {
                     it.note.textContent = '';
@@ -3494,7 +3502,12 @@
                 }
                 if (control) {
                     control.setAttribute('aria-label', `${row.function}, ${row.section}${row.tx ? ', changes transmit' : ''}`);
-                    control.addEventListener(kind === 'select' ? 'change' : 'input', refresh);
+                    // A new edit replaces the last send's result in the Note column.
+                    control.addEventListener(kind === 'select' ? 'change' : 'input', () => {
+                        const it = items.find(x => x.control === control);
+                        if (it) it.result = false;
+                        refresh();
+                    });
                     setting.appendChild(control);
                     // Text is sent space-padded; the radio may answer padded too, which is not a change.
                     const raw = kind === 'text' ? row.raw.trim() : row.raw;
@@ -3575,7 +3588,7 @@
                         bad++;
                     }
                     it.result = true;
-                    it.note.textContent = good ? 'Sent and read back.' : res.message || 'Not sent.';
+                    it.note.textContent = good ? 'Sent and read back.' : (res.message || 'Not sent.') + catHint(it);
                     it.note.className = `small text-${good ? 'success' : 'danger'}`;
                 }
                 refresh();
