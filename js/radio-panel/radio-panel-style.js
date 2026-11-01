@@ -265,7 +265,8 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-dial-vfo{display:inline-block;margin-left:10px;padding:0 7px;border:1px solid currentColor;border-radius:4px;font:700 15px ${MONO};letter-spacing:0;color:${v('vfo-a')}}
 .rp-dial-vfo[data-vfo=B]{color:${v('vfo-b')}}
 .rp-dial{width:300px;height:300px;border-radius:50%;background:repeating-conic-gradient(${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg);box-shadow:0 10px 24px rgba(0,0,0,.7),inset 0 0 0 1px ${v('dial-rim')};display:flex;align-items:center;justify-content:center}
-.rp-dial-inner{width:250px;height:250px;border-radius:50%;background:${v('dial-inner')};box-shadow:inset 0 2px 0 rgba(255,255,255,.07),inset 0 -6px 14px rgba(0,0,0,.45);position:relative}
+.rp-dial-inner{width:250px;height:250px;border-radius:50%;background:${v('dial-inner')};box-shadow:inset 0 2px 0 rgba(255,255,255,.07),inset 0 -6px 14px rgba(0,0,0,.45);position:relative;transform:rotate(var(--rp-face-rot,0deg))}
+.rp-dial-inner::before{content:'';position:absolute;inset:0;border-radius:50%;background:${v('dial-sheen')};transform:rotate(calc(var(--rp-face-rot,0deg) * -1));pointer-events:none}
 .rp-dial-dimple{position:absolute;width:52px;height:52px;border-radius:50%;left:154px;top:42px;background:${v('dial-dimple')};box-shadow:inset 0 3px 6px rgba(0,0,0,.7)}
 .rp-dial.dual{background:repeating-conic-gradient(from var(--rp-ring-rot,0deg),${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg)}
 .rp-turn{cursor:grab;touch-action:none;user-select:none}
