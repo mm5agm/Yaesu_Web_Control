@@ -1446,7 +1446,7 @@ In **DATA-L** and **DATA-U** the spectrum is centred on the middle of the DATA p
 
 The RTTY tuner ([§22](#22-rtty)) is docked at the right, as in Contest Mode ([§22.7](#227-contest-mode-the-tuner-on-its-own)). The keys on its bar:
 
-- **DECODE** shows the decoded text in a box of its own under the tuner, and starts the decoder. Press it again to stop the decoder and hide the text. The text box has its own **POP OUT**.
+- **DECODE** puts the decoded text in the tuning dial's place, under the tuner, and starts the decoder. The key then reads **VFO WHEEL**: press it to put the dial back, which stops the decoder. The text box has its own **POP OUT** (see *The tuning dial* below for how the two windows behave).
 - **POP OUT** moves the tuner into a window of its own, the same window every GUI pops its tuner out to.
 - **ON TOP** puts it in a small window that stays above other programs, such as your logger, where the browser allows it (Chrome and Edge do).
 
@@ -1462,7 +1462,9 @@ WIDTH and SHIFT follow the receiver on screen. A slider writes to the radio when
 
 **WIDTH is kept for each band.** A width you set on MAIN in your RTTY mode (the one chosen with MODE) is kept for the band you set it on, and stays kept after YWC restarts. A band key puts it back each time you go to that band, and the tuner uses it instead of the width it would work out ([§22.8](#228-what-the-tuner-changes-on-your-radio)). Closing the tuner leaves it as you set it. On a band where you haven't set one, an SH command in your RTTY setup gives the width; with no SH there, the tuner works it out. **CAT SET** forgets the widths kept on every band. While a band key is changing band, WIDTH shows the width it ends on, not the ones the radio passes through on the way. *New in v2.5.4-pre8; kept for each band, with the tuner closed too, since v2.5.4-pre12. Until then one width was kept for the mode on every band.*
 
-**The tuning dial.** Under those controls is the Radio panel's tuning dial, made smaller. Both parts tune the receiver on screen: the outer ring in big steps and the inner knob in small ones. Turn the mouse wheel over a part, or drag it round. Pick each part's step in the lists beside the dial, **OUTER** (100 Hz to start with) and **INNER** (10 Hz). The steps are kept in this browser. *New in v2.5.4-pre9.*
+**The tuning dial.** Under those controls is the Radio panel's tuning dial, made smaller, in a box headed **VFO WHEEL**. Both parts tune the receiver on screen: the outer ring in big steps and the inner knob in small ones. Turn the mouse wheel over a part, or drag it round. Pick each part's step in the lists beside the dial, **OUTER** (100 Hz to start with) and **INNER** (10 Hz). The steps are kept in this browser. *New in v2.5.4-pre9.*
+
+The dial and the decoded text share that place, one at a time: **DECODE** on the tuner's bar shows the text, and **VFO WHEEL** shows the dial again. Each has its own **POP OUT**, so either can go to a window of its own, on another monitor if you like, and the other then has the place to itself. A window stays out whichever is showing on the page. **DOCK** in a window puts it back on the page if its place is showing there; if the other one is showing, DOCK just closes the window. The decoder runs while the text is showing, on the page or in its window. *Heading, POP OUT and the swap new in v2.5.4-pre13, as Bruce VK2RT asked.*
 
 **AUTO**, at the end of the WIDTH row, is lit while the tuner works the width out itself, and dark while a width you set is kept; hold the mouse over it to see which width and band. Press it to go back to the tuner's own width on the band MAIN is on: the width kept for that band is forgotten, the tuner sizes the filter again straight away if it is open, and closing it puts back the width from before it opened. Setting WIDTH by hand while the tuner is open keeps a width again. AUTO is only for MAIN, because the tuner only sets MAIN. *New in v2.5.4-pre9.*
 

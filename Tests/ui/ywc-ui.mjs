@@ -22,7 +22,7 @@ const PAGES = [
     '/Calibration/MeterCalibration', '/MeterCalibration',
     '/CwReader', '/CwSend', '/Diagnostics', '/DxSpots', '/Labels', '/Memories',
     '/Ports', '/RadioDisplay', '/RemoteAudio', '/RttyTuner', '/Settings', '/UserManual',
-    '/rtty-contest/window?p=both', '/rtty-contest/window?p=waterfall', '/RttyTuner?contest=true', '/RttyTuner?contest=true&decode=true',
+    '/rtty-contest/window?p=both', '/rtty-contest/window?p=waterfall', '/rtty-contest/window?p=wheel', '/RttyTuner?contest=true', '/RttyTuner?contest=true&decode=true',
 ];
 
 const suite = new Suite(`Yaesu Web Control UI checks against ${BASE}`);
@@ -1110,14 +1110,17 @@ test('/rtty-contest: grabs size the spectrum and the tuner, the tuner scope stay
     }
 });
 
-test('/rtty-contest: DECODE shows the decoded text in its own box under the tuner and starts the decoder; it pops out by itself; off stops it and hides it', async () => {
+test('/rtty-contest: DECODE swaps the VFO wheel for the decoded text and starts the decoder; the text pops out by itself and stays out; VFO WHEEL swaps back', async () => {
     const before = `try { localStorage.removeItem('ywc.rttyContest.decode'); } catch {}`;
     const page = await open('/rtty-contest', { before, settleMs: 1500 });
     const wins = [];
     try {
         const shown = () => page.eval(`(e => !!e && e.offsetParent !== null)(document.getElementById('rttyReaderOut'))`);
         const posts = async what => (await page.writes()).filter(x => x.method === 'POST' && x.path === '/api/rtty/reader/' + what).length;
+        const wheel = () => visible(page, '.rc-wbox .rp-dial');
         expect(!(await shown()), 'the decoded text shows before DECODE');
+        expect(await wheel(), 'the VFO wheel does not show before DECODE');
+        expect(await text(page, '.rc-whead') === 'VFO WHEEL' && await text(page, '.rc-decode') === 'DECODE', 'the wheel has no heading, or the key does not say DECODE');
         expect(await posts('stop') >= 1, 'a decoder left running was not stopped at the start');
         expect(await page.eval(`(e => !!e && e.offsetParent === null)(document.getElementById('rttySendInput'))`), 'Send shows');
 
@@ -1126,8 +1129,9 @@ test('/rtty-contest: DECODE shows the decoded text in its own box under the tune
         await sleep(300);
         expect(await shown(), 'DECODE did not show the decoded text');
         expect(await posts('start') === 1, 'DECODE did not start the decoder');
-        expect(await page.eval(`document.querySelector('.rc-decode').getAttribute('aria-pressed') === 'true' && localStorage.getItem('ywc.rttyContest.decode') === '1'`),
-            'DECODE is not shown as on, or not kept');
+        expect(!(await wheel()), 'the VFO wheel still shows with the decoded text');
+        expect(await text(page, '.rc-decode') === 'VFO WHEEL' && await page.eval(`localStorage.getItem('ywc.rttyContest.decode') === '1'`),
+            'the key does not say VFO WHEEL, or the choice is not kept');
         expect(await page.eval(`(e => !!e && e.offsetParent === null)(document.getElementById('rttySendInput'))`), 'Send shows with DECODE on');
         expect(await page.eval(`!!document.querySelector('.rc-side > .rc-dbox > .rtty-decode #rttyReaderOut') && !document.querySelector('#rttyTunerDialog #rttyReaderOut')`),
             'the decoded text is not in a box of its own');
@@ -1153,9 +1157,67 @@ test('/rtty-contest: DECODE shows the decoded text in its own box under the tune
         await page.clearWrites();
         await page.click('.rc-decode');
         await sleep(300);
-        expect(!(await shown()), 'DECODE off did not hide the decoded text');
-        expect(await page.eval(`document.querySelector('.rc-dbox').hidden`), 'DECODE off left the decode box');
-        expect(await posts('stop') === 1, 'DECODE off did not stop the decoder');
+        expect(!(await shown()), 'VFO WHEEL did not hide the decoded text');
+        expect(await wheel() && await text(page, '.rc-decode') === 'DECODE', 'VFO WHEEL did not bring the wheel back');
+        expect(await page.eval(`document.querySelector('.rc-dbox').hidden`), 'VFO WHEEL left the decode box');
+        expect(await posts('stop') === 1, 'VFO WHEEL did not stop the decoder');
+
+        // Out, the text stays out with the wheel here, and the decoder runs
+        // until its window goes.
+        await page.click('.rc-decode');
+        wins.push(await open('/RttyTuner?contest=true&decode=true', { settleMs: 1500 }));
+        await page.waitFor(`document.querySelector('.rc-pop-decode').textContent === 'DOCK'`, { what: 'the decode key to say DOCK' });
+        await page.clearWrites();
+        await page.click('.rc-decode');
+        await sleep(300);
+        expect(await wheel(), 'VFO WHEEL with the text out did not show the wheel');
+        expect(await posts('stop') === 0, 'VFO WHEEL stopped the decoder with the text in its window');
+        expect(await wins[0].eval(`(e => !!e && e.offsetParent !== null)(document.getElementById('rttyReaderOut'))`), 'the decode window went with VFO WHEEL');
+        await wins.pop().close();
+        await page.waitFor(`document.querySelector('.rc-pop-decode').textContent === 'POP OUT'`, { what: 'the decode window to close', timeoutMs: 5000 });
+        await sleep(300);
+        expect(await posts('stop') === 1, 'the decoder did not stop when its window went with the wheel showing');
+        expect(!(await shown()) && await wheel(), 'closing the decode window did not leave the wheel');
+        for (const p of [page, ...wins]) expect(p.exceptions.length === 0, `uncaught exceptions:\n${p.exceptions.join('\n')}`);
+    } finally {
+        for (const p of wins) await p.close().catch(() => {});
+        await page.close();
+    }
+});
+
+test('/rtty-contest: the VFO wheel pops out to a window of its own that tunes, and stays out while DECODE has its place', async () => {
+    const before = `try { localStorage.removeItem('ywc.rttyContest.decode'); } catch {}`;
+    const page = await open('/rtty-contest', { before, settleMs: 1500 });
+    const wins = [];
+    try {
+        wins.push(await open('/rtty-contest/window?p=wheel', { settleMs: 1500 }));
+        const win = wins[0];
+        await page.waitFor(`document.querySelector('.rc-pop-wheel').textContent === 'DOCK'`, { what: 'the wheel key to say DOCK' });
+        expect(!(await visible(page, '.rc-wbox .rp-dial')) && await visible(page, '.rc-wnote'), 'with the wheel out the page still shows it, or has no note');
+        expect(await visible(win, '.rc-wbox .rp-dial') && !(await visible(win, '.rc-stack')) && !(await visible(win, '.rc-scope')),
+            'the wheel window does not show the wheel alone');
+        expect(await visible(win, '.rc-dock'), 'the wheel window has no DOCK');
+        // A notch over the inner knob in the window tunes.
+        await win.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the window hub handler' });
+        await win.state('FrequencyA', 14_080_000);
+        await win.clearWrites();
+        await win.eval(`(d => { const k = d.querySelector('.rp-dial-knob').getBoundingClientRect();
+            d.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true, clientX: k.left + k.width / 2, clientY: k.top + k.height / 2 })); })(document.querySelector('.rc-wbox .rp-dial'))`);
+        await sleep(600);
+        const w = (await win.writes()).filter(x => x.path === '/api/cat/frequency/a');
+        expect(w.length === 1 && w[0].body?.frequencyHz > 14_080_000, `a notch in the wheel window wrote ${JSON.stringify(w)}`);
+
+        // DECODE takes the wheel's place here; the window stays.
+        await page.click('.rc-decode');
+        await sleep(300);
+        expect(await page.eval(`document.querySelector('.rc-wbox').hidden`), 'DECODE did not take the wheel box away');
+        expect(await visible(win, '.rc-wbox .rp-dial'), 'the wheel window went with DECODE');
+        await page.click('.rc-decode');
+        await sleep(300);
+        expect(await visible(page, '.rc-wnote'), 'VFO WHEEL with the wheel out has no note');
+        await wins.pop().close();
+        await page.waitFor(`document.querySelector('.rc-pop-wheel').textContent === 'POP OUT'`, { what: 'the wheel to come back', timeoutMs: 5000 });
+        expect(await visible(page, '.rc-wbox .rp-dial'), 'the wheel did not come back when its window went');
         for (const p of [page, ...wins]) expect(p.exceptions.length === 0, `uncaught exceptions:\n${p.exceptions.join('\n')}`);
     } finally {
         for (const p of wins) await p.close().catch(() => {});

@@ -16,10 +16,15 @@
 // what is out, and the windows follow its choices - receiver, spots, levels,
 // swap, fixed, step - through storage events, so there is one set of them. The
 // tuner can also go On top (pip-dock.js), where the browser allows it.
-// DECODE on the tuner's bar shows the decoded text with it (opts.onDecode:
-// the app shows its reader and starts or stops the decoder). Between the
-// two, a box of settings the app names (opts.controls), e.g. power, IF width
-// and IF shift.
+// Under the tuner, a box of settings the app names (opts.controls), e.g.
+// power, IF width and IF shift, and under that the VFO wheel (opts.onNudge)
+// or the decoded text, one at a time: DECODE on the tuner's bar swaps the
+// wheel for the text and becomes VFO WHEEL, which swaps it back. Each has its
+// own POP OUT, and a window stays out whichever is showing here; its DOCK
+// puts it back only where it is showing, and otherwise just closes it. The
+// decoder runs while the text is showing here or in its window (opts.onDecode:
+// the app shows its reader and starts or stops the decoder). With no wheel,
+// DECODE shows and hides the text.
 //
 // Under the strip, a row of band keys for each receiver (opts.bandRows and
 // opts.bands): the app decides where a band key lands. BANDS picks which keys
@@ -96,15 +101,19 @@ const DEFAULT_STEP_HZ = 10;
 // heavy here, so the view starts thinner.
 export const TRACE_CHOICES_PX = [0.5, 0.8, 1.2, 2];
 const DEFAULT_TRACE_PX = 0.8;
-export const POPOUT_PARTS = ['spectrum', 'waterfall', 'both', 'tuner', 'decode'];
+export const POPOUT_PARTS = ['spectrum', 'waterfall', 'both', 'tuner', 'decode', 'wheel'];
 const POPOUT_SIZES = {
     spectrum: { width: 1100, height: 380 },
     waterfall: { width: 1100, height: 520 },
     both: { width: 1100, height: 760 },
     tuner: { width: 380, height: 620 },
     decode: { width: 560, height: 420 },
+    wheel: { width: 560, height: 330 },
 };
-const POPOUT_LABELS = { spectrum: 'SPECTRUM', waterfall: 'WATERFALL', both: 'BOTH', tuner: 'POP OUT', decode: 'POP OUT' };
+const POPOUT_LABELS = { spectrum: 'SPECTRUM', waterfall: 'WATERFALL', both: 'BOTH', tuner: 'POP OUT', decode: 'POP OUT', wheel: 'POP OUT' };
+// What each part is called in a sentence and on a key of its own.
+const PART_NAMES = { both: 'spectrum and waterfall', decode: 'decoded text', wheel: 'VFO wheel' };
+const PART_KEYS = { tuner: 'TUNER', decode: 'DECODE', wheel: 'VFO WHEEL' };
 
 /**
  * What the main page still draws, given which windows are out:
@@ -222,7 +231,11 @@ const CSS = `
 .rc-crow select{flex:1;min-width:0}
 .rc-crow .rc-num{min-width:4.6em;text-align:right}
 .rc-crow .rc-auto{flex:none;min-height:24px;min-width:0;padding:0 6px;font-size:12px}
-.rc-dialbox{flex-direction:row;align-items:center;gap:12px}
+.rc-wbox[hidden],.rc-dialbox[hidden],.rc-wnote[hidden]{display:none}
+.rc-wbox .rc-tbar{align-items:center;padding:0}
+.rc-wbox .rc-whead{margin-right:auto}
+.rc-wnote{font:500 15px ${SANS};color:var(--rp-legend-dim)}
+.rc-dialbox{display:flex;flex-direction:row;align-items:center;gap:12px}
 .rc-dialbox .rp-dial{flex:none;width:150px;height:150px}
 .rc-dialbox .rp-dial-well{width:102px;height:102px}
 .rc-dialbox .rp-dial-knob{width:84px;height:84px}
@@ -311,13 +324,13 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  *        The app can hide or show one later by its id
  * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
  * @param {HTMLElement} [opts.decode]  the decoded text, in a box of its own under the
- *        tuner while DECODE is on, with its own POP OUT
+ *        tuner, in the VFO wheel's place, with its own POP OUT
  * @param {string} [opts.storagePrefix='rwc.rttyContest.']  this view's own choices
  * @param {string} [opts.themePrefix='rwc.radioPanel.']  the radio panel's: the theme is read from it
  * @param {string} [opts.fontBase]
  * @param {number} [opts.minHz]
  * @param {number} [opts.maxHz]
- * @param {'spectrum'|'waterfall'|'both'} [opts.part]  a pop-out window showing only this
+ * @param {'spectrum'|'waterfall'|'both'|'wheel'} [opts.part]  a pop-out window showing only this
  * @param {() => void} [opts.onDock]  the window's DOCK key
  * @param {(part:string) => string} [opts.windowUrl]  the main page: the window for a part;
  *        without it there are no pop-outs
@@ -328,8 +341,9 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  *        Experimental's); without it there is no LAYOUT
  * @param {(out:boolean) => void} [opts.onDecodeOut]  the decoded text's window opened or
  *        closed: the text here stands still while it is out
- * @param {(on:boolean) => void} [opts.onDecode]  the main page: DECODE was turned on or
- *        off, here or in another window, or at the start; without it there is no DECODE
+ * @param {(on:boolean) => void} [opts.onDecode]  the main page: the decoded text began or
+ *        stopped showing, here or in its window, or at the start: the decoder runs while it
+ *        shows. Without it there is no DECODE
  */
 export function mountContestView(root, opts) {
     injectRadioPanelStyle(document, opts.fontBase);
@@ -571,6 +585,8 @@ export function mountContestView(root, opts) {
     // always-on-top window. Out either way, a note keeps its place.
     let tunerPop = null, onTopKey = null, decodeKey = null, pip = null;
     let decoding = store.get(own + 'decode', '0') === '1';
+    // What the app was last told of the decoder (tellDecode).
+    let toldDecode = null;
     const tunerNote = h('div', 'rc-tnote');
     tunerNote.hidden = true;
     if (isMain && opts.tuner) {
@@ -580,8 +596,7 @@ export function mountContestView(root, opts) {
             tbar.append(tunerPop);
         }
         if (opts.onDecode) {
-            decodeKey = key('DECODE', 'Show the decoded text with the tuner, or stop decoding and hide it',
-                () => setDecode(!decoding, true), 'rc-decode');
+            decodeKey = key('DECODE', '', () => setDecode(!decoding, true), 'rc-decode');
             tbar.append(decodeKey);
         }
         if (pipSupported()) {
@@ -653,8 +668,23 @@ export function mountContestView(root, opts) {
     // and kept in this browser. The wheel over a part or a drag round it
     // tunes, as on the radio panel. The parts are named A (the ring) and B
     // (the knob) for the radio panel's style, which lights them by those.
-    if (isMain && opts.onNudge) {
-        const dialBox = h('div', 'rc-ctl rc-dialbox');
+    // Bruce asked again (2026-11-01) for a heading on it and a POP OUT, and
+    // for DECODE to swap it with the decoded text. Its window is this view
+    // with part 'wheel', showing the strip and the wheel.
+    const wheelSlot = h('div', 'rc-ctl rc-wbox');
+    const wheelNote = h('div', 'rc-wnote', 'The VFO wheel is in a window of its own. DOCK puts it back here.');
+    wheelNote.hidden = true;
+    let wheelPop = null, dialBox = null;
+    const dialSteps = {};
+    const hasWheel = (isMain || part === 'wheel') && !!opts.onNudge;
+    if (hasWheel) {
+        const wbar = h('div', 'rc-tbar');
+        wbar.append(h('span', 'rc-lbl rc-whead', 'VFO WHEEL'));
+        if (isMain && opts.windowUrl) {
+            wheelPop = key(POPOUT_LABELS.wheel, '', () => togglePopout('wheel'), 'rc-pop-wheel');
+            wbar.append(wheelPop);
+        }
+        dialBox = h('div', 'rc-dialbox');
         const dial = h('div', 'rp-dial dual');
         const well = h('div', 'rp-dial-well');
         const knob = h('div', 'rp-dial-knob');
@@ -664,7 +694,6 @@ export function mountContestView(root, opts) {
         well.append(knob);
         dial.append(well);
         dial.title = 'Tune: mouse wheel or drag. The outer ring moves in big steps, the inner knob in small ones';
-        const dialSteps = {};
         const stepsBox = h('div', 'rc-dialsteps');
         for (const [part, label, name, def] of [['A', 'OUTER', 'outer ring', 100], ['B', 'INNER', 'inner knob', 10]]) {
             const sel = h('select', 'rc-step');
@@ -696,7 +725,8 @@ export function mountContestView(root, opts) {
             onStep: (part, dir) => opts.onNudge(receiver, dir * Number(dialSteps[part].value)),
         });
         dialBox.append(dial, stepsBox);
-        side.append(dialBox);
+        wheelSlot.append(wbar, dialBox, wheelNote);
+        side.append(wheelSlot);
     }
     function drawControls() {
         for (const ctl of Object.values(ctls)) {
@@ -743,7 +773,14 @@ export function mountContestView(root, opts) {
         decodeSlot.append(opts.decode, decodeNote);
         side.append(decodeSlot);
     }
-    side.hidden = !opts.tuner || !isMain;
+    side.hidden = part === 'wheel' ? !hasWheel : !opts.tuner || !isMain;
+    // The wheel's window is the strip and the wheel, filling the window.
+    if (part === 'wheel') {
+        scope.style.display = 'none';
+        stack.style.display = 'none';
+        side.style.flex = '1';
+        root.style.setProperty('--rc-tuner-w', '100%');
+    }
 
     // The boxes' sizes. Each is kept, and applied only here on the main page:
     // a window is its part and nothing else, the size of the window.
@@ -767,7 +804,8 @@ export function mountContestView(root, opts) {
         tunerHeight: { el: tunerSlot, axis: 'y', apply: v => { tunerSlot.style.height = v == null ? '' : v + 'px'; tunerSlot.classList.toggle('sized-h', v != null); },
             // Taller squeezes the decoded text under it, down to its least,
             // and never pushes the controls box off the bottom.
-            max: () => room.h() - (decodeDocked() ? DECODE_MIN_H + BODY_GAP : 0) - (ctlBox.offsetHeight ? ctlBox.offsetHeight + BODY_GAP : 0) },
+            max: () => room.h() - (decodeDocked() ? DECODE_MIN_H + BODY_GAP : 0) - (ctlBox.offsetHeight ? ctlBox.offsetHeight + BODY_GAP : 0)
+                - (wheelSlot.offsetHeight ? wheelSlot.offsetHeight + BODY_GAP : 0) },
     };
     function setSize(name, v, keep) {
         sizes[name] = tidyBoxSize(name, v);
@@ -983,12 +1021,12 @@ export function mountContestView(root, opts) {
     }
     // The pop-outs (main page only).
     const hosts = {};
-    const out = { spectrum: false, waterfall: false, both: false, tuner: false, decode: false };
+    const out = { spectrum: false, waterfall: false, both: false, tuner: false, decode: false, wheel: false };
     function drawOut() {
         // A window shows its own part; the main page what has not gone out.
-        const left = part ?? partsLeft(out);
+        const left = part === 'wheel' ? 'none' : part ?? partsLeft(out);
         for (const p of Object.values(panes)) p.setParts(left);
-        outNote.hidden = left !== 'none';
+        outNote.hidden = left !== 'none' || part === 'wheel';
         for (const g of stackGrabs) g.hidden = left === 'none';
         for (const [p, b] of Object.entries(popBtns)) {
             b.classList.toggle('on', out[p]);
@@ -1013,9 +1051,21 @@ export function mountContestView(root, opts) {
             onTopKey.classList.toggle('on', !!pip);
             onTopKey.disabled = out.tuner;
         }
+        if (dialBox && isMain) {
+            // In the wheel's place unless the decoded text has it. Out, the
+            // box is its bar and the note.
+            wheelSlot.hidden = decoding && !!decodeKey;
+            dialBox.hidden = out.wheel;
+            wheelNote.hidden = !out.wheel;
+        }
+        if (wheelPop) {
+            wheelPop.classList.toggle('on', out.wheel);
+            wheelPop.textContent = out.wheel ? 'DOCK' : POPOUT_LABELS.wheel;
+            wheelPop.title = out.wheel ? 'Put the VFO wheel back here and close its window' : 'Open the VFO wheel in a window of its own, for another monitor';
+        }
         if (decodeSlot.parentNode) {
-            // Shown only with DECODE on. Out, the box is its bar and the note,
-            // and the tuner has the column again.
+            // Shown only with DECODE on, in the wheel's place. Out, the box
+            // is its bar and the note, and the tuner has the column again.
             decodeSlot.hidden = !decoding;
             decodeSlot.classList.toggle('out', out.decode);
             side.classList.toggle('decoding', decoding && !out.decode);
@@ -1033,7 +1083,7 @@ export function mountContestView(root, opts) {
     // either single one takes BOTH back. Also run when a window turns up by
     // itself (a reload, an address typed in), not only on a POP OUT click.
     function recallClashing(p) {
-        const clash = p === 'both' ? ['spectrum', 'waterfall'] : p === 'tuner' || p === 'decode' ? [] : ['both'];
+        const clash = p === 'both' ? ['spectrum', 'waterfall'] : p === 'spectrum' || p === 'waterfall' ? ['both'] : [];
         for (const c of clash) if (hosts[c]?.isOpen) hosts[c].recall();
     }
     function togglePopout(p) {
@@ -1058,8 +1108,7 @@ export function mountContestView(root, opts) {
             ? 'The browser opened one window for that click. Click each to open the rest:'
             : 'The browser blocked a window. Click to open it, or allow pop-ups for this address:'));
         for (const p of blocked) {
-            const what = { both: 'spectrum and waterfall', decode: 'decoded text' }[p] ?? p;
-            blockedBar.append(key({ tuner: 'TUNER', decode: 'DECODE' }[p] ?? POPOUT_LABELS[p], `Open the ${what} window`,
+            blockedBar.append(key(PART_KEYS[p] ?? POPOUT_LABELS[p], `Open the ${PART_NAMES[p] ?? p} window`,
                 () => togglePopout(p), 'on rc-open-' + p));
         }
         blockedBar.append(key('×', 'Leave them docked', () => showBlocked([]), 'rc-pm rc-blocked-close'));
@@ -1087,6 +1136,7 @@ export function mountContestView(root, opts) {
         for (const p of POPOUT_PARTS) {
             if (p === 'tuner' && !opts.tuner) continue;
             if (p === 'decode' && !decodePop) continue;
+            if (p === 'wheel' && !wheelPop) continue;
             hosts[p] = new PopoutHost({
                 name: winName + p,
                 url: opts.windowUrl(p),
@@ -1096,7 +1146,7 @@ export function mountContestView(root, opts) {
                     out[p] = o;
                     drawOut();
                     if (p === 'tuner') opts.onTunerOut?.(o);
-                    if (p === 'decode') opts.onDecodeOut?.(o);
+                    if (p === 'decode') { opts.onDecodeOut?.(o); tellDecode(); }
                 },
             }).start();
         }
@@ -1117,6 +1167,10 @@ export function mountContestView(root, opts) {
         else if (name === 'split') { const f = Number(v); if (f > 0) for (const p of Object.values(panes)) p.setSplit(f); }
         else if (name in BOX_SIZES) setSize(name, v, false);
         else if (name === 'decode') setDecode(v === '1', false);
+        else if (name === 'dialOuterStep' || name === 'dialInnerStep') {
+            const sel = dialSteps[name === 'dialOuterStep' ? 'A' : 'B'];
+            if (sel && STEP_CHOICES_HZ.includes(Number(v))) sel.value = v;
+        }
         else if (name === 'trace') setTrace(Number(v), false);
         else if (name === 'step') { const n = Number(v); if (STEP_CHOICES_HZ.includes(n)) { stepHz = n; stepSel.value = v; } }
         else if (name.startsWith('levels.')) {
@@ -1156,15 +1210,30 @@ export function mountContestView(root, opts) {
         spotsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
         for (const p of Object.values(panes)) p.setShowSpots(on);
     }
+    // DECODE: with the wheel, a switch between the two, named for what it
+    // brings; without it, the decoded text on or off. The text's window
+    // stays out either way.
     function setDecode(on, keep) {
         decoding = on;
         if (!decodeKey) return;
         if (keep) store.set(own + 'decode', on ? '1' : '0');
-        decodeKey.classList.toggle('on', on);
-        decodeKey.setAttribute('aria-pressed', on ? 'true' : 'false');
-        // Off, the decoded text's window goes too: there is nothing for it to show.
-        if (!on && hosts.decode?.isOpen) hosts.decode.recall();
+        if (dialBox) {
+            decodeKey.textContent = on ? 'VFO WHEEL' : 'DECODE';
+            decodeKey.title = on ? 'Show the VFO wheel here in place of the decoded text. The decoder stops unless the text is in its own window'
+                : 'Show the decoded text here in place of the VFO wheel, and start the decoder';
+        } else {
+            decodeKey.classList.toggle('on', on);
+            decodeKey.setAttribute('aria-pressed', on ? 'true' : 'false');
+            decodeKey.title = 'Show the decoded text with the tuner, or hide it. The decoder runs while it shows, here or in its own window';
+        }
         drawOut();
+        tellDecode();
+    }
+    // The decoder runs while the text shows: here, or in its window.
+    function tellDecode() {
+        const on = decoding || out.decode;
+        if (!decodeKey || on === toldDecode) return;
+        toldDecode = on;
         opts.onDecode(on);
     }
     function setMetersShown(on) {
@@ -1215,7 +1284,7 @@ export function mountContestView(root, opts) {
         if (pip && l.out.tuner) pip.dock();
         const fail = [];
         for (const [p, host] of Object.entries(hosts)) {
-            if (l.out[p] && (p !== 'decode' || decoding) && !host.isOpen && !host.open()) fail.push(p);
+            if (l.out[p] && !host.isOpen && !host.open()) fail.push(p);
         }
         showBlocked(fail);
     }
