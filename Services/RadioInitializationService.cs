@@ -74,7 +74,8 @@ namespace Yaesu_Web_Control.Services
                 radioStateService.RadioModel = settings.RadioModel;
 
                 // Check if COM port is configured - if not, redirect to Settings
-                if (string.IsNullOrWhiteSpace(settings.SerialPort) || settings.SerialPort == "Not Set")
+                // (The stub radio needs no COM port.)
+                if (!StubRadio.Enabled && (string.IsNullOrWhiteSpace(settings.SerialPort) || settings.SerialPort == "Not Set"))
                 {
                     logger.LogWarning("[RadioInitializationService] No COM port configured - redirecting to Settings");
                     AppStatus.InitializationStatus = "error";
