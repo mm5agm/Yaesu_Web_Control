@@ -1431,6 +1431,8 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 
 **MEM**, next to BANDS, opens a list of your memories, the same ones the Memories page keeps. Click one to tune the receiver on screen, MAIN or SUB, to it. The memory that receiver is on is lit. The list stays open while you work, so you can hop between your spots. **EDIT** opens the Memories page in a new tab, to add, change or delete them; the list catches up when you come back. **×**, Escape or MEM again closes it. *New in v2.5.4-pre13, as Bruce VK2RT asked.*
 
+**A set of memories just for the contest.** MEM lists the memories you have loaded, so keep your contest spots in a bank of their own ([§8.5](#85-memory-banks)). On the Memories page, save the memories you use every day as a bank first (say *Everyday*). Then make the list just your contest spots and save that as another (say *RTTY Contest*). Load *RTTY Contest* before the contest and *Everyday* after it. Loading a bank replaces the memories you have now, which is why the everyday ones are saved first.
+
 **The scope row**
 
 - **REF** moves the bottom of the trace up or down from the noise floor. **AUTO** lets the floor follow the noise; off, it stays where it is.
