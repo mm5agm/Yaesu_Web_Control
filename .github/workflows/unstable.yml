@@ -71,9 +71,21 @@ jobs:
           }
         shell: pwsh
 
+      # community.chocolatey.org intermittently returns 503. choco exits 0
+      # anyway, so the failure only surfaced two steps later as "makensis.exe
+      # not found", which reads like a code problem. Retry, and fail here.
       - name: Install NSIS
-        run: choco install nsis --yes
         shell: pwsh
+        run: |
+          $makensis = 'C:\Program Files (x86)\NSIS\makensis.exe'
+          for ($i = 1; $i -le 4; $i++) {
+            choco install nsis --yes --no-progress
+            if (Test-Path $makensis) { Write-Host "NSIS installed at $makensis"; exit 0 }
+            Write-Host "NSIS not installed (attempt $i of 4); retrying in 15s..."
+            Start-Sleep -Seconds 15
+          }
+          Write-Error "NSIS did not install after 4 attempts - the Chocolatey feed may be down"
+          exit 1
 
       - name: Publish 64-bit self-contained app
         run: |
