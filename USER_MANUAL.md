@@ -1416,12 +1416,13 @@ While it is open, its tuner keeps the radio in the mode chosen in **MODE** (belo
 **The top strip**
 
 - **The frequency** of the receiver on screen. Click it to type a frequency: `14.08` and `14080` and `14080000` all mean 14.080 MHz. Enter tunes there and Esc leaves it as it was. Hold the mouse over a digit and turn the wheel to move that digit up or down, as on the Radio panel.
-- **MODE** is a list of RTTY-L, RTTY-U, DATA-L and DATA-U: DATA-L for AFSK, where your RTTY software makes the tones. A pick is kept (it is the same setting as **RTTY mode** in Settings), the tuner holds the radio in it, and the band keys use it. A mode outside the four shows as itself, greyed. Then the tuner's **MARK / SHIFT**, then **RX** or **TX**.
+- **MODE** is a list of RTTY-L, RTTY-U, DATA-L and DATA-U: DATA-L for AFSK, where your RTTY software makes the tones. A pick is kept (it is the same setting as **RTTY mode** in Settings), the tuner holds the radio in it, and the band keys use it. A mode outside the four, CW say, shows as itself in amber, so you can see at a glance that the radio isn't in RTTY: open the list to pick one. *The MODE label and the amber since v2.5.4-pre15.* Then the tuner's **MARK / SHIFT**, then **RX** or **TX**.
 - **Meters:** S, and PO, SWR and ALC while transmitting. **METERS** hides or shows them.
 - **Main / Sub** chooses which receiver's spectrum is on screen, where there are two SDRs. The strip follows it. **BANDS** (below) can hide SUB.
 - **DX SPOTS** switches the spot tags on the spectrum on and off.
 - **SPAN** is a list in the label at the top of the spectrum, beside the frequency, and sets the SDR's span. As well as the radio's own spans it has **30 kHz** and **40 kHz**, to fill the jump from 20 to 50; they are on the Radio panel and in Settings too, but not on Classic's span buttons.
 - **LAYOUT** saves and recalls named layouts (below).
+- **The theme list**, beside LAYOUT, is this page's colour theme, the same themes as the Radio panel. Until you pick one here the page follows the Radio panel's theme; once you have, the two are separate. The page's windows follow it, and it is kept in this browser, not in a layout. *New in v2.5.4-pre15.*
 
 **The band keys**
 
