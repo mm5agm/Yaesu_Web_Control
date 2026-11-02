@@ -11,7 +11,7 @@
 
 > **v2.5.3 brings two new ways of working the radio.** Fabio Valente's (CR7CDC) **Experimental UI** is a dark workspace of panels you can drag, dock, tab together and save as named layouts. The **Radio panel** is laid out like the front of a transceiver, with keys, knobs and a main dial that work, both receivers on the FTdx101, and windows for CW, RTTY, memories and the rest. The Classic page is unchanged and is still where YWC opens. RTTY now prints the text as well as drawing the cross, and its **Auto** button works the settings out from the signal; the CW Reader has an **Auto** button that tunes the station in. Everything is written up in the [v2.5.3 notes](#2026-10-16---v253).
 
-**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release), [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release), [v2.5.4-pre3](#2026-10-26---v254-pre3-pre-release), [v2.5.4-pre4](#2026-10-27---v254-pre4-pre-release), [v2.5.4-pre5](#2026-10-29---v254-pre5-pre-release), [v2.5.4-pre6](#2026-10-29---v254-pre6-pre-release), [v2.5.4-pre7](#2026-10-30---v254-pre7-pre-release), [v2.5.4-pre8](#2026-10-30---v254-pre8-pre-release), [v2.5.4-pre9](#2026-10-31---v254-pre9-pre-release), [v2.5.4-pre10](#2026-10-31---v254-pre10-pre-release), [v2.5.4-pre11](#2026-10-31---v254-pre11-pre-release), [v2.5.4-pre12](#2026-11-01---v254-pre12-pre-release) and [v2.5.4-pre13](#2026-11-01---v254-pre13-pre-release)):
+**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release), [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release), [v2.5.4-pre3](#2026-10-26---v254-pre3-pre-release), [v2.5.4-pre4](#2026-10-27---v254-pre4-pre-release), [v2.5.4-pre5](#2026-10-29---v254-pre5-pre-release), [v2.5.4-pre6](#2026-10-29---v254-pre6-pre-release), [v2.5.4-pre7](#2026-10-30---v254-pre7-pre-release), [v2.5.4-pre8](#2026-10-30---v254-pre8-pre-release), [v2.5.4-pre9](#2026-10-31---v254-pre9-pre-release), [v2.5.4-pre10](#2026-10-31---v254-pre10-pre-release), [v2.5.4-pre11](#2026-10-31---v254-pre11-pre-release), [v2.5.4-pre12](#2026-11-01---v254-pre12-pre-release), [v2.5.4-pre13](#2026-11-01---v254-pre13-pre-release) and [v2.5.4-pre14](#2026-11-02---v254-pre14-pre-release)):
 
 - **RTTY Contest, a new GUI for RTTY contesting** *(pre2 to pre4, still being tested)*. Only what a contest RTTY operator uses, on one screen: the frequency, band keys for MAIN and SUB, the spectrum over the waterfall, and the RTTY tuner docked at the side with its decoded text. Each part pops out into a window of its own, and named layouts put every window back on its own monitor. Bruce VK2RT asked for it. [§5.24](USER_MANUAL.md#524-rtty-contest).
 - **Three changes from Bruce VK2RT's testing** *(pre5)*. **From radio** and **Auto** are in the RTTY Tuner heading, so **Tones only** keeps them. The scope's arms no longer lean when the signal is on tune, so mark and space straighten at the same dial setting (on Bruce's FTdx101D they were 50 Hz apart). And **FIXED** on RTTY Contest holds the spectrum still while the dial moves.
@@ -102,6 +102,7 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 |---|---|---|
 | Memories: on the FTdx101, recalling a memory to SUB set MAIN's IF width, shift, roofing filter, NB, NR, AGC and antenna instead of SUB's. They now go to the receiver the memory is recalled to. | - | v2.5.4-pre13 |
 | RTTY Contest: AUTO on WIDTH gave the tuner's own width (300 Hz for 170 Hz shift) although the RTTY setup sets one with SH. It now goes back to the setup's width, as a band key does. | [#250](https://github.com/mm5agm/Yaesu_Web_Control/discussions/250) | v2.5.4-pre13 |
+| RTTY Contest: the MEM list ran off the bottom of the screen with more memories than fit, and the rest could not be reached. It now scrolls. | [#250](https://github.com/mm5agm/Yaesu_Web_Control/discussions/250) | v2.5.4-pre14 |
 | Pop-out windows: a window on a screen too short for it never kept its size, and opened at the default size every time, which didn't fit either. | - | v2.5.4-pre1 |
 | Radio panel and pop-out spectrum: with the mouse held still, the readout of the frequency under it went stale while the dial moved. It now follows the trace. | - | v2.5.4-pre1 |
 | A Radio panel window popped out to its own browser window drew and then never updated. It now gets live updates. | - | v2.5.4-pre1 |
@@ -350,6 +351,19 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 **Only the version you are installing is listed here.** Earlier releases are in
 [RELEASE_HISTORY.md](RELEASE_HISTORY.md); their installers are still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
+
+## 2026-11-02 - v2.5.4-pre14 (pre-release)
+
+*More from Bruce VK2RT's testing of RTTY Contest. Everything in v2.5.4-pre13 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **MONI, under INNER on the VFO WHEEL**: a key to switch the radio's monitor on and off, and a slider for its level, so your own transmit audio can sit lower than the receiver. MONI is on each time the page opens unless you turned it off, and the level you set is put back. Both are put back after your RTTY setup is sent too, so an ML command in the setup doesn't undo them. It doesn't transmit.
+- **The MEM list scrolls.** With more memories than fit on the screen it ran off the bottom; all 99 can be reached now.
+- **The VFO WHEEL box reaches the bottom of the window.**
+- **The tuner's pop-out key reads RTTY TUNER**, under the POP OUT keys for the spectrum and waterfall, rather than a second POP OUT.
+
+RTTY Contest is receive only: transmit from your logger, or from MMTTY.
 
 ## 2026-11-01 - v2.5.4-pre13 (pre-release)
 
