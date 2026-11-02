@@ -111,7 +111,7 @@ const POPOUT_SIZES = {
     decode: { width: 560, height: 420 },
     wheel: { width: 560, height: 330 },
 };
-const POPOUT_LABELS = { spectrum: 'SPECTRUM', waterfall: 'WATERFALL', both: 'BOTH', tuner: 'POP OUT', decode: 'POP OUT', wheel: 'POP OUT' };
+const POPOUT_LABELS = { spectrum: 'SPECTRUM', waterfall: 'WATERFALL', both: 'BOTH', tuner: 'RTTY TUNER', decode: 'POP OUT', wheel: 'POP OUT' };
 // What each part is called in a sentence and on a key of its own.
 const PART_NAMES = { both: 'spectrum and waterfall', decode: 'decoded text', wheel: 'VFO wheel' };
 const PART_KEYS = { tuner: 'TUNER', decode: 'DECODE', wheel: 'VFO WHEEL' };
@@ -235,6 +235,10 @@ const CSS = `
 .rc-wbox[hidden],.rc-dialbox[hidden],.rc-wnote[hidden]{display:none}
 .rc-wbox .rc-tbar{align-items:center;padding:0}
 .rc-wbox .rc-whead{margin-right:auto}
+.rc-wbox:has(>.rc-dialbox:not([hidden])){flex:1 0 auto}
+.rc-wrows{display:flex;flex-direction:column;gap:6px}
+.rc-wrows:empty{display:none}
+.rc-crow .rc-tog{flex:none;min-height:24px;min-width:3.6em;padding:0 6px;font-size:13px}
 .rc-wnote{font:500 15px ${SANS};color:var(--rp-legend-dim)}
 .rc-dialbox{display:flex;flex-direction:row;align-items:center;gap:12px}
 .rc-dialbox .rp-dial{flex:none;width:150px;height:150px}
@@ -287,7 +291,9 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
 .rc-bandrow{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:6px 10px 8px;border:1px solid var(--rp-key-border);border-radius:6px}
 .rc-bandrow legend{font:600 13px ${SANS};letter-spacing:.08em;color:var(--rp-legend-dim);padding:0 4px}
 .rc-tick{display:inline-flex;align-items:center;gap:5px;font:600 14px ${SANS};cursor:pointer}
-.rc-mem{position:fixed;top:64px;right:16px;left:auto;margin:0;z-index:20;width:min(560px,95vw)}
+.rc-mem{position:fixed;top:64px;right:16px;left:auto;margin:0;z-index:20;width:min(560px,95vw);max-height:calc(100vh - 80px)}
+.rc-mem[open]{display:flex;flex-direction:column}
+.rc-mem .rc-mem-tiles{flex:0 1 auto;min-height:0;grid-auto-rows:max-content}
 .rc-mem-head-keys{display:flex;gap:6px}
 .rc-mem-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
 .rc-mem-tile{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:0;padding:4px 8px;text-align:left}
@@ -634,9 +640,15 @@ export function mountContestView(root, opts) {
     const ctlVals = {};
     const ctlKey = c => (c.perReceiver ? receiver : '');
     const ctlText = (c, v) => (v == null || !Number.isFinite(Number(v)) ? '-' : c.format ? c.format(Number(v)) : `${v}${c.unit ?? ''}`);
+    // A control with box: 'wheel' goes in the VFO WHEEL box, under INNER
+    // (Bruce VK2RT, #250 2026-11-02: MONI), where there is a wheel.
+    const wheelRows = h('div', 'rc-wrows');
+    const wheelHere = (isMain || part === 'wheel') && !!opts.onNudge;
     if (isMain && opts.controls?.length && opts.onControl) {
         for (const c of opts.controls) {
-            const row = h('label', 'rc-crow rc-c-' + c.id);
+            // A toggle's key is its label, so the row is no <label>: a click
+            // anywhere on that would press the key.
+            const row = h(c.toggle ? 'div' : 'label', 'rc-crow rc-c-' + c.id);
             row.title = c.title ?? '';
             const ctl = { c, row, val: h('span', 'rc-num', ''), held: false, timer: 0, opts: '' };
             const send = v => opts.onControl(c.id, v, c.perReceiver ? receiver : null);
@@ -665,7 +677,12 @@ export function mountContestView(root, opts) {
                     ctl.timer = setTimeout(() => { ctl.held = false; send(now()); }, 300);
                 }, { passive: false });
                 if (c.reset != null) r.addEventListener('dblclick', () => { r.value = String(c.reset); ctl.val.textContent = ctlText(c, c.reset); send(Number(c.reset)); });
-                row.append(h('span', 'rc-lbl', c.label), r, ctl.val);
+                // toggle: the label is a key that switches the setting on and
+                // off, sent as 'on' or 'off'; what the radio has comes back as on.
+                if (c.toggle) {
+                    ctl.tog = key(c.label, c.toggle, e => { e.preventDefault(); send(ctlVals[c.id]?.[ctlKey(c)]?.on ? 'off' : 'on'); }, 'rc-tog');
+                    row.append(ctl.tog, r, ctl.val);
+                } else row.append(h('span', 'rc-lbl', c.label), r, ctl.val);
             }
             if (c.auto) {
                 ctl.auto = key('AUTO', c.auto, e => { e.preventDefault(); send('auto'); }, 'rc-auto');
@@ -673,7 +690,7 @@ export function mountContestView(root, opts) {
                 row.append(ctl.auto);
             }
             ctls[c.id] = ctl;
-            ctlBox.append(row);
+            (c.box === 'wheel' && wheelHere ? wheelRows : ctlBox).append(row);
         }
         side.append(ctlBox);
     }
@@ -691,7 +708,7 @@ export function mountContestView(root, opts) {
     wheelNote.hidden = true;
     let wheelPop = null, dialBox = null;
     const dialSteps = {};
-    const hasWheel = (isMain || part === 'wheel') && !!opts.onNudge;
+    const hasWheel = wheelHere;
     if (hasWheel) {
         const wbar = h('div', 'rc-tbar');
         wbar.append(h('span', 'rc-lbl rc-whead', 'VFO WHEEL'));
@@ -742,7 +759,7 @@ export function mountContestView(root, opts) {
             onStep: (part, dir) => opts.onNudge(receiver, dir * Number(dialSteps[part].value)),
         });
         dialBox.append(dial, stepsBox);
-        wheelSlot.append(wbar, dialBox, wheelNote);
+        wheelSlot.append(wbar, dialBox, wheelRows, wheelNote);
         side.append(wheelSlot);
     }
     function drawControls() {
@@ -757,6 +774,10 @@ export function mountContestView(root, opts) {
                 ctl.auto.classList.toggle('on', auto);
                 ctl.auto.setAttribute('aria-pressed', auto ? 'true' : 'false');
                 ctl.auto.title = typeof kept === 'string' ? kept : ctl.c.auto;
+            }
+            if (ctl.tog) {
+                ctl.tog.classList.toggle('on', !!e?.on);
+                ctl.tog.setAttribute('aria-pressed', e?.on ? 'true' : 'false');
             }
             if (ctl.c.kind === 'list') {
                 const list = e?.options ?? [];
@@ -805,6 +826,14 @@ export function mountContestView(root, opts) {
     for (const name of Object.keys(BOX_SIZES)) sizes[name] = tidyBoxSize(name, store.get(own + name, ''));
     const tunerShown = () => side.offsetWidth > 0;
     const decodeDocked = () => decodeSlot.offsetHeight > 0;
+    // The wheel box stretches to the bottom of the column (Bruce VK2RT,
+    // #250 2026-11-02), so what it needs is its contents, not its height.
+    const wheelNeeds = () => {
+        const top = wheelSlot.getBoundingClientRect().top;
+        let bottom = top;
+        for (const c of wheelSlot.children) if (c.offsetHeight) bottom = Math.max(bottom, c.getBoundingClientRect().bottom);
+        return Math.ceil(bottom - top) + (wheelSlot.offsetHeight - wheelSlot.clientHeight) + 8;
+    };
     const room = {
         w: () => body.clientWidth - 2 * BODY_GAP,
         h: () => body.clientHeight - 2 * BODY_GAP,
@@ -822,7 +851,7 @@ export function mountContestView(root, opts) {
             // Taller squeezes the decoded text under it, down to its least,
             // and never pushes the controls box off the bottom.
             max: () => room.h() - (decodeDocked() ? DECODE_MIN_H + BODY_GAP : 0) - (ctlBox.offsetHeight ? ctlBox.offsetHeight + BODY_GAP : 0)
-                - (wheelSlot.offsetHeight ? wheelSlot.offsetHeight + BODY_GAP : 0) },
+                - (wheelSlot.offsetHeight ? wheelNeeds() + BODY_GAP : 0) },
     };
     function setSize(name, v, keep) {
         sizes[name] = tidyBoxSize(name, v);
@@ -1540,7 +1569,7 @@ export function mountContestView(root, opts) {
          * the AUTO key's tooltip while the operator's value is kept, false
          * where AUTO does not apply. Left out, it stays as it was.
          */
-        setControl(id, value, { vfo = null, options, max, kept } = {}) {
+        setControl(id, value, { vfo = null, options, max, kept, on } = {}) {
             const c = ctls[id]?.c;
             if (!c) return;
             const k = c.perReceiver ? vfo : '';
@@ -1549,6 +1578,7 @@ export function mountContestView(root, opts) {
             if (options !== undefined) e.options = options;
             if (max != null) e.max = max;
             if (kept !== undefined) e.kept = kept;
+            if (on !== undefined) e.on = on;
             if (!c.perReceiver || k === receiver) drawControls();
         },
         /** frac 0..1 for the bar, text beside it; over lights it red. */

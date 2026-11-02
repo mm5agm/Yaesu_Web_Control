@@ -96,6 +96,10 @@ export function startYaesuRttyContest(root, cfg) {
             { id: 'shift', label: 'SHIFT', kind: 'range', perReceiver: true, min: -1000, max: 1000, step: 20, reset: 0,
               format: v => `${v > 0 ? '+' : ''}${v} Hz`,
               title: 'IF shift of the receiver on screen. Double-click to centre it' },
+            // MONI under INNER on the VFO WHEEL (Bruce VK2RT, #250 2026-11-02).
+            { id: 'moni', label: 'MONI', kind: 'range', box: 'wheel', min: 0, max: 100, step: 1,
+              toggle: 'Monitor on or off: hear your own transmit audio. It does not transmit. Kept, and put back each time this page opens and after your RTTY setup is sent',
+              title: 'Monitor level. Drag and let go, or turn the mouse wheel over it. Kept, and put back after your RTTY setup is sent' },
         ],
         onControl: (id, value, vfo) => setControl(id, value, vfo),
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
@@ -176,6 +180,8 @@ export function startYaesuRttyContest(root, cfg) {
         const res = await post(`/api/rtty/setup${q.size ? `?${q}` : ''}`, {});
         const body = await res?.json().catch(() => ({})) ?? {};
         if (!res?.ok) console.warn('RTTY setup:', body.error || res?.status);
+        // An ML in the setup would undo the operator's MONI: put it back.
+        else await putBackMoni();
         if (!key) return !!res?.ok;
         const was = key.dataset.label ??= key.textContent;
         key.textContent = res?.ok ? 'SENT' : 'NOT SENT';
@@ -221,6 +227,22 @@ export function startYaesuRttyContest(root, cfg) {
         const watts = band ? readKept()[band] : null;
         if (watts != null) await post(`/api/cat/power/${vfo.toLowerCase()}`, { Watts: watts });
     }
+    // MONI: on or off and the level, kept here and put back when the page
+    // opens and after the RTTY setup, which may have its own ML (Bruce
+    // VK2RT, #250 2026-11-02: on unless he turns it off, and held either way).
+    // The radio has one monitor, for both receivers.
+    const MONI_KEY = 'ywc.rttyContest.moni';
+    const readMoni = () => { try { return JSON.parse(localStorage.getItem(MONI_KEY)) || {}; } catch { return {}; } };
+    function keepMoni(change) {
+        try { localStorage.setItem(MONI_KEY, JSON.stringify({ ...readMoni(), ...change })); } catch { /* private window */ }
+    }
+    async function putBackMoni() {
+        const kept = readMoni();
+        await post('/api/cat/monitoron', { on: kept.on !== false });
+        if (kept.level != null) await post('/api/cat/monitorlevel/a', { level: kept.level });
+    }
+    const moni = { on: null, level: null };
+    const showMoni = () => view.setControl('moni', moni.level, { on: moni.on });
     // PWR, WIDTH and SHIFT. Power has no receiver; the URL names the one on
     // screen, as the Radio panel's knob names the selected one.
     function setControl(id, value, vfo) {
@@ -233,6 +255,15 @@ export function startYaesuRttyContest(root, cfg) {
         if (id === 'width' && value === 'auto') return widthToAuto();
         if (id === 'width') return post(`/api/cat/ifwidth/${rx}`, { code: String(value) }).then(r => { checkKept(); return r; });
         if (id === 'shift') return post(`/api/cat/ifshift/${rx}`, { shiftHz: Math.round(num(value)) });
+        if (id === 'moni' && (value === 'on' || value === 'off')) {
+            keepMoni({ on: value === 'on' });
+            return post('/api/cat/monitoron', { on: value === 'on' });
+        }
+        if (id === 'moni') {
+            const level = Math.max(0, Math.min(100, Math.round(num(value))));
+            keepMoni({ level });
+            return post('/api/cat/monitorlevel/a', { level });
+        }
     }
     // WIDTH's choices change with the mode: in AM or FM there are none.
     const widthOf = { A: null, B: null }, modeOf = { A: '', B: '' }, holdWidth = { A: false, B: false };
@@ -321,6 +352,8 @@ export function startYaesuRttyContest(root, cfg) {
         IfShiftA: v => view.setControl('shift', num(v), { vfo: 'A' }),
         IfShiftB: v => view.setControl('shift', num(v), { vfo: 'B' }),
         Power: v => view.setControl('power', num(v)),
+        MonitorOn: v => { moni.on = on(v); showMoni(); },
+        MonitorLevelA: v => { moni.level = num(v); showMoni(); },
         SMeterA: v => { s.A = calibrateNumeric('SMETER', num(v)); drawS(); },
         SMeterB: v => { s.B = calibrateNumeric('SMETER', num(v)); drawS(); },
         IsTransmitting: v => {
@@ -344,5 +377,6 @@ export function startYaesuRttyContest(root, cfg) {
     drawS();
     drawTx();
     cfg.conn.start().catch(e => console.warn('rtty contest: hub', e));
+    if (!cfg.part) putBackMoni();
     return view;
 }
