@@ -64,7 +64,7 @@ test('a layout with nothing in it is the standard page', () => {
         assert.deepEqual(tidyLayout(l), {
             stackWidth: null, stackHeight: null, tunerWidth: null, tunerHeight: null, meters: true, spots: true, wfFirst: false, fixed: false, decode: false,
             split: 0.5, step: 10, trace: 0.8,
-            out: { spectrum: false, waterfall: false, both: false, tuner: false, decode: false },
+            out: { spectrum: false, waterfall: false, both: false, tuner: false, decode: false, wheel: false },
             places: {},
         });
     }
@@ -93,7 +93,7 @@ test('a saved layout comes back as saved, less what is wrong in it', () => {
     assert.equal(l.split, 0.3);
     assert.equal(l.step, 100);
     // Only true is out: a hand edit's "yes" is not.
-    assert.deepEqual(l.out, { spectrum: false, waterfall: false, both: true, tuner: false, decode: false });
+    assert.deepEqual(l.out, { spectrum: false, waterfall: false, both: true, tuner: false, decode: false, wheel: false });
     // A place with no size is no place.
     assert.deepEqual(l.places, { both: place });
     assert.equal(tidyLayout({ split: 1.5, step: 7 }).split, 0.5);
