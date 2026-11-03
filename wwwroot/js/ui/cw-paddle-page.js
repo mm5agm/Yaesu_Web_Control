@@ -41,24 +41,31 @@ const link = new KeyLink({
     },
 });
 // A summary of each burst of keying, a second after the shack goes quiet,
-// so a long log need not be read line by line.
+// so a long log need not be read line by line. It is also how the operator
+// judges the timing on their own PCs (Fabio, D#274): how late the shack's
+// timer played the elements, and how much of the jitter buffer the network
+// used up (the buffer less the least that was left when an event arrived).
 let burst = null;
+let bufferMs = null;
 let burstTimer = 0;
 function burstSummary() {
     const b = burst;
     burst = null;
     const safety = b.safety ? `${b.safety} safety let-go${b.safety === 1 ? '' : 's'}` : 'no safety let-go';
+    const net = b.minLeft == null || bufferMs == null ? ''
+        : b.minLeft < 0 ? `, network jitter over the ${bufferMs} ms buffer by ${(-b.minLeft).toFixed(0)} ms: some keying played late`
+        : `, network jitter up to ${(bufferMs - b.minLeft).toFixed(0)} of the ${bufferMs} ms buffer`;
     log(`shack  SUMMARY: ${b.elements} elements, lengths within ${b.maxErr.toFixed(1)} ms of sent, ` +
-        `latest ${b.maxLate.toFixed(1)} ms, ${safety}`);
+        `timer up to ${b.maxLate.toFixed(1)} ms late${net}, ${safety}`);
 }
 hub.on('CwKeyReport', r => {
     const late = r.kind === 'key' && r.lateMs > 1 ? `  (${r.lateMs.toFixed(1)} ms late)` : '';
     log(`shack  ${r.kind === 'safety' ? '!! ' : ''}${r.text}${late}`);
     if (r.kind === 'busy') { $('cwpLinkStatus').textContent = 'Another browser has the key: close its tab.'; return; }
-    if (r.kind === 'unsupported') { $('cwpLinkStatus').textContent = 'YWC on this PC cannot key: paddle keying is Windows only for now.'; return; }
-    burst ??= { elements: 0, maxErr: 0, maxLate: 0, safety: 0 };
+    burst ??= { elements: 0, maxErr: 0, maxLate: 0, minLeft: null, safety: 0 };
     if (r.kind === 'safety') burst.safety++;
     if (r.kind === 'key') burst.maxLate = Math.max(burst.maxLate, r.lateMs ?? 0);
+    if (r.kind === 'key' && r.bufferLeftMs != null) burst.minLeft = Math.min(burst.minLeft ?? Infinity, r.bufferLeftMs);
     if (r.playedMs != null && r.sentMs != null) {
         burst.elements++;
         burst.maxErr = Math.max(burst.maxErr, Math.abs(r.playedMs - r.sentMs));
@@ -91,6 +98,7 @@ async function loadKeyLine() {
     let st;
     try { st = await hub.invoke('CwKeyLineStatus'); } catch (e) { status.textContent = `Could not ask YWC: ${e.message}`; return; }
     keyPort = st.keyPort ?? null;
+    bufferMs = st.bufferMs ?? null;
     // Logged when the page first learns it and whenever it changes, so the
     // log never says dry run while YWC is keying the radio.
     if (keyPort !== loggedKeyPort) {
@@ -105,9 +113,10 @@ async function loadKeyLine() {
         sel.add(o);
     }
     sel.value = keyPort ?? '';
-    sel.disabled = !st.supported;
-    status.textContent = !st.supported ? 'Windows only for now.'
-        : keyPort ? '' : 'Choose the radio\'s Standard COM port to key it.';
+    // Keying works on every OS but has only been tried on Windows: say so,
+    // rather than hide it (Fabio, D#274).
+    const untested = st.tested ? '' : ` Not tested on ${st.platform} yet: watch the timing in each SUMMARY line.`;
+    status.textContent = (keyPort ? '' : 'Choose the radio\'s Standard port to key it.') + untested;
     showKeyLine();
 }
 $('cwpKeyPort').addEventListener('change', async () => {

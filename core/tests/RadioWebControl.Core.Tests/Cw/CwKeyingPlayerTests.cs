@@ -110,6 +110,20 @@ namespace RadioWebControl.Core.Tests.Cw
         }
 
         [Fact]
+        public void Reports_how_much_of_the_buffer_the_network_left()
+        {
+            // The fastest delivery is 20 ms (the pings); this element comes
+            // 60 ms slower, so 150 - 60 = 90 ms of the buffer was left.
+            var sim = new Sim();
+            sim.Pings(0, 200, 20);
+            sim.Element(300, 360, 80);
+            sim.Run();
+            var down = sim.Reports.First(r => r.Kind == "key");
+            Assert.Equal(90, down.BufferLeftMs!.Value, 3);
+            Assert.Equal(150, sim.Player.BufferMs);
+        }
+
+        [Fact]
         public void Steady_network_plays_every_element_after_the_buffer_with_exact_timing()
         {
             var sim = new Sim();

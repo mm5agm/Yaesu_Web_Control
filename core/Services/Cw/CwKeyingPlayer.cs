@@ -75,9 +75,13 @@
     /// <summary>
     /// A line for the log, and for the operator's page. A key up also carries
     /// the element's length as played and as sent, for the page's summary.
+    /// A key event carries <see cref="BufferLeftMs"/>: how much of the jitter
+    /// buffer was still to run when it arrived. The buffer less the smallest
+    /// of these is the network's jitter; below zero, the event came too late
+    /// to play on time.
     /// </summary>
     public sealed record CwKeyingReport(string Kind, string Text, double AtMs, double? LateMs = null,
-                                        double? PlayedMs = null, double? SentMs = null);
+                                        double? PlayedMs = null, double? SentMs = null, double? BufferLeftMs = null);
 
     /// <summary>
     /// Plays key events from a browser keyer on the shack PC, after a fixed
@@ -103,6 +107,7 @@
         {
             public required CwKeyEvent Event;
             public double PlayAt;
+            public double BufferLeft;
         }
 
         private readonly ICwKeyLine _line;
@@ -132,6 +137,9 @@
         public event Action<CwKeyingReport>? Report;
 
         public bool KeyDown { get; private set; }
+
+        /// <summary>The jitter buffer, for the page's summary.</summary>
+        public double BufferMs => _o.BufferMs;
 
         /// <summary>The fastest (arrival - sent) in the window; null before any packet.</summary>
         public double? OffsetMs { get; private set; }
@@ -178,7 +186,7 @@
                     if (!e.Down || e.T + OffsetMs!.Value + _o.BufferMs < now) continue;
                     _waitForDown = false;
                 }
-                Enqueue(e);
+                Enqueue(e, now);
             }
             Tick(now);
         }
@@ -234,7 +242,7 @@
             OffsetMs = _offsets.Min(x => x.Offset);
         }
 
-        private void Enqueue(CwKeyEvent e)
+        private void Enqueue(CwKeyEvent e, double now)
         {
             double playAt = e.T + OffsetMs!.Value + _o.BufferMs;
             if (_prevEvent is not null)
@@ -254,7 +262,10 @@
                 playAt = Math.Max(playAt, _downPlayedAt + (e.T - _downPlayed.T));
             _prevEvent = e;
             _prevPlayAt = playAt;
-            _queue.AddLast(new Pending { Event = e, PlayAt = playAt });
+            // Measured against the buffer alone, not the spacing kept above,
+            // so it is the network's doing and nothing else.
+            double bufferLeft = e.T + OffsetMs!.Value + _o.BufferMs - now;
+            _queue.AddLast(new Pending { Event = e, PlayAt = playAt, BufferLeft = bufferLeft });
         }
 
         private void Play(Pending p, double now)
@@ -283,7 +294,7 @@
                 sent = e.T - _downPlayed.T;
             }
             string len = played is null ? "" : $", {played:0.0} ms (sent {sent:0.0})";
-            Report?.Invoke(new CwKeyingReport("key", $"key {what} #{e.Seq}{len}", now, late, played, sent));
+            Report?.Invoke(new CwKeyingReport("key", $"key {what} #{e.Seq}{len}", now, late, played, sent, p.BufferLeft));
         }
 
         private void SetKey(bool down, double now)

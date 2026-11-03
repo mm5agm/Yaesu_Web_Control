@@ -9,9 +9,9 @@ namespace YaesuWebControl.Tests;
 
 /// <summary>
 /// Choosing the paddle key line. What matters for safety: it starts as the
-/// dry run, it never opens the CAT port (which YWC holds with DTR raised),
-/// and outside Windows it refuses. No test here opens a real port: the CAT
-/// port and the missing port are names no PC has.
+/// dry run, and it never opens the CAT port (which YWC holds with DTR
+/// raised), on any OS. No test here opens a real port: the CAT port and the
+/// missing port are names no PC has.
 /// </summary>
 public sealed class CwKeyingServiceTests
 {
@@ -32,7 +32,7 @@ public sealed class CwKeyingServiceTests
         using var service = CreateService();
         var error = service.SetKeyPort(CatPort.ToLowerInvariant());
         Assert.NotNull(error);
-        Assert.Contains(CwKeyingService.Supported ? "CAT port" : "Windows only", error);
+        Assert.Contains("CAT port", error);
         Assert.Null(Prop(service.LineStatus(), "keyPort"));
     }
 
@@ -42,17 +42,34 @@ public sealed class CwKeyingServiceTests
         using var service = CreateService();
         var error = service.SetKeyPort("COM198");
         Assert.NotNull(error);
-        Assert.Contains(CwKeyingService.Supported ? "not on this PC" : "Windows only", error);
+        Assert.Contains("not on this PC", error);
     }
 
     [Fact]
-    public void Choosing_the_dry_run_always_works_on_Windows()
+    public void Choosing_the_dry_run_always_works()
     {
         using var service = CreateService();
-        var error = service.SetKeyPort(null);
-        if (CwKeyingService.Supported) Assert.Null(error);
-        else Assert.Contains("Windows only", error);
+        Assert.Null(service.SetKeyPort(null));
     }
+
+    [Fact]
+    public void Says_where_it_has_been_tested()
+    {
+        using var service = CreateService();
+        var status = service.LineStatus();
+        Assert.Equal(OperatingSystem.IsWindows(), Prop(status, "tested"));
+        Assert.Equal(150.0, Prop(status, "bufferMs"));
+    }
+
+    [Theory]
+    [InlineData("usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_01234567-if00-port0",
+                "Silicon Labs CP2105 Dual USB to UART Bridge Controller: Enhanced port (/dev/ttyUSB0)")]
+    [InlineData("usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_01234567-if01-port0",
+                "Silicon Labs CP2105 Dual USB to UART Bridge Controller: Standard port (/dev/ttyUSB0)")]
+    [InlineData("usb-FTDI_FT232R_USB_UART_A10K1234-if00-port0", "FTDI FT232R USB UART, interface 0 (/dev/ttyUSB0)")]
+    [InlineData("not-a-by-id-name", "/dev/ttyUSB0")]
+    public void Names_Linux_ports_from_their_by_id_links(string id, string expected) =>
+        Assert.Equal(expected, SerialCwKeyLine.DescribeById(id, "/dev/ttyUSB0"));
 
     private static object? Prop(object o, string name) => o.GetType().GetProperty(name)!.GetValue(o);
 

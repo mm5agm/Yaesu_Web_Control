@@ -44,8 +44,12 @@ namespace Yaesu_Web_Control.Services.Cw
     /// that choice is not saved. The CAT port is refused. If the port fails
     /// while keying, the key is let go and the line goes back to the dry run.
     ///
-    /// Windows only for now: elsewhere every packet is refused, until the
-    /// timing and the Standard port have been tried on Linux and the Mac.
+    /// Every platform (Fabio, D#274 2026-11-02): it keys once a key port is
+    /// chosen, whatever the OS. Only Windows has been tried, so elsewhere the
+    /// page and the log say so, and the page shows the timing (how late the
+    /// thread played each element, and how much of the jitter buffer the
+    /// network used) for the operator to judge. ThreadPriority does nothing
+    /// on Linux, which is one reason a Pi needs watching.
     /// </summary>
     public sealed class CwKeyingService : IDisposable
     {
@@ -85,8 +89,12 @@ namespace Yaesu_Web_Control.Services.Cw
 
         private double NowMs => _clock.Elapsed.TotalMilliseconds;
 
-        /// <summary>Windows only for now (see the class comment).</summary>
-        public static bool Supported => OperatingSystem.IsWindows();
+        /// <summary>Where paddle keying has been tried (see the class comment).</summary>
+        public static bool Tested => OperatingSystem.IsWindows();
+
+        /// <summary>This OS, for "not tested on ..." in the page and the log.</summary>
+        public static string Platform =>
+            OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsLinux() ? "Linux" : RuntimeInformation.OSDescription;
 
         private string Mode => _serial is null ? "dry run" : $"DTR on {_serial.PortName}";
 
@@ -134,14 +142,19 @@ namespace Yaesu_Web_Control.Services.Cw
         /// <summary>For the page: the key line now, the CAT port, and the COM ports to choose from.</summary>
         public object LineStatus()
         {
-            var ports = Supported ? SerialCwKeyLine.Ports() : new();
+            var ports = SerialCwKeyLine.Ports();
+            string? cat = CatPort();
             lock (_lock)
             {
                 return new
                 {
-                    supported = Supported,
+                    tested = Tested,
+                    platform = Platform,
+                    bufferMs = _player.BufferMs,
                     keyPort = _serial?.PortName,
-                    catPort = CatPort(),
+                    // As the port list names it: on Linux the CAT port may be
+                    // set as a /dev/serial/by-id link to the same ttyUSB node.
+                    catPort = cat is null ? null : SerialCwKeyLine.RealPath(cat),
                     ports = ports.Select(p => new { name = p.Name, description = p.Description }),
                 };
             }
@@ -159,7 +172,6 @@ namespace Yaesu_Web_Control.Services.Cw
         /// </summary>
         public string? SetKeyPort(string? port)
         {
-            if (!Supported) return "Paddle keying is Windows only for now.";
             port = string.IsNullOrWhiteSpace(port) ? null : port.Trim();
             lock (_lock)
             {
@@ -171,7 +183,7 @@ namespace Yaesu_Web_Control.Services.Cw
                     _logger.LogInformation("CW keying: key line is the dry run.");
                     return null;
                 }
-                if (string.Equals(port, CatPort(), StringComparison.OrdinalIgnoreCase))
+                if (CatPort() is { } cat && string.Equals(SerialCwKeyLine.RealPath(port), SerialCwKeyLine.RealPath(cat), StringComparison.OrdinalIgnoreCase))
                     return $"{port} is the CAT port. Choose the radio's Standard COM port.";
                 if (!SerialPort.GetPortNames().Contains(port, StringComparer.OrdinalIgnoreCase))
                     return $"{port} is not on this PC.";
@@ -188,6 +200,8 @@ namespace Yaesu_Web_Control.Services.Cw
                     return $"{port} could not be opened: {ex.Message}";
                 }
                 _logger.LogWarning("CW keying: keying the radio by DTR on {Port}.", port);
+                if (!Tested)
+                    _logger.LogWarning("CW keying has not been tested on {Platform} yet: check the timing summary on the CW Paddle page.", Platform);
                 return null;
             }
         }
@@ -195,12 +209,6 @@ namespace Yaesu_Web_Control.Services.Cw
         /// <summary>A packet from a browser's keyer (RadioHub.CwKey).</summary>
         public void Receive(string connectionId, CwKeyPacket packet)
         {
-            if (!Supported)
-            {
-                if (packet.Events.Count > 0)
-                    _reports.Writer.TryWrite((connectionId, new CwKeyingReport("unsupported", "Paddle keying is Windows only for now", NowMs)));
-                return;
-            }
             lock (_lock)
             {
                 double now = NowMs;
@@ -255,7 +263,7 @@ namespace Yaesu_Web_Control.Services.Cw
                 try
                 {
                     await _hub.Clients.Client(id).SendAsync(ReportMethod,
-                        new { kind = r.Kind, text = r.Text, atMs = r.AtMs, lateMs = r.LateMs, playedMs = r.PlayedMs, sentMs = r.SentMs });
+                        new { kind = r.Kind, text = r.Text, atMs = r.AtMs, lateMs = r.LateMs, playedMs = r.PlayedMs, sentMs = r.SentMs, bufferLeftMs = r.BufferLeftMs });
                 }
                 catch (Exception ex)
                 {
