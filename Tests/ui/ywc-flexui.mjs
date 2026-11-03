@@ -32,9 +32,11 @@ const status = async p => (await fetch(BASE + p)).status;
 test('fork serves the flex modules and assets', async () => {
     for (const p of [
         '/js/flexui/site.js',
-        '/js/flexui/flex-shims.js',
+        '/js/flex/flex-shims.js',
+        '/js/flex/flex-workspace.js',
+        '/js/flex/flex-popout-bridge.js',
         '/js/flexui/flex-workspace.js',
-        '/js/flexui/flex-layouts-admin.js',
+        '/js/flex/flex-layouts-admin.js',
         '/js/flexui/app/guages/meter-panel.js',
         '/js/flexui/app/guages/gaugeFactory.js',
         '/js/flexui/app/guages/gauge.js',
@@ -86,6 +88,22 @@ test('/flexui loads the Classic page without the fork', async () => {
         expect(!html.includes('/js/flexui/'), 'the Classic page referenced a flex script');
         expect(!html.includes('/css/flexui/'), 'the Classic page referenced the flex stylesheet');
         expect(!html.includes('theme-yaesu'), 'the Classic page loaded the Yaesu palette');
+    } finally { await page.close(); }
+});
+
+// ---------------------------------------------------------------- front-panel
+
+test('/flexui: a MicGain broadcast moves the MIC Gain key (#228)', async () => {
+    // The Classic UI has a range input; this fork renders MIC Gain as a
+    // CycleContextButton whose slider lives in its context menu, so the value
+    // has to go into the widget rather than an <input>.
+    const page = await open('/flexui', { settleMs: 3000 });
+    try {
+        await page.waitFor('!!window.micGainCycleButton', { timeoutMs: 8000, what: 'the MIC Gain key' });
+        await page.state('MicGain', 33);
+        await page.waitFor('window.micGainCycleButton.getState().value === 33', { what: 'MIC Gain key at 33' });
+        const shown = await page.eval(`document.querySelector('#micGainButton .toggle-dd__slider-value')?.textContent ?? null`);
+        expect(shown === '33', `the key's slider value shows ${shown}`);
     } finally { await page.close(); }
 });
 

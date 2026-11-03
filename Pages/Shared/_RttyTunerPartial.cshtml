@@ -24,6 +24,16 @@
     // rather than passed in, so the main page's dialog and the pop-out window
     // cannot end up disagreeing about it.
     var contest = (await SettingsSvc.GetSettingsAsync()).RttyContestMode;
+
+    // Docked in the RTTY Contest view (/rtty-contest): open from the start,
+    // the Tune section only whatever the setting says, a fixed size, and no
+    // message line under the scope, so nothing in it moves while tuning.
+    // The view has its own way out, so no pop-out or close buttons here.
+    var docked = ViewData["RttyTunerDocked"] is true;
+    // The RTTY Contest view's tuner window is the Tune section only too.
+    if (docked || ViewData["RttyTunerContest"] is true) contest = true;
+    // Its decoded-text window is the Decode section only, from the same markup.
+    var decodeOnly = ViewData["RttyTunerDecodeOnly"] is true;
 }
 <style>
     /* Wide enough for the two columns the layout is built around: the decode
@@ -55,8 +65,10 @@
     /* Once the operator has sized the dialog, or in the pop-out, the scope
        takes whatever room is left in its column and stays square inside it.
        Positioned so that the canvas's own size cannot push the box bigger. */
-    #rttyTunerDialog.user-sized .rtty-scope-box { flex:1 1 auto; min-height:120px; position:relative; overflow:hidden; }
-    #rttyTunerDialog.user-sized #rttyTunerCanvas { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); }
+    #rttyTunerDialog.user-sized .rtty-scope-box,
+    #rttyTunerDialog.rtty-docked .rtty-scope-box { flex:1 1 auto; min-height:120px; position:relative; overflow:hidden; }
+    #rttyTunerDialog.user-sized #rttyTunerCanvas,
+    #rttyTunerDialog.rtty-docked #rttyTunerCanvas { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); }
 
     /* Tones only: once Mark is set the operator only needs the cross, so the
        settings, the readouts and the other two sections go, and the window can
@@ -76,8 +88,34 @@
        mostly empty space on a screen a contest is already fighting over. */
     #rttyTunerDialog.rtty-contest .rtty-col-main,
     #rttyTunerDialog.rtty-contest .rtty-hint { display:none !important; }
-    #rttyTunerDialog.rtty-contest:not(.rtty-popout) { width:360px; }
+    #rttyTunerDialog.rtty-contest:not(.rtty-popout) { width:300px; }
     #rttyTunerDialog.rtty-contest .rtty-col-tune { flex:1 1 auto; }
+    /* DECODE in the RTTY Contest view (contest-view.js) shows the Decode
+       section in a box of its own under the tuner: the page moves it out of
+       this panel into the view's box (.rc-dbox), so the tuner and the text
+       can each pop out by themselves. Not Send, which is not built. The box
+       takes the room the tuner leaves and the text scrolls in it, so the
+       tuner stays put while the text runs. */
+    .rc-dbox > .rtty-decode {
+        flex:1 1 auto; min-height:0; padding:0.5rem;
+        border:1px solid #555; border-radius:8px; background:#222; color:#eee;
+    }
+    .rc-dbox #rttyReaderOut { flex:1 1 0; }
+    /* Docked, the tuner is as tall as its square scope, as wide as the tuner,
+       and shrinks with it when its grab makes it shorter. It used to fill the
+       column when DECODE was off; Bruce VK2RT found it far too big (2026-10-26),
+       and the room under it now holds the controls and the decoded text. */
+    #rttyTunerDialog.rtty-docked .rtty-col-tune { flex:0 1 auto; min-height:0; }
+    #rttyTunerDialog.rtty-docked .rtty-scope-box { flex:0 1 auto; aspect-ratio:1 / 1; min-height:0; }
+    /* The decoded text's window (/RttyTuner?contest=true&decode=true): the
+       Decode section and nothing else. */
+    #rttyTunerDialog.rtty-decode-only .rtty-col-tune,
+    #rttyTunerDialog.rtty-decode-only #rttyTunerCompactBtn,
+    #rttyTunerDialog.rtty-decode-only #rttyTunerFromRadio,
+    #rttyTunerDialog.rtty-decode-only #rttyTunerAutoBtn { display:none !important; }
+    #rttyTunerDialog.rtty-decode-only .rtty-col-main { display:flex !important; flex:1 1 0; min-height:0; }
+    #rttyTunerDialog.rtty-decode-only #rttyReaderOut { flex:1 1 0; }
+    #rttyTunerDialog.rtty-contest .rtty-send { display:none; }
 
     /* The one thing Bruce VK2RT asked for and did not get: a panel that holds
        still. Both lines are live regions whose text changes length as the tuner
@@ -88,6 +126,31 @@
        clipped, and it is only the common case that has to stop jumping. */
     #rttyTunerDialog.rtty-contest #rttyTunerInfo,
     #rttyTunerDialog.rtty-contest #rttyTunerStatus { min-height:2.4em; }
+
+    /* Docked in the RTTY Contest view: part of the page, not a dialog. It
+       fills its place beside the spectrum, at the size the operator set with
+       its grabs, and the scope is the largest square that fits - as in
+       the pop-out - so a wider tuner is a bigger scope, never a stretched
+       one. The status line goes; the readouts above it stay. */
+    #rttyTunerDialog.rtty-docked {
+        position:static; display:flex; flex-direction:column;
+        width:340px; height:auto; flex:1 1 auto; max-height:100%; min-height:0; max-width:none;
+        margin:0; padding:0; resize:none; overflow:auto;
+        border:1px solid #555; border-radius:8px; background:#222; color:#eee;
+    }
+    /* On top (the always-on-top window, pip-dock.js): the docked tuner moves
+       there whole, so it fills that window instead of keeping its width, and
+       the scope sizes to it as in the pop-out - however small the operator
+       makes the window, or the browser makes it on a screen with another
+       scale. What still does not fit scrolls. */
+    #rttyTunerDialog.rtty-docked.rc-on-top {
+        width:100%; height:100vh; max-height:none; border:0; border-radius:0;
+    }
+    /* The width the operator dragged it to, with its grabs (contest-view.js).
+       The height is its place's, which the grabs set too. */
+    #rttyTunerDialog.rtty-docked:not(.rc-on-top) { width:var(--rc-tuner-w, 300px); }
+    #rttyTunerDialog.rtty-docked .rtty-header { cursor:default; }
+    #rttyTunerDialog.rtty-docked #rttyTunerStatus { display:none; }
 
     /* Shown only in the pop-out, which stays open when the mode changes
        rather than vanishing off a second monitor. */
@@ -102,17 +165,19 @@
         margin-bottom: 0.5rem;
     }
 
-    /* A section heading with a rule running off to the right of it. */
-    #rttyTunerDialog .rtty-section {
+    /* A section heading with a rule running off to the right of it. Not
+       under #rttyTunerDialog: docked in the RTTY Contest view the Decode
+       section is in a box of its own. */
+    .rtty-section {
         display:flex; align-items:center; gap:0.5rem;
         flex:0 0 auto; min-height:1.75rem;
     }
-    #rttyTunerDialog .rtty-section > .rtty-section-name {
+    .rtty-section > .rtty-section-name {
         font-size:0.68rem; letter-spacing:0.09em; text-transform:uppercase; color:#9ab; flex:0 0 auto;
     }
-    #rttyTunerDialog .rtty-section > .rtty-rule { flex:1 1 auto; height:1px; background:#3a3a3a; }
+    .rtty-section > .rtty-rule { flex:1 1 auto; height:1px; background:#3a3a3a; }
 
-    #rttyTunerDialog .rtty-decode { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:0.35rem; }
+    .rtty-decode { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:0.35rem; }
     #rttyReaderOut {
         flex:1 1 auto; min-height:4.5rem; overflow:auto;
         background:#111; border:1px solid #444; border-radius:6px;
@@ -136,17 +201,41 @@
      oscilloscope; the reader (core/js/rtty/rtty-reader.js) prints what the
      server's demodulator makes of the same audio. Non-modal so the VFO stays
      in reach. -->
-<dialog id="rttyTunerDialog" open="@popout"
-        class="@(string.Join(" ", new[] { popout ? "rtty-popout user-sized" : null, contest ? "rtty-contest" : null }.Where(c => c is not null)))"
-        style="@(popout ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0;")"
+<dialog id="rttyTunerDialog" open="@(popout || docked)"
+        class="@(string.Join(" ", new[] { popout ? "rtty-popout user-sized" : null, docked ? "rtty-docked" : null, contest ? "rtty-contest" : null, decodeOnly ? "rtty-decode-only" : null }.Where(c => c is not null)))"
+        style="@(popout || docked ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0;")"
         aria-labelledby="rttyTunerTitle">
     <div class="rtty-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
-        <strong id="rttyTunerTitle">@(contest ? "RTTY Tuner" : "RTTY")</strong>
+        <strong id="rttyTunerTitle">@(decodeOnly ? "RTTY Decode" : contest ? "RTTY Tuner" : "RTTY")</strong>
         <div class="d-flex align-items-center gap-1">
+            @* From radio and Auto sit in the heading, not with Mark and Shift,
+               so the tones-only view keeps them: Bruce VK2RT found Auto two
+               clicks away there (2026-10-28). *@
+            @* The shared tuner re-reads the radio's own RTTY menu every few
+               seconds while this panel is open - there is no CAT event for a
+               menu change, so polling is the only way to notice one - and it
+               only ever overwrites figures it put there itself. So in RTTY the
+               button is mostly for taking the radio's numbers back after you
+               have typed your own. It stays because it is also the only way to
+               read the menu in an AFSK mode, where the sync deliberately keeps
+               its hands off. Note that this button existing is what turns the
+               polling on at all - see _startRadioSync in rtty-tuner.js. *@
+            <button type="button" id="rttyTunerFromRadio" class="btn btn-sm btn-outline-secondary"
+                    title="Read Mark and Shift from the radio's own RTTY menu. In RTTY the tuner already follows that menu on its own; press this to take the radio's numbers back after typing your own, or to read them in an AFSK mode.">From radio</button>
+            @* Listens for about four seconds and fills in all four settings
+               from what it hears. The shared tuner hides this button by itself
+               if the backend has no /api/rtty/auto, so it cost nothing while
+               this app had no Auto. *@
+            <button type="button" id="rttyTunerAutoBtn" class="btn btn-sm btn-outline-secondary"
+                    title="Listen for a few seconds and work out the tones, the shift, which way round they are and the speed. Needs the signal tuned in well enough to hear the two tones; it changes nothing if it cannot make sense of what it hears."
+                    aria-label="Work out the RTTY settings by listening">Auto</button>
             <button id="rttyTunerCompactBtn" class="btn btn-sm btn-outline-secondary" type="button" aria-pressed="false"
                     title="Tones only - show just the scope, without the settings, the readouts or the decoded text"
                     aria-label="Tones only view"><i class="bi bi-fullscreen-exit" aria-hidden="true"></i></button>
-            @if (popout)
+            @if (docked)
+            {
+            }
+            else if (popout)
             {
                 <button id="rttyTunerReattachBtn" class="btn btn-sm btn-outline-secondary" type="button"
                         title="Put the RTTY panel back in the main page"
@@ -292,24 +381,6 @@
                         <label class="form-check-label" for="rttyTunerReverse"
                                title="The other station is sending reversed. The radio's own RTTY-L / RTTY-U setting is followed automatically - this is on top of it.">Rev</label>
                     </div>
-                    @* The shared tuner re-reads the radio's own RTTY menu every few
-                       seconds while this panel is open - there is no CAT event for a
-                       menu change, so polling is the only way to notice one - and it
-                       only ever overwrites figures it put there itself. So in RTTY the
-                       button is mostly for taking the radio's numbers back after you
-                       have typed your own. It stays because it is also the only way to
-                       read the menu in an AFSK mode, where the sync deliberately keeps
-                       its hands off. Note that this button existing is what turns the
-                       polling on at all - see _startRadioSync in rtty-tuner.js. *@
-                    <button type="button" id="rttyTunerFromRadio" class="btn btn-sm btn-outline-secondary"
-                            title="Read Mark and Shift from the radio's own RTTY menu. In RTTY the tuner already follows that menu on its own; press this to take the radio's numbers back after typing your own, or to read them in an AFSK mode.">From radio</button>
-                    @* Listens for about four seconds and fills in all four settings
-                       from what it hears. The shared tuner hides this button by itself
-                       if the backend has no /api/rtty/auto, so it cost nothing while
-                       this app had no Auto. *@
-                    <button type="button" id="rttyTunerAutoBtn" class="btn btn-sm btn-outline-secondary"
-                            title="Listen for a few seconds and work out the tones, the shift, which way round they are and the speed. Needs the signal tuned in well enough to hear the two tones; it changes nothing if it cannot make sense of what it hears."
-                            aria-label="Work out the RTTY settings by listening">Auto</button>
                 </div>
                 <div class="rtty-scope-box">
                     <canvas id="rttyTunerCanvas" width="320" height="320"

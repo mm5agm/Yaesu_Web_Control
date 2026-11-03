@@ -18,6 +18,16 @@ two repositories.
   changing a character of it. Pure functions, tested in
   `tests/js/cw-tokens.test.mjs`; `docs/design/cw-decoder.md` §7.3 records the
   measurements behind it, including the suppression version that was rejected.
+- `cw/paddle-firmware.js` and `cw/paddle-firmware-box.js` — install and update
+  the paddle adapter's firmware (`firmware/paddle-adapter`) from the CW Paddle
+  page: SysEx over Web MIDI for its version and a restart into download mode,
+  then esptool-js over Web Serial, limited to Espressif's USB ID so a radio's
+  COM port can never be chosen. The box is the page's half; the app serves
+  `firmware/paddle-adapter/dist`. Tested in `tests/js/paddle-firmware.test.mjs`,
+  which also fails when `dist/` does not match the firmware source.
+- `vendor/esptool-js.js` — Espressif's esptool-js 0.7.1 bundle, unchanged but
+  for a licence header (Apache-2.0, `vendor/LICENSE-esptool-js`). Loaded only
+  when programming starts.
 - `popout/popout.js` — opens a panel in a window of its own (for a second
   monitor), remembers the window's size and position, and keeps the main page
   and the pop-out in step over a `BroadcastChannel`: `PopoutHost` in the main
@@ -51,6 +61,23 @@ two repositories.
   UI layer over `createAudioSession` and does touch app-specific markup and
   settings. Same split as the calibration engine and its tables: the shared
   half knows the shape, the app half knows the specifics.
+- `flex/` — the dockable workspace behind YWC's Experimental UI, written by
+  Fabio Valente and moved here so IWC can have one too:
+  `flex-workspace.js` (the FlexLayout dock, layout persistence, pop-outs,
+  scale, the Panels and Layouts menus), `flex-popout-bridge.js` (makes a
+  popped-out panel part of the page for lookups and listeners; a classic
+  script, loaded first), `flex-shims.js` (the Bootstrap Modal/Tooltip/Dropdown
+  shim the dock pages use instead of Bootstrap's JS) and
+  `flex-layouts-admin.js` (the Manage layouts dialog). The app passes
+  `initFlexWorkspace` a config naming its panels, layout file, storage prefix
+  and API base; a panel's markup is either a `<template>` or a node the page
+  pre-rendered into `#ywcFlexParking`. Each app keeps its own page, layout
+  JSON, `popout.html` and vendored `lib/flexlayout/` (only `*.js` is copied
+  from here). The C# half — `Services/Flex/FlexLayoutStore` and
+  `Models/FlexLayout` — is in this repo too; the controller is each app's.
+  The `ywc-flex-*` event/class names and the `window.ywcFlex*` globals are
+  the shell's namespace in both apps and keep their original prefix on
+  purpose: both apps' scripts and CSS use them.
 
 The per-radio numbers it works on are **not** here: each app keeps its own
 `wwwroot/js/calibration/calibration-tables.js`, which the engine imports as a

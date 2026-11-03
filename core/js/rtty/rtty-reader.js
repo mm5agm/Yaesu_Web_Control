@@ -104,6 +104,10 @@ export class RttyReader {
 
     get isRunning() { return this._running; }
 
+    /** Start or stop the decoder on the server, as the panel's Start key does. */
+    start() { return this._send('start'); }
+    stop()  { return this._send('stop'); }
+
     /**
      * Pause or resume without closing - for a pop-out window, where closing
      * itself on a mode change would make a window vanish off a second monitor.

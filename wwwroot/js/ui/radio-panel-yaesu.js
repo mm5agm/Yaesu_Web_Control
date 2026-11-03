@@ -27,10 +27,10 @@
 import { mountRadioPanel } from '/js/radio-panel/radio-panel.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
 import { alignBins, txMeterFraction, rangeLegends } from '/js/radio-panel/panel-math.js';
-import { BAND_PLANS, BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, autoModeForHz, getSegments, segmentForHz } from '/js/ui/band-plan.js';
-import { loadRttySettings, afskMidpointAudioHz } from '/js/rtty/rtty-settings.js';
+import { BAND_PLANS, BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, getSegments, segmentForHz } from '/js/ui/band-plan.js';
+import { MODE_CAT, spectrumTuner } from '/js/ui/spectrum-tune-yaesu.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
-import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
+import { axisOffsetHz, viewOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 import { RadioScopeControl } from '/js/ui/radio-scope.js';
 import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js';
@@ -38,9 +38,9 @@ import { PopoutHost } from '/js/popout/popout.js';
 import { txTimeoutBeep, txTimeoutWarning } from '/js/radio-panel/tx-timeout.js';
 
 const BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
-const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'DATA-U'];
+// DATA-L and RTTY-U too: Bruce VK2RT runs AFSK in DATA-L (2026-10-26).
+const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'RTTY-U', 'DATA-L', 'DATA-U'];
 // Classic's mode-to-MD-code table (site.js setMode), for the modes above.
-const MODE_CAT = { 'LSB': '1', 'USB': '2', 'CW-U': '3', 'FM': '4', 'AM': '5', 'RTTY-L': '6', 'CW-L': '7', 'DATA-U': 'C' };
 const AGC = { '0': 'OFF', '1': 'FAST', '2': 'MID', '3': 'SLOW', '4': 'AUTO', '5': 'AUTO', '6': 'AUTO' };
 const IPO = { '0': 'IPO', '1': 'AMP1', '2': 'AMP2' };
 // What a press moves to next: FAST > MID > SLOW > AUTO > OFF > FAST. OFF is
@@ -174,12 +174,13 @@ export function startYaesuRadioPanel(root, cfg) {
         spectrumPanes: dual
             ? [{ id: 'A', tab: 'Main', name: 'MAIN · SDR A' }, { id: 'B', tab: 'Sub', name: 'SUB · SDR B' }]
             : [{ id: 'A', tab: 'VFO-A', name: 'VFO-A · SDR A' }, { id: 'B', tab: 'VFO-B', name: 'VFO-B · SDR B' }],
-        // The spans Classic offers (SpectrumSpanPlan.ValidSpans).
-        spectrumSpans: [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6].map(hz => ({ hz })),
+        // The SDR's spans (SpectrumSpanPlan.ValidSpans).
+        spectrumSpans: [1e3, 2e3, 5e3, 10e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6].map(hz => ({ hz })),
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         windows: YAESU_WINDOWS,
         onWindowPanel: (g, p, shown) => { win?.onShow(g, p, shown); windowMode(g, p, shown); },
         onWindowPopout: (g, p) => { win?.popout(g, p); windowMode(g, p, true, true); },
+        onWindowLaunch: g => win?.launch(g) ?? false,
         frequencyEntry: true,
         clock: true,
         fullscreenKey: true,
@@ -218,8 +219,10 @@ export function startYaesuRadioPanel(root, cfg) {
         contourHz: { A: 800, B: 800 }, apfHz: { A: 0, B: 0 }, notchHz: { A: null, B: null },
         af: { A: null, B: null }, rf: { A: null, B: null }, sql: { A: null, B: null },
         mic: null, procl: null, amc: null, procType: null, power: null, mon: null, speed: null, pitchKnown: false,
-        tx: false, txMeterRaw: {}, sel: 'A', split: 0, txVfo: 0, proc: false, moni: false, catOn: false,
+        tx: false, txMeterRaw: {}, poHist: [], swrHist: [], sel: 'A', split: 0, txVfo: 0, proc: false, moni: false, catOn: false,
     };
+    // The DATA filter sits DATA SHIFT from the dial; drawn there until the radio says otherwise.
+    panel.setDataShift(r.dataShiftHz);
     let stepHz = (() => { try { return num(localStorage.getItem(STEP_KEY)); } catch { return 0; } })();
     if (!STEPS_HZ.includes(stepHz)) stepHz = 100;
     panel.setStep(stepText(stepHz));
@@ -704,28 +707,10 @@ export function startYaesuRadioPanel(root, cfg) {
     }
 
     // ---- click-to-tune on the SDR spectrum ---------------------------------
-    // Classic's rules (spectrum-panel.js): the band plan may pick the mode
-    // (unless Settings turns that off), and in RTTY / DATA-L the dial goes
-    // the tone offset away from the clicked signal, which is the midpoint.
-    const rttyTones = { shiftHz: 170, polarityRev: false, asked: false };
-    function askRttyTones(mode) {
-        if (rttyTones.asked || !String(mode).startsWith('RTTY')) return;
-        rttyTones.asked = true;
-        fetch('/api/cat/rtty').then(res => res.ok ? res.json() : null).then(t => {
-            if (Number(t?.shiftHz) > 0) rttyTones.shiftHz = Number(t.shiftHz);
-            if (typeof t?.polarityRev === 'boolean') rttyTones.polarityRev = t.polarityRev;
-        }).catch(() => { rttyTones.asked = false; });
-    }
-    function toneOffsetHz(mode) {
-        if (mode === 'RTTY-L' || mode === 'RTTY-U') return (rttyTones.polarityRev ? -1 : 1) * rttyTones.shiftHz / 2;
-        if (mode === 'DATA-L') return afskMidpointAudioHz(loadRttySettings());
-        return 0;
-    }
-    function spectrumTarget(v, hz) {
-        const auto = autoModeForHz(hz);
-        const mode = auto && MODE_CAT[auto] ? auto : null;
-        return { mode, to: Math.round(hz + toneOffsetHz(mode || r.mode[v])) };
-    }
+    // The rules are in spectrum-tune-yaesu.js, shared with the pop-out spectrum.
+    const tuner = spectrumTuner();
+    const askRttyTones = mode => tuner.askTones(mode);
+    const spectrumTarget = (v, hz) => tuner.target(hz, r.mode[v]);
     function spectrumTune(v, hz) {
         if (!(hz > 0)) return;
         const { mode, to } = spectrumTarget(v, hz);
@@ -828,6 +813,34 @@ export function startYaesuRadioPanel(root, cfg) {
         panel.setKey('txclar', { on: r.txClar });
     }
 
+    // PO and SWR are averaged over the last few readings of the over, as the
+    // Classic gauges do (4 and 3), and both start afresh at each over. A raw 0
+    // is the server's end-of-over reset, not a reading, so it clears the
+    // history rather than being averaged in (the #124 trap). An SWR reading
+    // taken while the radio is putting out under 1 W - between CW elements,
+    // or at the start of an over - measures nothing and swung the needle to
+    // full scale on a 1:1 load, so it is left out and the needle holds.
+    const MIN_PO_FOR_SWR_W = 1;
+    const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+    const poWatts = () => r.poHist.length ? Math.min(maxPowerW, calibrateNumeric('PWR', avg(r.poHist))) : 0;
+
+    function takePo(raw) {
+        const n = num(raw);
+        if (!r.tx || n === 0) { r.poHist = []; r.txMeterRaw.PO = 0; return; }
+        r.poHist.push(n);
+        if (r.poHist.length > 4) r.poHist.shift();
+        r.txMeterRaw.PO = avg(r.poHist);
+    }
+
+    function takeSwr(raw) {
+        const n = num(raw);
+        if (!r.tx || n === 0) { r.swrHist = []; r.txMeterRaw.SWR = 0; return; }
+        if (poWatts() < MIN_PO_FOR_SWR_W) return;
+        r.swrHist.push(n);
+        if (r.swrHist.length > 3) r.swrHist.shift();
+        r.txMeterRaw.SWR = avg(r.swrHist);
+    }
+
     function refreshTxMeters() {
         const raw = r.txMeterRaw;
         const v = {
@@ -843,16 +856,22 @@ export function startYaesuRadioPanel(root, cfg) {
     // The axis correction, in the same convention as the Classic spectrum
     // panel: true RF of the frame's centre = dial + offset. Null (unmeasured
     // radio) is treated as no correction.
+    const filterFor = vfo => ({
+        mode: r.mode[vfo],
+        ifWidthHz: widthHz(vfo) ?? 3000,
+        ifShiftHz: num(r.shift[vfo]),
+        cwPitchHz: pitchHz(),
+        dataShiftHz: r.dataShiftHz,
+    });
     function offsetFor(vfo, frame) {
         if (frame.rfOrdered) return num(frame.centreHz) - r.freq[vfo];
-        const filter = {
-            mode: r.mode[vfo],
-            ifWidthHz: widthHz(vfo) ?? 3000,
-            ifShiftHz: num(r.shift[vfo]),
-            cwPitchHz: pitchHz(),
-            dataShiftHz: r.dataShiftHz,
-        };
-        try { return axisOffsetHz(model, vfo, frame.centreHz, filter) ?? 0; } catch { return 0; }
+        try { return axisOffsetHz(model, vfo, frame.centreHz, filterFor(vfo)) ?? 0; } catch { return 0; }
+    }
+    // Where the pane is centred from the dial: the filter in DATA modes
+    // (viewOffsetHz). The radio's own scope is drawn as it is sent.
+    function viewFor(vfo, frame) {
+        if (frame.rfOrdered) return 0;
+        try { return viewOffsetHz(model, filterFor(vfo)); } catch { return 0; }
     }
     // The SDR lamp shows the better of the two SDRs; one that is not
     // configured does not count against the other.
@@ -867,7 +886,7 @@ export function startYaesuRadioPanel(root, cfg) {
         if (mode !== 'DATA-L' && mode !== 'DATA-U') return;
         fetch('/api/cat/datashift')
             .then(x => (x.ok ? x.json() : null))
-            .then(d => { const hz = Number(d?.dataShiftHz); if (Number.isFinite(hz)) r.dataShiftHz = hz; })
+            .then(d => { const hz = Number(d?.dataShiftHz); if (Number.isFinite(hz)) { r.dataShiftHz = hz; panel.setDataShift(hz); } })
             .catch(() => { /* 1500 stays */ });
     }
 
@@ -934,7 +953,11 @@ export function startYaesuRadioPanel(root, cfg) {
         TxClarOn: v => { r.txClar = on(v); refreshClar(); },
         ClarifierOffsetA: v => { r.clarHz.A = num(v); refreshClar(); },
         ClarifierOffsetB: v => { r.clarHz.B = num(v); refreshClar(); },
-        IsTransmitting: v => { r.tx = on(v); panel.setTx(r.tx); },
+        IsTransmitting: v => {
+            r.tx = on(v);
+            if (!r.tx) { takePo(0); takeSwr(0); refreshTxMeters(); }
+            panel.setTx(r.tx);
+        },
         AtuTuning: v => { r.atuTuning = on(v); refreshTune(); },
         ProcEnabled: v => { r.proc = on(v); panel.setKey('proc', { on: r.proc }); refreshSharedKnobs(); },
         VoxOn: v => { r.vox = on(v); panel.setKey('vox', { on: r.vox }); },
@@ -955,8 +978,8 @@ export function startYaesuRadioPanel(root, cfg) {
         MonitorLevelA: v => { r.mon = num(v); refreshSharedKnobs(); },
         SMeterA: v => panel.setSMeter('A', calibrateNumeric('SMETER', num(v))),
         SMeterB: v => panel.setSMeter('B', calibrateNumeric('SMETER', num(v))),
-        PowerMeter: v => { r.txMeterRaw.PO = typeof v === 'object' && v ? v.value : v; refreshTxMeters(); },
-        SWRMeter: v => { r.txMeterRaw.SWR = v; refreshTxMeters(); },
+        PowerMeter: v => { takePo(typeof v === 'object' && v ? v.value : v); refreshTxMeters(); },
+        SWRMeter: v => { takeSwr(v); refreshTxMeters(); },
         ALCMeter: v => { r.txMeterRaw.ALC = v; refreshTxMeters(); },
         CompressionMeter: v => { r.txMeterRaw.COMP = v; refreshTxMeters(); },
         IDDMeter: v => { r.txMeterRaw.IDD = v; refreshTxMeters(); },
@@ -988,7 +1011,11 @@ export function startYaesuRadioPanel(root, cfg) {
             if (sdrState[vfo] !== 'streaming') { sdrState[vfo] = 'streaming'; refreshSdrLamp(); }
             panel.setSpectrumSource({ label: 'SDR ' + vfo, spanHz: span, status: null }, vfo);
             let bins = v.rfOrdered ? v.bins : Array.prototype.slice.call(v.bins).reverse();
-            if (r.freq[vfo] > 0) bins = alignBins(bins, offsetFor(vfo, v), span);
+            if (r.freq[vfo] > 0) {
+                const view = viewFor(vfo, v);
+                panel.setViewOffset(vfo, view);
+                bins = alignBins(bins, offsetFor(vfo, v) - view, span);
+            }
             if (!specAway) panel.pushSpectrum(bins, vfo);
         },
         DxSpot: addSpot,

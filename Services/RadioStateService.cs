@@ -674,6 +674,12 @@ namespace Yaesu_Web_Control.Services
         public int CwSpeed { get => _cwSpeed; set => SetField(ref _cwSpeed, value); }
         private string _cwBreakIn = "0";
         public string CwBreakIn { get => _cwBreakIn; set => SetField(ref _cwBreakIn, value); }
+        // The two halves CwBreakIn is built from: BI (on/off) and the CW BK-IN
+        // TYPE menu (Semi/Full). Kept here, not broadcast, so the dispatcher
+        // (radio reports) and CatController (its own read-backs) share one
+        // record - with two, a BI1 report paired with a stale FULL.
+        public bool CwBreakInOn { get; set; }
+        public bool CwBreakInFull { get; set; }
         private int _cwBreakInDelay = 200;
         public int CwBreakInDelay { get => _cwBreakInDelay; set => SetField(ref _cwBreakInDelay, value); }
 

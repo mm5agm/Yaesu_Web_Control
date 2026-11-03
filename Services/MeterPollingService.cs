@@ -460,6 +460,19 @@ namespace Yaesu_Web_Control.Services
                             var an1 = await _multiplexer.SendCommandAsync("AN1;", "MeterPoll", stoppingToken);
                             if (!string.IsNullOrEmpty(an1)) _dispatcher.DispatchMessage(an1);
                         }
+
+                        // CW BK-IN TYPE (Semi/Full) is a menu item, and a change
+                        // made on the front panel is never pushed, so the app kept
+                        // showing whatever it read at connect. Re-read it, with BI,
+                        // while either receiver is in CW - the only time it matters.
+                        if (CwBreakInCodes.BkInTypeExAddress(settings.RadioModel) is string bkTypeAddr
+                            && (IsCw(_stateService.ModeA) || IsCw(_stateService.ModeB)))
+                        {
+                            var bkType = await _multiplexer.SendCommandAsync($"EX{bkTypeAddr};", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(bkType)) _dispatcher.DispatchMessage(bkType);
+                            var bi = await _multiplexer.SendCommandAsync("BI;", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(bi)) _dispatcher.DispatchMessage(bi);
+                        }
                     }
 
                     // Frequency backstop poll — single-receiver radios only (see field comment).
@@ -495,6 +508,8 @@ namespace Yaesu_Web_Control.Services
                 }
             }
         }
+
+        private static bool IsCw(string? mode) => mode != null && mode.StartsWith("CW", StringComparison.OrdinalIgnoreCase);
 
         // FTdx101 power-meter restore on shutdown (discussion #6, F1ubw) lives
         // in RadioInitializationService.StopAsync, not here — the hosted-service

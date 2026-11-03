@@ -26,6 +26,13 @@
         public bool AutoShutdownWhenNoBrowsers { get; set; } = true;
 
         /// <summary>
+        /// When true, YWC sends PS0; as it closes (tray Exit or the no-browser
+        /// auto-shutdown), switching the radio off. Settings' Restart Now leaves
+        /// it on. Off by default.
+        /// </summary>
+        public bool PowerOffAtExit { get; set; } = false;
+
+        /// <summary>
         /// When true, the SDR workers stop about 3 s after the last browser
         /// disconnects, so another program can open the SDR straight away,
         /// and start again when a browser reconnects. Default false: the SDRs
@@ -301,6 +308,37 @@
         // puts mode and filter back when the tuner closes.
         public bool RttyTunerSetMode { get; set; } = true;
 
+        // The mode that switch puts the radio in, and that the RTTY Contest
+        // band keys use: RTTY-L, RTTY-U, DATA-L or DATA-U. Bruce VK2RT,
+        // 2026-10-26: he runs AFSK through the radio's codec in DATA-L, and
+        // with RTTY-L fixed here the tuner kept taking him out of it.
+        // Anything else reads as RTTY-L (RttyTunerModeService.TargetMode).
+        public string RttyTunerMode { get; set; } = "RTTY-L";
+
+        // IF widths the operator set by hand while the tuner was open, as SH
+        // codes keyed "model|mode|band". The tuner uses one in place of the
+        // width it would work out (RttyTunerModeService.WidthSetByHandAsync).
+        // Bruce VK2RT, Discussion #257; per band since #250, 2026-11-01, and
+        // older "model|mode" keys are no longer read. Not on the Settings
+        // page; that page's save leaves it as it is.
+        public Dictionary<string, string> RttyTunerWidths { get; set; } = new();
+
+        // The tones the RTTY tuner last ran on. Browser storage is kept per
+        // address - http and https, localhost and 127.0.0.1, another browser -
+        // so a window on an address that had never been set started the shared
+        // tuner on 2125 and every other window followed it (Bruce VK2RT,
+        // Discussion #250). Each tuner now starts from these. Null until the
+        // tuner has run.
+        public RttyTones? RttyTunerTones { get; set; }
+
+        // The operator's RTTY setup, CAT commands sent by the CAT SET key on RTTY
+        // Contest; a line starting "20m:" is for that band only. See
+        // RttySetupCat. Bruce VK2RT, Discussion #250.
+        public string RttySetupCat { get; set; } = "";
+
+        // Whether a band key on RTTY Contest sends the setup for that band too.
+        public bool RttySetupOnBand { get; set; } = false;
+
         // Whether a confident Auto answer also moves the VFO so the measured mark
         // lands on the tuner's mark.
         //
@@ -510,6 +548,15 @@
         // Squelch (read from radio on connect — default 0 = open)
         public int SquelchA { get; set; } = 0;
         public int SquelchB { get; set; } = 0;
+    }
+
+    // The RTTY tuner's tones, as ApplicationSettings.RttyTunerTones keeps them.
+    public class RttyTones
+    {
+        public double MarkHz { get; set; }
+        public int ShiftHz { get; set; }
+        public bool Reverse { get; set; }
+        public double Baud { get; set; }
     }
 
     // Stores per-band IF Width/Shift/Mode/Antenna so they are restored when the operator returns to a band.

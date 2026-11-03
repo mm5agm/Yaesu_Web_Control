@@ -14,6 +14,7 @@ namespace Yaesu_Web_Control.Hubs
         private readonly ISettingsService _settings;
         private readonly FilterSpectrumService _filterSpectrum;
         private readonly BrowserPresence _presence;
+        private readonly Services.Cw.CwKeyingService _cwKeying;
 
         // Every currently open SignalR connection, and the whole of what the
         // host means by "a browser is watching". Presence used to mean a
@@ -38,14 +39,45 @@ namespace Yaesu_Web_Control.Hubs
             RadioStateService radioState,
             ISettingsService settings,
             FilterSpectrumService filterSpectrum,
-            BrowserPresence presence)
+            BrowserPresence presence,
+            Services.Cw.CwKeyingService cwKeying)
         {
             _presence = presence;
+            _cwKeying = cwKeying;
             _logger   = logger;
             _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
             _radioState = radioState;
             _settings = settings;
             _filterSpectrum = filterSpectrum;
+        }
+
+        /// <summary>
+        /// Key events from a paddle keyer running in the browser, played on
+        /// this PC after a jitter buffer. Reports come back on "CwKeyReport".
+        /// The key line is the dry run until CwSetKeyLine chooses a port.
+        /// </summary>
+        public void CwKey(RadioWebControl.Core.Services.Cw.CwKeyPacket packet) =>
+            _cwKeying.Receive(Context.ConnectionId, packet);
+
+        /// <summary>The paddle key line now, the CAT port, and the COM ports, for the test page.</summary>
+        public object CwKeyLineStatus() => _cwKeying.LineStatus();
+
+        /// <summary>
+        /// Chooses the paddle key line: a COM port keyed by DTR (the radio's
+        /// Standard port), or null for the dry run. Returns null when done,
+        /// or why not.
+        /// </summary>
+        public string? CwSetKeyLine(string? port) => _cwKeying.SetKeyPort(port);
+
+        /// <summary>
+        /// What the paddle page's keyer sent, read back as text there, passed
+        /// to the other pages for the CW Send log. Whether it reached the radio
+        /// is the server's word, not the page's: is a key line chosen.
+        /// </summary>
+        public Task CwPaddleText(string? text)
+        {
+            if (string.IsNullOrEmpty(text) || text.Length > 16) return Task.CompletedTask;
+            return Clients.Others.SendAsync("CwPaddleText", text, _cwKeying.Live);
         }
 
         /// <summary>
@@ -101,6 +133,7 @@ namespace Yaesu_Web_Control.Hubs
         {
             _connections.TryRemove(Context.ConnectionId, out _);
             _filterSpectrum.Unsubscribe(Context.ConnectionId);
+            _cwKeying.Disconnected(Context.ConnectionId);
 
             // A navigation or a closed tab arrives with no exception. A
             // connection the server gave up on -- one that sent nothing

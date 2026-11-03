@@ -398,8 +398,8 @@ namespace Yaesu_Web_Control.Services.Rtty
             // Outside the lock, because it writes to the radio, and only when
             // there is something to write: the mode arrives on every poll loop
             // and the usual answer is "still RTTY, nothing to do".
-            if (_mode.HeldMode is not null
-                && RttyMarkCentre.SidebandForFskMode(_state.ModeA) is null)
+            if (_mode.HeldMode is { } held
+                && !RttyTunerModeService.SameKind(_state.ModeA, held))
             {
                 _ = HoldModeAsync();
             }
@@ -425,6 +425,21 @@ namespace Yaesu_Web_Control.Services.Rtty
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "RTTY tuner: holding the mode threw");
+            }
+        }
+
+        /// <summary>
+        /// The operator picked <paramref name="mode"/> for RTTY: the hold moves
+        /// to it (<see cref="RttyTunerModeService.ChooseAsync"/>), and the status
+        /// line says so rather than still reporting a hold of the mode they have
+        /// just left.
+        /// </summary>
+        public async Task ChooseModeAsync(string mode, CancellationToken ct = default)
+        {
+            await _mode.ChooseAsync(mode, ct);
+            lock (_gate)
+            {
+                if (_scope != null) _modeNote = $"Mode set to {mode}.";
             }
         }
 

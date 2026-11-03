@@ -11,6 +11,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Display">
     <title>Radio - Yaesu Web Control</title>
     <link rel="icon" href="~/favicon.ico" />
     <style>html, body { margin: 0; height: 100%; background: #0b0d10; }</style>
@@ -34,7 +35,7 @@
             maxHz: @Model.MaxHz,
             scopeCat: @(Model.HasScopeCat ? "true" : "false"),
             bandPlan: '@Model.BandPlan',
-            vdd: @(Model.HasVdd ? Html.Raw($"{{ min: {Model.VddDial.Min}, max: {Model.VddDial.Max} }}") : Html.Raw("null")),
+            vdd: { min: @Model.VddDial.Min, max: @Model.VddDial.Max },
             paTemp: @(Model.HasPaTemp ? "true" : "false"),
             antennas: @(Model.HasAntennaSelector ? Html.Raw("['1', '2', '3']") : Html.Raw("[]")),
             roofing: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RoofingChoices.Select(o => new { code = o.Code, label = o.Label }))),
@@ -42,6 +43,7 @@
                 { label: 'Classic', href: '/' },
                 { label: 'Experimental', href: '/flexui' },
                 { label: 'Radio', href: '/radio', on: true },
+                { label: 'RTTY Contest', href: '/rtty-contest' },
             ],
             menu: [
                 { group: 'SETUP', items: [
@@ -51,6 +53,9 @@
                     { label: 'Labels', href: '/Labels' },
                     { label: 'Meter Calibration', href: '/MeterCalibration' },
                     { label: 'Diagnostics', href: '/Diagnostics' },
+                ] },
+                { group: 'CW', items: [
+                    { label: 'CW Paddle', href: '/CwPaddle', title: 'Key the radio from a paddle on a MIDI adapter' },
                 ] },
                 { group: 'HELP', items: [
                     { label: 'User Manual', href: '/UserManual' },

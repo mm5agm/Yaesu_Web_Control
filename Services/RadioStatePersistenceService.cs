@@ -15,6 +15,11 @@ namespace Yaesu_Web_Control.Services
         private RadioState? _pendingState;
         private volatile bool _dirty;
 
+        // What the file holds now, so a flush whose content hasn't changed
+        // (a value that moved and came back inside the 5 s window) isn't
+        // written again. Matters on a Pi, where every write wears the SD card.
+        private string? _lastJson;
+
         public RadioStatePersistenceService(
             ILogger<RadioStatePersistenceService> logger,
             IWebHostEnvironment env)
@@ -42,6 +47,7 @@ namespace Yaesu_Web_Control.Services
                     }
 
                     var json = File.ReadAllText(_filePath);
+                    _lastJson = json;
                     var options = new JsonSerializerOptions
                     {
                         PropertyNamingPolicy = null // Use PascalCase (default)
@@ -108,9 +114,15 @@ namespace Yaesu_Web_Control.Services
                     WriteIndented = true
                 };
                 var json = JsonSerializer.Serialize(state, options);
+                if (json == _lastJson)
+                {
+                    _logger.LogDebug("Radio state unchanged; not rewriting {FilePath}", _filePath);
+                    return;
+                }
                 var tmp = _filePath + ".tmp";
                 File.WriteAllText(tmp, json);
                 File.Move(tmp, _filePath, overwrite: true);
+                _lastJson = json;
                 _logger.LogDebug("Radio state saved to {FilePath}: MicGain={MicGain}, Power={Power}",
                     _filePath, state.MicGain, state.Power);
             }

@@ -16,7 +16,9 @@
       "Bash(gh pr merge:*)",
       "Bash(gh pr close:*)",
       "PowerShell(gh pr merge:*)",
-      "PowerShell(gh pr close:*)"
+      "PowerShell(gh pr close:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)"
     ],
     "additionalDirectories": [
       "C:\\build",

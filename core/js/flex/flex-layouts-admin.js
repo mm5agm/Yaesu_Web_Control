@@ -2,18 +2,21 @@
  * Named Flex UI layout administration, shared by the Flex UI "Manage layouts"
  * dialog and the Settings page.
  *
- * Pure server CRUD against /api/flexlayouts — it never touches the live
+ * Pure server CRUD against the app's layouts API (opts.apiBase, default
+ * /api/flexlayouts) — it never touches the live
  * workspace. On /flexui the caller passes `onSelect` so a row can switch the
  * active arrangement; on Settings there is no live workspace and no onSelect.
  *
  * The layout payload is opaque to this module too: it is read, duplicated,
- * exported and imported whole, never inspected.
+ * exported and imported whole, never inspected. The RTTY Contest view uses
+ * it for its own layouts, with its own apiBase and opts.emptyText.
  */
 
-const API = '/api/flexlayouts';
+const DEFAULT_API = '/api/flexlayouts';
 
 export function initFlexLayoutsAdmin(container, opts = {}) {
     if (!container) return { refresh: () => {} };
+    const API = opts.apiBase || DEFAULT_API;
 
     const state = {
         presets: [],
@@ -76,7 +79,8 @@ export function initFlexLayoutsAdmin(container, opts = {}) {
         if (state.presets.length === 0) {
             const empty = document.createElement('p');
             empty.className = 'text-muted small mb-0';
-            empty.textContent = 'No saved layouts yet. On the Experimental UI, arrange the panels and use “Save current as…”.';
+            empty.textContent = opts.emptyText
+                || 'No saved layouts yet. On the Experimental UI, arrange the panels and use “Save current as…”.';
             list.appendChild(empty);
             return;
         }

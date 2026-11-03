@@ -148,22 +148,44 @@ public sealed class SdrManager : BackgroundService
     }
 
     /// <summary>
-    /// Where the dial sits in this VFO's SDR stream right now: the radio's
-    /// IF OUT for the receiver plus its current LO slide, or the SDR's own
-    /// tune frequency for a model whose IF OUT is unmeasured. This is the
-    /// centre of every software-zoom crop.
+    /// Where the spectrum is centred in this VFO's SDR stream right now: the
+    /// dial (the radio's IF OUT for the receiver plus its current LO slide),
+    /// or in DATA modes the filter's centre (YaesuIfOutOffset.ViewIfHz), or
+    /// the SDR's own tune frequency for a model whose IF OUT is unmeasured.
+    /// This is the centre of every software-zoom crop.
     /// </summary>
     private long DialCentreHz(string vfo, ApplicationSettings config)
     {
         bool b = vfo == "B";
-        long? dial = YaesuIfOutOffset.DialIfHz(
+        long? dial = YaesuIfOutOffset.ViewIfHz(
             config.RadioModel, vfo,
             mode:        b ? _state.ModeB    : _state.ModeA,
             ifWidthCode: b ? _state.IfWidthB : _state.IfWidthA,
             ifShiftHz:   b ? _state.IfShiftB : _state.IfShiftA,
             cwPitchCode: _state.CwPitch,
             dataShiftHz: _state.DataShiftHz);
-        return dial ?? (b ? config.SdrIfFrequencyHzB : config.SdrIfFrequencyHzA);
+        // The IF OUT is inverted (higher RF is lower IF), so a hold above
+        // the usual centre moves the crop down the stream.
+        long hold = b ? Interlocked.Read(ref _holdRfB) : Interlocked.Read(ref _holdRfA);
+        return (dial ?? (b ? config.SdrIfFrequencyHzB : config.SdrIfFrequencyHzA)) - hold;
+    }
+
+    // FIXED on RTTY Contest: the RF offset of the held picture from the usual
+    // centre, per VFO (POST /api/sdr/hold). 0 when FIXED is off.
+    private long _holdRfA, _holdRfB;
+
+    /// <summary>
+    /// Cut this VFO's crop <paramref name="rfHz"/> from its usual centre, so
+    /// a spectrum held still by FIXED is filled to both edges instead of
+    /// running off the end of a crop that follows the dial (Bruce VK2RT,
+    /// Discussion #250, 2026-10-29). The frames say where they were cut, so
+    /// every pane still draws them in the right place.
+    /// </summary>
+    public Task SetHoldAsync(string vfo, long rfHz)
+    {
+        if (vfo == "B") Interlocked.Exchange(ref _holdRfB, rfHz);
+        else            Interlocked.Exchange(ref _holdRfA, rfHz);
+        return RecentreViewAsync(vfo);
     }
 
     /// <summary>

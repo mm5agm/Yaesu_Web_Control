@@ -199,6 +199,19 @@ test('no request, or a window not given its size, gives no frame', () => {
     assert.equal(frameFrom({ width: 716, height: 459 }, { width: 'x', height: 420 }), null);
 });
 
+test('a window squeezed to a short screen still gives its frame', () => {
+    // Asked for 1100 x 700 at 50% zoom on a screen 651 high: the width came
+    // out as asked (1100 + 17), the height was cut to the screen. The width
+    // says 2 CSS pixels per screen unit, so 1140 inner is 570 tall, frame 82.
+    assert.deepEqual(frameFrom({ width: 1117, height: 652 }, { width: 1100, height: 700 }, { width: 2200, height: 1140 }),
+        { w: 17, h: 82 });
+    // And the other way round, at 100%.
+    assert.deepEqual(frameFrom({ width: 800, height: 459 }, { width: 900, height: 420 }, { width: 784, height: 420 }),
+        { w: 16, h: 39 });
+    // Both sides squeezed: nothing to go on.
+    assert.equal(frameFrom({ width: 800, height: 400 }, { width: 900, height: 420 }, { width: 784, height: 361 }), null);
+});
+
 test('the saved page area ignores zoom when the frame is known', () => {
     // 50% zoom: inner is twice the screen size, outer is not.
     const win = { innerWidth: 1400, innerHeight: 840, outerWidth: 716, outerHeight: 459 };

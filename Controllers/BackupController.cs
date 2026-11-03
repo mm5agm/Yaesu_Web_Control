@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
 using Yaesu_Web_Control.Services;
@@ -23,6 +24,10 @@ namespace Yaesu_Web_Control.Controllers
     ///   radio_state.json   — live transient state, should reset on a new PC
     ///   *.bak              — recovery copies, not for migration
     ///   *.log / *.adi      — diagnostic / export logs
+    ///   subfolders         — Backups and Radio menus are never zipped
+    ///
+    /// The zip is written into the Backups subfolder, not sent as a browser
+    /// download, so the user can find it with YWC's other files.
     /// </summary>
     [ApiController]
     [Route("api/backup")]
@@ -55,8 +60,13 @@ namespace Yaesu_Web_Control.Controllers
             "flex-layouts.json",
         };
 
-        [HttpGet("export")]
-        public IActionResult Export()
+        /// <summary>Where YWC writes each backup zip.</summary>
+        private string BackupsFolder => Path.Combine(
+            Path.GetDirectoryName(_settingsService.GetSettingsFilePath()) ?? "", "Backups");
+
+        /// <summary>POST /api/backup/save — writes ywc-backup-{stamp}.zip into the Backups folder.</summary>
+        [HttpPost("save")]
+        public IActionResult Save()
         {
             var appDataDir = Path.GetDirectoryName(_settingsService.GetSettingsFilePath());
             if (string.IsNullOrEmpty(appDataDir) || !Directory.Exists(appDataDir))
@@ -88,13 +98,55 @@ namespace Yaesu_Web_Control.Controllers
                     w.WriteLine("Files included: " + included);
                 }
             }
-            ms.Position = 0;
 
-            var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-            return new FileContentResult(ms.ToArray(), "application/zip")
+            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            var fileName = $"ywc-backup-{stamp}.zip";
+            var target = Path.Combine(BackupsFolder, fileName);
+            try
             {
-                FileDownloadName = $"ywc-backup-{stamp}.zip"
-            };
+                Directory.CreateDirectory(BackupsFolder);
+                System.IO.File.WriteAllBytes(target, ms.ToArray());
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogError(ex, "Backup save: could not write {Path}", target);
+                return StatusCode(500, new { error = $"Could not write {target}: {ex.Message}" });
+            }
+            _logger.LogInformation("Backup saved to {Path} ({Included} files).", target, included);
+            return Ok(new { name = fileName, path = target, included });
+        }
+
+        /// <summary>GET /api/backup/files/{name} — a saved zip as a download, for a browser on another PC.</summary>
+        [HttpGet("files/{name}")]
+        public IActionResult Download(string name)
+        {
+            // A bare file name in the folder, nothing that could climb out of it.
+            if (name != Path.GetFileName(name) || !name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = "Not a backup file name." });
+            var path = Path.Combine(BackupsFolder, name);
+            if (!System.IO.File.Exists(path))
+                return NotFound(new { error = $"{name} is not in {BackupsFolder}." });
+            return PhysicalFile(path, "application/zip", name);
+        }
+
+        /// <summary>
+        /// POST /api/backup/open-folder — opens the Backups folder in Explorer on
+        /// the PC YWC runs on. Created if missing so the user lands somewhere real.
+        /// </summary>
+        [HttpPost("open-folder")]
+        public IActionResult OpenFolder()
+        {
+            try
+            {
+                Directory.CreateDirectory(BackupsFolder);
+                Process.Start(new ProcessStartInfo { FileName = BackupsFolder, UseShellExecute = true });
+                return Ok(new { path = BackupsFolder });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Backup: could not open {Folder}", BackupsFolder);
+                return StatusCode(500, new { error = ex.Message, path = BackupsFolder });
+            }
         }
 
         [HttpPost("import")]

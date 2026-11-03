@@ -1128,6 +1128,9 @@ const connection = window.rwcHubConnection("/radioHub");
 window.ywcRadioConnection = connection;
 
 // Redirect to Settings page if the backend signals an init failure
+// What the CW Paddle page sent, for the CW Send log.
+connection.on("CwPaddleText", (text, live) => window.cwSendPanel?.paddleText?.(text, live));
+
 connection.on("ShowSettingsPage", function () {
     window.location.href = "/Settings";
 });
@@ -1224,7 +1227,11 @@ connection.on("FrequencyRejected", function (info) {
 
 
 function sMeterLabel(val) {
-    return window.calibrationEngine.calibrateSMeterLabel(val);
+    // The engine is set by a module script in the layout, and module scripts
+    // run after this classic one, so the first SignalR update can arrive
+    // before it exists. null tells updateSMeter to leave the label for the
+    // next reading rather than throw.
+    return window.calibrationEngine?.calibrateSMeterLabel?.(val) ?? null;
 }
 
 
@@ -1515,6 +1522,23 @@ connection.on("RadioStateUpdate", function (update) {
         const label  = document.getElementById('procLevelValue');
         if (slider) slider.value = update.value;
         if (label)  label.textContent = update.value;
+    }
+
+    // --- MIC GAIN ---
+    // Same #228 gap as the classic UI: a front-panel MIC GAIN change reaches
+    // here as a MicGain broadcast, but nothing was applying it. The
+    // experimental UI has no range input — MIC Gain is a CycleContextButton
+    // whose slider lives in its context menu — so push the value into the
+    // widget (silent, or we'd echo it straight back to the radio).
+    if (update.property === "MicGain") {
+        const slider = document.getElementById('micGainSlider');
+        const label  = document.getElementById('micGainValue');
+        if (slider) slider.value = update.value;
+        if (label)  label.textContent = update.value;
+        const value = Number(update.value);
+        if (Number.isFinite(value)) {
+            window.micGainCycleButton?.setState?.({ value }, { silent: true });
+        }
     }
 
     // --- FREQUENCY CHANGE ---
@@ -3440,6 +3464,7 @@ window.setApfFreq = setApfFreq;
         if (receiver === 'A' && typeof updateRawSMeterValueA === 'function') updateRawSMeterValueA(value);
         const canvas = document.getElementById(canvasId);
         const sUnit = sMeterLabel(value);
+        if (sUnit == null) return;
         if (canvas) canvas.dataset.reading = sUnit;
         // Update the "S-Meter S5" title label under the gauge (matches SWR /
         // Power / Temp / etc. format). Element is rendered by SMeterGauge

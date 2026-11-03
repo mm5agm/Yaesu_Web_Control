@@ -156,6 +156,23 @@ namespace Yaesu_Web_Control.Services.Voice
         // genuine speech drives the gain; the fast down-ramp still pulls back
         // instantly if a loud sound arrives, so brief noise-driven ramps on a
         // normal mic self-correct.
+        //
+        // Two things stop that ceiling doing harm, and both were learnt from
+        // the same mic once its Windows level had been turned up to a healthy
+        // 35-55% FS:
+        //
+        // 1. The gain follows a peak-hold envelope, not each 50 ms buffer.
+        //    Adapting per buffer meant the pause between two words (noise at
+        //    raw ~500-2000) read as "quiet", the gain wound up to the cap in
+        //    about a second, and the next word arrived at 16000 x 4 - hard
+        //    clipped. SAPI logged "TooLoud" on the onset of nearly every
+        //    utterance and put correctly-heard phrases at 0.2-0.5 confidence.
+        //    The envelope holds the recent speech peak and decays over a few
+        //    seconds, so a pause inside a sentence leaves the gain alone.
+        // 2. A per-buffer limiter: whatever the AGC has settled on, no buffer
+        //    is ever multiplied past ClipCeiling. The first word after a long
+        //    silence is the case the envelope cannot see coming; this is what
+        //    keeps it clean.
         private const int TargetPeak = 10_000; // ~30% FS
         private const int SilenceFloor = 40;   // below this = don't adapt (noise)
         // 120x: even at 60x the Umpire Mic reached only ~9% FS on speech (raw
@@ -164,7 +181,10 @@ namespace Yaesu_Web_Control.Services.Voice
         // discarded before each press, so lifting the noise floor between words
         // is low-risk — noise only matters inside the utterance window.
         private const float MaxGain = 120f;
+        private const int ClipCeiling = 30_000; // ~92% FS, the limiter's hard stop
+        private const float EnvDecay = 0.985f;  // per 50 ms buffer: halves in ~2.3 s
         private float _gain = 3f;
+        private float _env;                     // peak-hold envelope of the raw input
 
         public MicrophoneStream(int deviceNumber, ILogger? logger = null)
         {
@@ -209,33 +229,42 @@ namespace Yaesu_Web_Control.Services.Voice
             }
             if (bufPeak > _peakSinceLog) _peakSinceLog = bufPeak;
 
-            // Adapt the gain toward TargetPeak (only when there's real signal).
-            if (bufPeak > SilenceFloor)
+            // Adapt the gain toward TargetPeak against the held envelope, so a
+            // gap between words is not mistaken for a quiet mic (only when
+            // there's real signal).
+            _env = Math.Max(bufPeak, _env * EnvDecay);
+            if (_env > SilenceFloor)
             {
-                float desired = (float)TargetPeak / bufPeak;
+                float desired = TargetPeak / _env;
                 float rate = desired < _gain ? 0.5f : 0.05f; // fast down, slow up
                 _gain += (desired - _gain) * rate;
                 if (_gain < 1f) _gain = 1f;
                 else if (_gain > MaxGain) _gain = MaxGain;
             }
 
+            // The limiter: this buffer's own peak caps what is applied to it,
+            // so an onset the AGC has not caught up with cannot clip.
+            float applied = bufPeak > 0 ? Math.Min(_gain, (float)ClipCeiling / bufPeak) : _gain;
+
             _totalCaptured += e.BytesRecorded;
             if (_logger != null && DateTime.UtcNow >= _nextLevelLog)
             {
                 _nextLevelLog = DateTime.UtcNow.AddSeconds(1);
-                _logger.LogInformation("[Voice] Mic capture: peak={Peak}/32767, gain={Gain:F1}x, captured={Cap}B read={Read}B",
-                    _peakSinceLog, _gain, _totalCaptured, _totalRead);
+                // Once a second for as long as the mic is open — Debug only.
+                _logger.LogDebug("[Voice] Mic capture: peak={Peak}/32767, gain={Gain:F1}x (applied {Applied:F1}x), captured={Cap}B read={Read}B",
+                    _peakSinceLog, _gain, applied, _totalCaptured, _totalRead);
                 _peakSinceLog = 0;
             }
 
-            // Apply gain into a fresh chunk (hard-clipped to 16-bit).
+            // Apply gain into a fresh chunk (hard-clipped to 16-bit, which the
+            // limiter above means never actually happens).
             var chunk = new byte[e.BytesRecorded];
-            if (_gain > 1.01f)
+            if (applied > 1.01f)
             {
                 for (int i = 0; i + 1 < e.BytesRecorded; i += 2)
                 {
                     short s = (short)(e.Buffer[i] | (e.Buffer[i + 1] << 8));
-                    int v = (int)(s * _gain);
+                    int v = (int)(s * applied);
                     if (v > short.MaxValue) v = short.MaxValue;
                     else if (v < short.MinValue) v = short.MinValue;
                     chunk[i] = (byte)(v & 0xFF);

@@ -98,32 +98,89 @@ export function meterGeometry(frac, lower = LOWER_SCALES.PO) {
 
 // Where the receive passband sits relative to the dial, in Hz. Upper-sideband
 // modes listen above the dial, lower-sideband below, the rest either side.
-// The 100 Hz SSB offset is the conventional low edge of a voice filter; it is
+// Data modes come by the radio's name (DATA-U) or the one the board shows
+// (USB-D); both are upper sideband. The 100 Hz SSB offset is the conventional low edge of a voice filter; it is
 // drawing, not a measurement of any particular radio.
-export function passbandHz(mode, widthHz) {
+// dataCentreHz, when a radio has one, is where its DATA filter is centred
+// from the dial (a Yaesu's DATA SHIFT, 1500 Hz by default): the DATA modes are
+// then drawn around it, not from the 100 Hz edge. Radios without one leave it out.
+export function passbandHz(mode, widthHz, dataCentreHz) {
     const w = Math.max(0, Number(widthHz) || 0);
     const m = String(mode || '').toUpperCase();
     if (!w) return null;
-    if (m === 'USB' || m === 'DATA-U' || m === 'PSK' || m === 'DATA-USB') return { lo: 100, hi: 100 + w };
-    if (m === 'LSB' || m === 'DATA-L' || m === 'DATA-LSB') return { lo: -100 - w, hi: -100 };
+    const c = Number(dataCentreHz) || 0;
+    const upper = m === 'USB' || m === 'DATA-U' || m === 'USB-D' || m === 'PSK' || m === 'DATA-USB';
+    const lower = m === 'LSB' || m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB';
+    if (c > 0 && (m.startsWith('DATA') || m.endsWith('-D'))) {
+        const lo = Math.max(100, c - w / 2), hi = c + w / 2;
+        if (upper) return { lo, hi };
+        if (lower) return { lo: -hi, hi: -lo };
+    }
+    if (upper) return { lo: 100, hi: 100 + w };
+    if (lower) return { lo: -100 - w, hi: -100 };
     return { lo: -w / 2, hi: w / 2 };
 }
 
-// The same passband as percentages of a span centred on the dial, clipped to
-// the screen. Returns null when there is nothing to draw.
-export function passbandPercent(mode, widthHz, spanHz) {
-    const pb = passbandHz(mode, widthHz);
+// The same passband as percentages of the span, clipped to the screen.
+// Returns null when there is nothing to draw. viewOffsetHz is how far the
+// span's centre sits from the dial (setViewOffset on the panes); 0, the
+// span is centred on the dial.
+export function passbandPercent(mode, widthHz, spanHz, dataCentreHz, viewOffsetHz = 0) {
+    const pb = passbandHz(mode, widthHz, dataCentreHz);
     const span = Number(spanHz) || 0;
     if (!pb || span <= 0) return null;
-    let left = 50 + pb.lo / span * 100;
-    let right = 50 + pb.hi / span * 100;
+    const off = Number(viewOffsetHz) || 0;
+    let left = 50 + (pb.lo - off) / span * 100;
+    let right = 50 + (pb.hi - off) / span * 100;
     left = Math.max(0, Math.min(100, left));
     right = Math.max(0, Math.min(100, right));
     if (right - left <= 0) return null;
     return { left, width: right - left };
 }
 
-// Axis labels for a span centred on the dial, in kHz: five evenly spaced.
+// The frequency under a point a fraction (0 left, 1 right) of the way across
+// a span centred on the dial, or a DX spot's own frequency when one is within
+// snapHz of it - what a click there tunes to. Null until there is a span and
+// a dial.
+export function spectrumHzAt(frac, centreHz, spanHz, spots = [], snapHz = 0) {
+    const c = Number(centreHz) || 0, s = Number(spanHz) || 0;
+    if (!(c > 0 && s > 0)) return null;
+    const f = Math.max(0, Math.min(1, Number(frac) || 0));
+    let hz = Math.round(c + (f - 0.5) * s), spot = null, best = snapHz;
+    for (const sp of spots ?? []) {
+        const gap = Math.abs(sp.hz - hz);
+        if (gap <= best) { best = gap; spot = sp; }
+    }
+    if (spot) hz = spot.hz;
+    return { hz, frac: f, spot };
+}
+
+// Where the fine line at the middle of the DATA filter sits, in percent of a
+// span whose centre is viewOffsetHz from the dial: dataCentreHz above the dial
+// in DATA-U, below it in DATA-L - where Auto and a click on Mark 1415 / 170
+// put the pair (#250). Null in other modes, whose passband is centred on the
+// dial line already, and while it is off the screen.
+export function passbandCentrePercent(mode, spanHz, dataCentreHz, viewOffsetHz = 0) {
+    const m = String(mode || '').toUpperCase(), c = Number(dataCentreHz) || 0;
+    const span = Number(spanHz) || 0;
+    if (c <= 0 || span <= 0) return null;
+    const upper = m === 'DATA-U' || m === 'USB-D' || m === 'DATA-USB';
+    const lower = m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB';
+    if (!upper && !lower) return null;
+    const x = 50 + ((upper ? c : -c) - (Number(viewOffsetHz) || 0)) / span * 100;
+    return x >= 0 && x <= 100 ? x : null;
+}
+
+// Where the dial's line sits across a span whose centre is viewOffsetHz from
+// the dial, in percent; null while it is off the screen.
+export function dialPercent(viewOffsetHz, spanHz) {
+    const span = Number(spanHz) || 0;
+    if (span <= 0) return 50;
+    const x = 50 - (Number(viewOffsetHz) || 0) / span * 100;
+    return x >= 0 && x <= 100 ? x : null;
+}
+
+// Axis labels for a span centred on centreHz, in kHz: five evenly spaced.
 export function axisLabels(centreHz, spanHz, count = 5) {
     const c = Number(centreHz) || 0, s = Number(spanHz) || 0;
     const lo = c - s / 2;
@@ -230,6 +287,35 @@ export function alignBins(bins, offsetHz, spanHz) {
         out[i] = k >= 0 && k < n ? bins[k] : floor;
     }
     return out;
+}
+
+// A fixed spectrum: the screen stays on the RF it shows while the dial moves
+// inside it, so a station keeps its place and the operator can find it again
+// by where it sits (Bruce VK2RT, 2026-10-28). `held` is the last answer, or
+// null; `wantedHz` is the view offset the pane would have centred
+// (setViewOffset). The screen moves only when there is no held centre, the
+// span changed, or what would be centred has gone more than `edge` of the
+// span from the middle - off the screen, a band change or a jump along it.
+// `edge` is half the span, the screen's own edge, as Bruce asked on #250
+// (2026-10-29); it was 0.35, which moved the picture with the dial in the
+// outer 15%, and his fallback was about 5% in from the edge (0.45). Returns
+// the new held centre and the view offset that draws it.
+//
+// Tuned off an edge, the screen turns a page rather than re-centring: the
+// dial comes back in at the opposite side, `lead` of the span in from it, so
+// tuning up the band carries on from left to right (Bruce VK2RT, #250,
+// 2026-10-31). A jump of more than a span past the edge - a band change, a
+// typed frequency, a spot - is not tuning, and centres as before.
+export function holdView(held, dialHz, wantedHz, spanHz, edge = 0.5, lead = 0.1) {
+    const dial = Number(dialHz) || 0;
+    const span = Number(spanHz) || 0;
+    const wanted = dial + (Number(wantedHz) || 0);
+    const same = held && span > 0 && held.spanHz === span;
+    const away = same ? wanted - held.centreHz : 0;
+    let centreHz = wanted;
+    if (same && Math.abs(away) <= edge * span) centreHz = held.centreHz;
+    else if (same && Math.abs(away) <= (edge + 1) * span) centreHz = wanted + Math.sign(away) * Math.max(0, edge - lead) * span;
+    return { centreHz, spanHz: span, viewHz: centreHz - dial };
 }
 
 // Needle positions for the TX meters, matching LOWER_SCALES' five legends at

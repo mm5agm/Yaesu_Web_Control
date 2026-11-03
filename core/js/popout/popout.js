@@ -126,19 +126,35 @@ export function featuresFor(geom) {
  * page area in screen units, so outer size minus that is the frame, and
  * outer size minus the frame is the page area at any zoom.
  *
+ * A window asked to be taller (or wider) than its screen is made smaller by
+ * the browser, and that side's sum comes out wrong. The other side, given
+ * the size asked for, still says how many CSS pixels the zoom puts in each
+ * screen unit, and with that the inner size gives the short side's frame.
+ * Without that, every open on a short screen fell back to the default size,
+ * which did not fit either, so the size was never remembered.
+ *
  * Pure, so it can be tested.
  *
  * @param {{width:number,height:number}} outer  outerWidth / outerHeight on load
  * @param {{width:number,height:number}|null} req  what window.open was asked for
+ * @param {{width:number,height:number}} [inner]  innerWidth / innerHeight on load
  * @returns {{w:number,h:number}|null}
  */
-export function frameFrom(outer, req) {
+export function frameFrom(outer, req, inner) {
     if (!req || !outer) return null;
-    const w = Math.round(Number(outer.width)  - Number(req.width));
-    const h = Math.round(Number(outer.height) - Number(req.height));
-    if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
-    if (w < 0 || h < 0 || w > MAX_FRAME || h > MAX_FRAME) return null;
-    return { w, h };
+    const ok = v => Number.isFinite(v) && v >= 0 && v <= MAX_FRAME;
+    let w = Math.round(Number(outer.width)  - Number(req.width));
+    let h = Math.round(Number(outer.height) - Number(req.height));
+    if (ok(w) && ok(h)) return { w, h };
+    if (!inner || ok(w) === ok(h)) return null;
+    // One side was given its size: CSS pixels per screen unit from that side.
+    const zoom = ok(w)
+        ? Number(inner.width)  / (Number(outer.width)  - w)
+        : Number(inner.height) / (Number(outer.height) - h);
+    if (!Number.isFinite(zoom) || zoom <= 0) return null;
+    if (ok(w)) h = Math.round(Number(outer.height) - Number(inner.height) / zoom);
+    else       w = Math.round(Number(outer.width)  - Number(inner.width)  / zoom);
+    return ok(w) && ok(h) ? { w, h } : null;
 }
 
 /**
@@ -197,6 +213,22 @@ function readGeometry(name) {
 function writeGeometry(name, geom) {
     try { localStorage.setItem(GEOM_PREFIX + name, JSON.stringify(geom)); }
     catch { /* private browsing or storage off: the next open uses the default */ }
+}
+
+/**
+ * Where a pop-out was last left - { left, top, width, height, ... } - or
+ * null. An open pop-out keeps it up to date every two seconds, so a page
+ * can save it with its own layout and put it back with setPopoutPlace
+ * before the next open().
+ */
+export function popoutPlace(name) {
+    const g = readGeometry(name);
+    return g && typeof g === 'object' ? g : null;
+}
+
+/** Where the next open() of this pop-out puts it. See popoutPlace. */
+export function setPopoutPlace(name, geom) {
+    if (geom && typeof geom === 'object') writeGeometry(name, geom);
 }
 
 function makeChannel(name) {
@@ -521,7 +553,8 @@ export class PopoutChild {
                 req = readJson(localStorage, REQ_PREFIX + this._name);
                 localStorage.removeItem(REQ_PREFIX + this._name);
             } catch { /* storage off */ }
-            this._frame = frameFrom({ width: window.outerWidth, height: window.outerHeight }, req);
+            this._frame = frameFrom({ width: window.outerWidth, height: window.outerHeight }, req,
+                { width: window.innerWidth, height: window.innerHeight });
             if (this._frame) {
                 try { sessionStorage.setItem(FRAME_KEY, JSON.stringify(this._frame)); } catch { /* ignore */ }
             }

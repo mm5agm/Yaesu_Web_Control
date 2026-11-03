@@ -21,6 +21,8 @@ using System.Windows.Forms;
 if (OperatingSystem.IsMacOS())
     Environment.SetEnvironmentVariable("OPENCV_AVFOUNDATION_SKIP_AUTH", "1");
 
+LaunchPage.ReadFrom(args);
+
 // ── Single-instance guard ────────────────────────────────────────────────────
 const string MutexName = "Global\\Yaesu_Web_Control_SingleInstance";
 var mutex = new Mutex(initiallyOwned: true, name: MutexName, out bool createdNew);
@@ -39,7 +41,7 @@ if (!createdNew)
     catch { others = Array.Empty<Process>(); }
 
     int existingPort = LoadConfiguredHttpPort();
-    string url = $"http://localhost:{existingPort}";
+    string url = LaunchPage.At($"http://localhost:{existingPort}");
     string who = others.Length > 0
         ? $"(process ID {string.Join(", ", others.Select(p => p.Id))})"
         : "(its window may be minimised to the system tray)";
@@ -508,8 +510,32 @@ builder.Services.AddHostedService<RigctldServer>();
 builder.Services.AddSingleton<ISettingsService, SettingsService>();
 
 // Named Flex UI workspace arrangements (flex-layouts.json). Kept out of
-// ApplicationSettings deliberately — see FlexLayoutStore for why.
-builder.Services.AddSingleton<Yaesu_Web_Control.Services.Flex.IFlexLayoutStore, Yaesu_Web_Control.Services.Flex.FlexLayoutStore>();
+// ApplicationSettings deliberately — see FlexLayoutStore for why. The store is
+// in core (shared with Icom Web Control), so this app hands it the path and a
+// logger to report through.
+builder.Services.AddSingleton<RadioWebControl.Core.Services.Flex.IFlexLayoutStore>(sp =>
+{
+    var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("FlexLayoutStore");
+    return new RadioWebControl.Core.Services.Flex.FlexLayoutStore(
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MM5AGM", "Yaesu Web Control", "flex-layouts.json"),
+        msg => log.LogWarning("{Message}", msg));
+});
+
+// The RTTY Contest view's named layouts (rtty-contest-layouts.json): the same
+// store in a file of its own, so its layouts and Experimental's never mix.
+// RttyContestLayoutController asks for it by this key.
+builder.Services.AddKeyedSingleton<RadioWebControl.Core.Services.Flex.IFlexLayoutStore>(
+    Yaesu_Web_Control.Controllers.RttyContestLayoutController.StoreKey, (sp, _) =>
+{
+    var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("RttyContestLayoutStore");
+    return new RadioWebControl.Core.Services.Flex.FlexLayoutStore(
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MM5AGM", "Yaesu Web Control", "rtty-contest-layouts.json"),
+        msg => log.LogWarning("{Message}", msg));
+});
 
 // Remote radio audio (browser ↔ USB) — opt-in; devices open only while a client is connected.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManager>();
@@ -527,6 +553,8 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwQsoLogService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderModeService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwAutoService>();
+// Paddle keying from a browser (dry run: logs only, never opens a port).
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwKeyingService>();
 // RTTY tuning scope: takes its own capture hold on the bridge while its dialog is open.
 // The mode service is a singleton for the reason CwReaderModeService is - it holds
 // what the operator had before the tuner touched it, and a per-request copy would
@@ -784,8 +812,15 @@ try
     // revalidates it, so an unchanged file costs one conditional GET answered
     // with a 304 and no body. On a localhost or LAN app that is free, and it is
     // the price of never shipping a fix that fails to arrive.
+    //
+    // .bin is added for the paddle adapter's firmware (wwwroot/firmware), which
+    // the CW Paddle page's Install / Update box fetches: an unknown type is
+    // otherwise a 404.
+    var staticTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+    staticTypes.Mappings[".bin"] = "application/octet-stream";
     app.UseStaticFiles(new StaticFileOptions
     {
+        ContentTypeProvider = staticTypes,
         OnPrepareResponse = ctx =>
         {
             ctx.Context.Response.Headers.CacheControl = "no-cache, must-revalidate";
@@ -886,6 +921,22 @@ try
             sdr.RequestRestart(target);
         return Results.Ok();
     });
+
+    // FIXED on RTTY Contest: how far (RF Hz) the held picture sits from the
+    // usual centre, so the SDR crop is cut around what the pane shows and not
+    // around the dial. Without it a held view runs off the crop and the edge
+    // is blank (Bruce VK2RT, Discussion #250, 2026-10-29). 0 puts it back.
+    app.MapPost("/api/sdr/hold", async (
+        [Microsoft.AspNetCore.Mvc.FromQuery] long rfHz,
+        [Microsoft.AspNetCore.Mvc.FromQuery] string? sdrId,
+        Yaesu_Web_Control.Services.Sdr.SdrManager sdr) =>
+    {
+        var target = (sdrId ?? "A").ToUpperInvariant();
+        if (target != "A" && target != "B") return Results.BadRequest("sdrId must be A or B.");
+        if (Math.Abs(rfHz) > 1_000_000) return Results.BadRequest("rfHz out of range.");
+        await sdr.SetHoldAsync(target, rfHz);
+        return Results.Ok();
+    });
 #endif
 
     // Open browser automatically when app starts (but not when debugging in Visual Studio)
@@ -902,7 +953,7 @@ try
 
     lifetime.ApplicationStarted.Register(() =>
     {
-        browserLauncher.OpenOnce(portInfo.RootUrl);
+        browserLauncher.OpenOnce(LaunchPage.At(portInfo.RootUrl));
     });
 
 #if !WINDOWS

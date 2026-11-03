@@ -1084,6 +1084,9 @@ async function checkTxStatus() {
 const connection = window.rwcHubConnection("/radioHub");
 
 // Redirect to Settings page if the backend signals an init failure
+// What the CW Paddle page sent, for the CW Send log.
+connection.on("CwPaddleText", (text, live) => window.cwSendPanel?.paddleText?.(text, live));
+
 connection.on("ShowSettingsPage", function () {
     window.location.href = "/Settings";
 });
@@ -1180,7 +1183,11 @@ connection.on("FrequencyRejected", function (info) {
 
 
 function sMeterLabel(val) {
-    return window.calibrationEngine.calibrateSMeterLabel(val);
+    // The engine is set by a module script in the layout, and module scripts
+    // run after this classic one, so the first SignalR update can arrive
+    // before it exists. null tells updateSMeter to leave the label for the
+    // next reading rather than throw.
+    return window.calibrationEngine?.calibrateSMeterLabel?.(val) ?? null;
 }
 
 
@@ -1416,6 +1423,19 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "ProcLevel") {
         const slider = document.getElementById('procLevelSlider');
         const label  = document.getElementById('procLevelValue');
+        if (slider) slider.value = update.value;
+        if (label)  label.textContent = update.value;
+    }
+
+    // --- MIC GAIN ---
+    // Front-panel MIC GAIN changes arrive as MG; auto-information, the
+    // dispatcher stores them in RadioStateService and the hub broadcasts
+    // "MicGain" — but nothing on this page was listening, so the Power /
+    // MIC Gain row's slider stayed put while the radio moved (linux150 #228).
+    // The value was correct in Diagnostics, which is what pointed here.
+    if (update.property === "MicGain") {
+        const slider = document.getElementById('micGainSlider');
+        const label  = document.getElementById('micGainValue');
         if (slider) slider.value = update.value;
         if (label)  label.textContent = update.value;
     }
@@ -3411,6 +3431,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (receiver === 'A' && typeof updateRawSMeterValueA === 'function') updateRawSMeterValueA(value);
         const canvas = document.getElementById(canvasId);
         const sUnit = sMeterLabel(value);
+        if (sUnit == null) return;
         if (canvas) canvas.dataset.reading = sUnit;
         // Update the "S-Meter S5" title label under the gauge (matches SWR /
         // Power / Temp / etc. format). Element is rendered by SMeterGauge

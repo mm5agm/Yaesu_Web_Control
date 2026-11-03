@@ -164,6 +164,7 @@ namespace RadioWebControl.Core.Services.Cw
         private readonly StringBuilder _pending = new();
         private const int PendingCap = 64;
         private double _badSinceSeconds = double.NaN;
+        private double _pendingAtSeconds;
         private double _nowSeconds;
 
         // Phasor points for the tuning aid, kept in a ring the UI drains at its
@@ -351,6 +352,18 @@ namespace RadioWebControl.Core.Services.Cw
         /// </summary>
         private string Gate(string produced)
         {
+            // Held text that nothing has followed for HoldStaleSeconds belongs
+            // to the silence before this, not to what is starting now. The
+            // stale clock below cannot see it, because between overs the
+            // windows empty and there is no verdict to run it on - so noise
+            // dits kept piling up in the quiet and came out in front of the
+            // next CQ. Measured on bench/iwc-2way-test-1642z-5min.wav: "EEE EE"
+            // held 7.7 s, "SEE" about 15 s. Within an over characters follow
+            // one another far faster than this, even at 5 WPM Farnsworth.
+            if (_pending.Length > 0 && _nowSeconds - _pendingAtSeconds > _opt.HoldStaleSeconds)
+                _pending.Clear();
+            if (produced.Length > 0) _pendingAtSeconds = _nowSeconds;
+
             if (_elements.Readability == CwReadability.Readable && _signalPresent)
             {
                 _badSinceSeconds = double.NaN;

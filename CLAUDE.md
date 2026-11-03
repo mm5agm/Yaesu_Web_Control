@@ -69,6 +69,31 @@ flag it if you think `rules.md` should be extended to cover them explicitly.
 6. Pushing to `origin`, tagging, releasing, and opening PRs all need Colin's
    explicit word, as before.
 
+### Claude: the connected radio - change anything, never transmit
+
+Colin gave standing permission on 2026-10-22 for Claude to change any receive
+or operating setting on the connected radio while testing, through the running
+YWC (its API, its pages or the UI tests): frequency, band, mode, VFO, split,
+filters and widths, IF shift/width, AGC, NR/NB/notch, preamp (IPO) and
+attenuator, AF/RF/SQL, clarifier, scope span and mode, memory recall, and
+stored levels such as RF power, mic gain and processor. Restore what you
+changed when you finish, and say what you changed.
+
+**Never transmit.** No exceptions, and not to "just check" something. That rules
+out:
+
+- `/api/cat/tx` (PTT), `/api/cat/atu/tune` (the tuner keys the radio),
+  `/api/cat/cw/send` and `/api/cat/cw/messages` (keyer and message playback),
+  anything that sends audio to the transmitter, and switching VOX on;
+- raw CAT that keys the radio: `TX1;`/`TX2;`, `AC002;` (tune), `KY…;`
+  (keyer playback), `PB…;` (voice message playback), sent by any route;
+- WSJT-X or any other program's TX path through YWC.
+
+Also leave alone: `/api/cat/radiopower` (do not switch the radio off), and
+writing or clearing memory channels or keyer memories (`PUT cw/keyer/{slot}`);
+ask first. Choosing the TX VFO or split is fine; it does not transmit. If you
+are not sure whether something keys the radio, do not do it: ask Colin.
+
 ### Issue triage: minor vs serious, and who closes an issue
 
 Pre-releases are batched — one is cut for something serious, or once four
@@ -163,10 +188,10 @@ that gets missed.
 ./scripts/core-sync.ps1 -Pull    # bring the sibling's core work down
 ```
 
-`-Push` refuses on a dirty tree, because `git subtree split` only sees
-committed content and would silently leave uncommitted `core/` work behind.
-The split walks the whole repo history and prints nothing for a couple of
-minutes; it is not hung.
+`-Push` refuses on a dirty tree, because only committed content is sent and
+uncommitted `core/` work would silently be left behind. It merges core main
+into `core/`, then sends `core/` up as one commit on top of core main, naming
+the app commits it carries. Seconds; it does not use `git subtree split`.
 
 ### Claude: your standing instructions
 
@@ -286,6 +311,24 @@ pages, pop-outs or `core/js`. The browser driver it uses is shared, in
 `Tests/test-api.ps1` is a separate, manual API-poking script — not part of
 the automated suite.
 
+**Running with no radio.** Start YWC with `YWC_USE_STUB_RADIO=1` and
+`CatMultiplexerService` talks to `Services/StubRadio.cs` instead of opening
+the COM port; the log says `STUB RADIO` at connect. The stub stands in for
+whatever model Settings names. It answers reads with real FTdx101MP values,
+keeps every set so it reads back, reports sets back under AI1, and goes
+silent after PS0 until PS1. It is a CAT-level stand-in, not a model of the
+radio: menus (`EX`) and anything it has no value for answer `?;`, and the
+SDR spectrum, USB audio and TFT video still need the hardware. Use it for
+page, layout, HTTP and SignalR work; anything about how a real radio
+answers still has to be checked on one.
+
+```bash
+YWC_USE_STUB_RADIO=1 dotnet run --no-build --framework net10.0-windows --project Yaesu_Web_Control.csproj
+```
+
+The seam is `ICatTransport` (`Services/CatTransport.cs`): the COM port is
+`SerialCatTransport`, the stub is the other implementation.
+
 ---
 
 ## Release Process
@@ -389,6 +432,11 @@ Remote Video in the standing instructions above.
   directly in `core/` on `feature/cw-reader`, not migrated in after the fact.
   This is the model to follow going forward: build shared work in `core/`
   from the start rather than writing it locally and moving it later.
+- `js/flex/*`, `Services/Flex/FlexLayoutStore.cs`, `Models/FlexLayout.cs` —
+  the Experimental UI's dock shell and its named-layout store, shared with
+  IWC since 2026-10-16. YWC's `wwwroot/js/flexui/flex-workspace.js` is now a
+  thin config wrapper (panels, layout file, `ywc.flexui.` storage prefix);
+  everything else under `wwwroot/js/flexui/` is still YWC's own fork.
 - `js/audio/*` — the transport-layer JS for Remote Audio (session, protocol,
   capture, playback) is already shared. The C# side (`Services/Audio/`)
   isn't yet — treat it as a candidate on next touch, not something to
@@ -422,8 +470,10 @@ that gets missed.
 ./scripts/core-sync.ps1 -Pull    # bring IWC's core work down
 ```
 
-`-Push` refuses on a dirty tree, because `git subtree split` only sees
-committed content and would silently leave uncommitted `core/` work behind.
+`-Push` refuses on a dirty tree, because only committed content is sent and
+uncommitted `core/` work would silently be left behind. It merges core main
+into `core/`, then sends `core/` up as one commit on top of core main, naming
+the app commits it carries. Seconds; it does not use `git subtree split`.
 
 Never author feature changes to `core/` in a standalone clone of
 `Radio_Web_Control_Core` — a standalone clone isn't compiled against a real

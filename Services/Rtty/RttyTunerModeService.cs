@@ -26,11 +26,14 @@ namespace Yaesu_Web_Control.Services.Rtty
     /// <para><b>Two deliberate restraints</b>, both narrower than the CW
     /// equivalent:</para>
     ///
-    /// <para>1. <i>Opening the tuner puts the radio in RTTY</i> from any mode
-    /// that is not already one of its FSK modes - see <see cref="NeedsSwitching"/>.
+    /// <para>1. <i>Opening the tuner puts the radio in the operator's RTTY
+    /// mode</i> (<see cref="ApplicationSettings.RttyTunerMode"/>) from any other
+    /// mode - see <see cref="NeedsSwitching"/>.
     /// Until 2026-10-13 SSB and DATA were left alone for AFSK; Colin asked for
     /// RTTY on open, and an AFSK operator who wants the radio left alone turns
-    /// <see cref="ApplicationSettings.RttyTunerSetMode"/> off.</para>
+    /// <see cref="ApplicationSettings.RttyTunerSetMode"/> off. Since 2026-10-26
+    /// an AFSK operator can choose DATA-L or DATA-U instead, which Bruce VK2RT
+    /// asked for: the tuner then puts the radio in DATA and holds it there.</para>
     ///
     /// <para>2. <i>The filter is sized to the signal.</i> The narrowest rung
     /// at or above the floor <see cref="RttyIfWidth"/> computes, wider or
@@ -51,8 +54,8 @@ namespace Yaesu_Web_Control.Services.Rtty
     public sealed class RttyTunerModeService
     {
         /// <summary>
-        /// The mode the switch goes to: RTTY normal, the one the UI calls
-        /// "RTTY-L".
+        /// The mode the switch goes to unless the operator has chosen another:
+        /// RTTY normal, the one the UI calls "RTTY-L".
         ///
         /// Not RTTY-U (RTTY-R). Which of the two is right depends on the station,
         /// and the tuner already has a Reverse control for that; starting from
@@ -60,6 +63,35 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// the mark and shift defaults are the normal-mode ones.
         /// </summary>
         public const string RttyMode = "RTTY-L";
+
+        /// <summary>
+        /// The modes an operator can choose for RTTY: the radio's two FSK modes,
+        /// and the two DATA modes AFSK software uses.
+        /// </summary>
+        public static readonly IReadOnlyList<string> Modes = ["RTTY-L", "RTTY-U", "DATA-L", "DATA-U"];
+
+        /// <summary>One of <see cref="Modes"/>, spelled as listed there, or null.</summary>
+        public static string? Normalise(string? mode) =>
+            Modes.FirstOrDefault(m => string.Equals(m, mode?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>The mode the tuner switches to and holds.</summary>
+        public static string TargetMode(ApplicationSettings settings) =>
+            Normalise(settings.RttyTunerMode) ?? RttyMode;
+
+        private static bool IsData(string? mode) =>
+            string.Equals(mode, "DATA-L", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(mode, "DATA-U", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Whether <paramref name="mode"/> is the same kind as
+        /// <paramref name="target"/>: both FSK, or both DATA. Either sideband
+        /// will do, as it always has for FSK: which one is right depends on the
+        /// station, and the tuner's Reverse is for that.
+        /// </summary>
+        public static bool SameKind(string? mode, string target) =>
+            IsData(target)
+                ? IsData(mode)
+                : RttyMarkCentre.SidebandForFskMode(mode) is not null;
 
         /// <summary>
         /// How wide Auto listens. A filter left narrow from the last signal - or
@@ -79,6 +111,7 @@ namespace Yaesu_Web_Control.Services.Rtty
         private readonly RadioStateService _state;
         private readonly ISettingsService _settings;
         private readonly RttyRadioToneService _tones;
+        private readonly IBandPlanService _bands;
         private readonly ILogger<RttyTunerModeService> _logger;
 
         // One at a time. Ensuring and restoring both read the radio, decide from
@@ -88,10 +121,10 @@ namespace Yaesu_Web_Control.Services.Rtty
 
         private Saved? _saved;
 
-        // The FSK mode the tuner is operating in and will put back if something
-        // else moves the radio out of it - null when the tuner is not holding
-        // the mode at all, which is every AFSK session: there the mode is the
-        // operator's software's business and nothing here may touch it.
+        // The mode the tuner is operating in and will put back if something
+        // else moves the radio out of its kind - null when the tuner is not
+        // holding the mode at all, which is every session with
+        // RttyTunerSetMode off: there the mode is the operator's business.
         private string? _heldMode;
 
         // The mark, shift and speed the filter was last sized for. Every poll of
@@ -101,11 +134,24 @@ namespace Yaesu_Web_Control.Services.Rtty
         // same signal, so a repeat start asks it nothing.
         private (double Mark, int Shift, double Baud, bool Reverse)? _sizedFor;
 
+        // The operator set the IF width by hand while the tuner held the
+        // radio. Bruce VK2RT, Discussion #257: the WIDTH he chose on RTTY
+        // Contest kept being undone, by the sizing on the next start and by
+        // the restore on the way out. From then until the tuner closes the
+        // width is his, and closing leaves it where he put it.
+        private bool _widthByHand;
+
+        // The tones the tuner last started on, so that AUTO on WIDTH can size
+        // the filter again there and then (ForgetWidthAsync). Unlike
+        // _sizedFor, nothing else clears it.
+        private (double Mark, int Shift, double Baud, bool Reverse)? _lastTones;
+
         public RttyTunerModeService(ICatClient cat,
                                     CatMultiplexerService mux,
                                     RadioStateService state,
                                     ISettingsService settings,
                                     RttyRadioToneService tones,
+                                    IBandPlanService bands,
                                     ILogger<RttyTunerModeService> logger)
         {
             _cat = cat;
@@ -113,6 +159,7 @@ namespace Yaesu_Web_Control.Services.Rtty
             _state = state;
             _settings = settings;
             _tones = tones;
+            _bands = bands;
             _logger = logger;
         }
 
@@ -128,10 +175,11 @@ namespace Yaesu_Web_Control.Services.Rtty
         public bool IsOn => _saved is not null;
 
         /// <summary>
-        /// The FSK mode being held for as long as the tuner runs, or null if
+        /// The mode being held for as long as the tuner runs, or null if
         /// none is. Read without the gate on purpose: it is a single reference
-        /// and the only caller is deciding whether a re-assert is worth a task
-        /// at all, which <see cref="ReassertAsync"/> then re-checks properly.
+        /// and its callers only decide whether a re-assert is worth a task at
+        /// all, which <see cref="ReassertAsync"/> then re-checks properly, or
+        /// whether Auto's wrong-mode note applies.
         /// </summary>
         public string? HeldMode => _heldMode;
 
@@ -169,6 +217,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 if (!_cat.IsConnected) return null;
                 if (_saved is not null && _sizedFor == (markHz, shiftHz, baud, reverse)) return null;
 
+                string target = TargetMode(settings);
                 string? switched = null;
                 if (_saved is null)
                 {
@@ -188,12 +237,12 @@ namespace Yaesu_Web_Control.Services.Rtty
                         mode, string.IsNullOrWhiteSpace(code) ? "unknown" : code,
                         WidthHz(settings, mode, code) is { } hz ? hz + " Hz" : "unknown");
 
-                    if (NeedsSwitching(mode))
+                    if (NeedsSwitching(mode, target))
                     {
-                        await SetModeAsync(RttyMode, ct);
-                        switched = $"Mode set to {RttyMode}.";
+                        await SetModeAsync(target, ct);
+                        switched = $"Mode set to {target}.";
                         _logger.LogInformation(
-                            "RTTY tuner: mode {From} set to {To}", mode, RttyMode);
+                            "RTTY tuner: mode {From} set to {To}", mode, target);
                     }
                 }
 
@@ -202,17 +251,25 @@ namespace Yaesu_Web_Control.Services.Rtty
                 // for the mode the radio is about to leave. The mode change also
                 // brings the radio's own stored RTTY width with it, which is the
                 // width this then judges.
-                var sized = await SizeFilterAsync(settings, markHz, shiftHz, baud, reverse, ct);
+                // A width the operator chose for this mode is used instead of
+                // the one worked out, and a width chosen this session is left
+                // alone altogether.
+                // Failing that, the width the operator's RTTY setup gives the band.
+                string? sized = null;
+                if (KeptWidth(settings, _state.ModeA, BandNow()) is { } kept)
+                    sized = await PutKeptWidthAsync(settings, kept, ct);
+                else if (!_widthByHand && SetupWidth(settings) is { } setup)
+                    sized = await PutKeptWidthAsync(settings, setup, ct, fromSetup: true);
+                else if (!_widthByHand)
+                    sized = await SizeFilterAsync(settings, markHz, shiftHz, baud, reverse, ct);
                 _sizedFor = (markHz, shiftHz, baud, reverse);
+                _lastTones = _sizedFor;
 
-                // What to hold. The mode the radio is in now, if it is one of
-                // the radio's own FSK modes - which is either the one just
-                // written or one it was already in. An AFSK session holds
-                // nothing: RTTY-L would be the wrong answer there, and the
-                // operator did not ask for it.
-                _heldMode = RttyMarkCentre.SidebandForFskMode(_state.ModeA) is not null
-                    ? _state.ModeA
-                    : null;
+                // What to hold. The mode the radio is in now, if it is the
+                // kind the operator chose - which is either the one just
+                // written or one it was already in. Anything else, which only
+                // a mode the switch could not write leaves, holds nothing.
+                _heldMode = SameKind(_state.ModeA, target) ? _state.ModeA : null;
 
                 return Join(switched, sized);
             }
@@ -223,7 +280,7 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// Open the filter to <see cref="ListenWidthHz"/> for Auto's listen.
         /// Returns the SH code it was at, for <see cref="EndListeningAsync"/>, or
         /// null when nothing was changed - the tuner is not running, the radio is
-        /// not in RTTY, or the filter is already wide enough.
+        /// not in RTTY or DATA, or the filter is already wide enough.
         /// </summary>
         public async Task<string?> BeginListeningAsync(CancellationToken ct = default)
         {
@@ -233,7 +290,7 @@ namespace Yaesu_Web_Control.Services.Rtty
             {
                 if (_saved is null || !_cat.IsConnected) return null;
                 string mode = _state.ModeA ?? "";
-                if (RttyMarkCentre.SidebandForFskMode(mode) is null) return null;
+                if (RttyMarkCentre.SidebandForMode(mode) is null) return null;
 
                 var settings = await _settings.GetSettingsAsync();
                 string? was = _state.IfWidthA;
@@ -275,13 +332,14 @@ namespace Yaesu_Web_Control.Services.Rtty
 
         /// <summary>
         /// Where Auto should put the middle of the tone pair: this radio's
-        /// passband centre, or null when the tuner is not holding an FSK mode.
+        /// passband centre, or null when the tuner is not holding an FSK or DATA
+        /// mode. In DATA that is the model's DATA carrier point, not a menu read.
         /// Also lets the next start size the filter afresh for the moved pair.
         /// </summary>
         public async Task<double?> CentreForAutoAsync(CancellationToken ct = default)
         {
             string? mode = _state.ModeA;
-            if (_saved is null || RttyMarkCentre.SidebandForFskMode(mode) is null) return null;
+            if (_saved is null || RttyMarkCentre.SidebandForMode(mode) is null) return null;
             _sizedFor = null;
             return await PassbandCentreAsync(mode, ct);
         }
@@ -315,8 +373,9 @@ namespace Yaesu_Web_Control.Services.Rtty
 
                 // Width after mode, and only when it was read: a missing code is
                 // "could not read it", and writing a guess would be inventing a
-                // filter nobody chose.
-                if (int.TryParse(saved.IfWidthCode, out int code))
+                // filter nobody chose. Not when the operator set one by hand
+                // while the tuner was open: that one is theirs to keep.
+                if (!_widthByHand && int.TryParse(saved.IfWidthCode, out int code))
                 {
                     string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
                     await _cat.SendCommandAsync(
@@ -330,10 +389,173 @@ namespace Yaesu_Web_Control.Services.Rtty
                 _saved = null;
                 _sizedFor = null;
                 _heldMode = null;
+                bool byHand = _widthByHand;
+                _widthByHand = false;
                 _logger.LogInformation("RTTY tuner: restored mode {Mode}, IF width code {Code}",
-                                       saved.Mode, saved.IfWidthCode ?? "none");
+                                       saved.Mode, byHand ? "left as set by hand" : saved.IfWidthCode ?? "none");
             }
             finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// The operator has set VFO A's IF width by hand, to the SH code
+        /// <paramref name="code"/>. While MAIN is in the RTTY mode (the tuner's
+        /// while it holds the radio, the one chosen in Settings otherwise) that
+        /// width is kept for the band and mode it was set in, and used each time
+        /// the tuner starts there and after each band key (BandChangedAsync),
+        /// instead of the width the tuner would work out. Kept for the band,
+        /// not the mode, and with the tuner closed too, since Bruce VK2RT, #250
+        /// 2026-11-01: a width set on one band followed him to every other. In
+        /// any other mode it means nothing here.
+        /// </summary>
+        public async Task WidthSetByHandAsync(string code, CancellationToken ct = default)
+        {
+            if (!int.TryParse(code, out _)) return;
+            string mode = _state.ModeA ?? "";
+            var settings = await _settings.GetSettingsAsync();
+            if (!SameKind(mode, _saved is null ? TargetMode(settings) : _heldMode ?? "")) return;
+
+            if (_saved is not null) _widthByHand = true;
+            string band = BandNow();
+            settings.RttyTunerWidths[WidthKey(settings, mode, band)] = code;
+            await _settings.SaveSettingsAsync(settings);
+            _logger.LogInformation("RTTY tuner: IF width code {Code} set by hand in {Mode} on {Band}, kept", code, mode, band);
+        }
+
+        /// <summary>
+        /// The mode MAIN is in, and the width kept for it as an SH code - null
+        /// when the tuner works the width out itself. For WIDTH's AUTO key.
+        /// </summary>
+        public async Task<(string Mode, string? Code)> KeptWidthNowAsync()
+        {
+            var settings = await _settings.GetSettingsAsync();
+            string mode = _state.ModeA ?? "";
+            return (mode, KeptWidth(settings, mode, BandNow()));
+        }
+
+        /// <summary>
+        /// AUTO on WIDTH: forget the width kept for MAIN's mode on this band, so the
+        /// band goes back to where it starts: the width an SH line in the
+        /// operator's RTTY setup gives it, put on now (Bruce VK2RT, #250
+        /// 2026-11-01: AUTO gave 300 Hz where his setup has 500 Hz), or with
+        /// none, the tuner works the width out again, and if the tuner is open,
+        /// sizes the filter now. Closing the tuner then puts back the width from
+        /// before it opened, as it did before a width was set by hand. Returns a
+        /// line for the status bar.
+        /// </summary>
+        public async Task<string> ForgetWidthAsync(CancellationToken ct = default)
+        {
+            var settings = await _settings.GetSettingsAsync();
+            await _gate.WaitAsync(ct);
+            try
+            {
+                string mode = _state.ModeA ?? "";
+                if (settings.RttyTunerWidths.Remove(WidthKey(settings, mode, BandNow())))
+                    await _settings.SaveSettingsAsync(settings);
+                _widthByHand = false;
+                _sizedFor = null;
+                _logger.LogInformation("RTTY tuner: IF width in {Mode} back to automatic", mode);
+
+                if (SetupWidth(settings) is { } setup)
+                {
+                    if (!_cat.IsConnected || !SameKind(mode, _saved is null ? TargetMode(settings) : _heldMode ?? ""))
+                        return "WIDTH is back to your RTTY setup's width for this band.";
+                    var put = await PutKeptWidthAsync(settings, setup, ct, force: true, fromSetup: true);
+                    _sizedFor = _lastTones;
+                    return put ?? "WIDTH is back to your RTTY setup's width for this band.";
+                }
+
+                if (_saved is null || _lastTones is not { } t || !_cat.IsConnected)
+                    return "WIDTH is automatic: the tuner works it out when it starts.";
+                var sized = await SizeFilterAsync(settings, t.Mark, t.Shift, t.Baud, t.Reverse, ct);
+                _sizedFor = t;
+                return sized ?? "WIDTH is automatic, and the width it has is right for the signal.";
+            }
+            finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// After a band key, and after the operator's RTTY setup if it went:
+        /// the width kept for the new band, if one was set there by hand. If
+        /// none was, an SH line in the setup has the say - sent with it
+        /// (<paramref name="setupSetWidth"/>), or put on here when the setup is
+        /// not sent on a band key - and failing that the tuner, when it is open, sizes the
+        /// filter as it does on starting. Bruce VK2RT, #250 2026-11-01: a width
+        /// set on a band was lost on the way back to it, because nothing put
+        /// it back after a band change. Returns a line for the status bar.
+        /// </summary>
+        public async Task<string?> BandChangedAsync(bool setupSetWidth, CancellationToken ct = default)
+        {
+            var settings = await _settings.GetSettingsAsync();
+            await _gate.WaitAsync(ct);
+            try
+            {
+                if (!_cat.IsConnected) return null;
+                string mode = _state.ModeA ?? "";
+                if (!SameKind(mode, TargetMode(settings))) return null;
+                if (KeptWidth(settings, mode, BandNow()) is { } kept)
+                {
+                    // The band key or the setup may have moved the width since
+                    // it was last read, so it is always written.
+                    return await PutKeptWidthAsync(settings, kept, ct, force: true);
+                }
+                if (setupSetWidth) return null;
+                // A setup that is not sent on a band key still says where
+                // the band starts.
+                if (SetupWidth(settings) is { } setup)
+                    return await PutKeptWidthAsync(settings, setup, ct, force: true, fromSetup: true);
+                if (_saved is null || _lastTones is not { } t) return null;
+                var sized = await SizeFilterAsync(settings, t.Mark, t.Shift, t.Baud, t.Reverse, ct);
+                _sizedFor = t;
+                return sized;
+            }
+            finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// CAT SET: forget the width kept for every band, so each goes back to
+        /// the setup's width, or the tuner's own, until one is set by hand
+        /// again (Bruce VK2RT, #250 2026-11-01).
+        /// </summary>
+        public async Task ForgetAllWidthsAsync()
+        {
+            var settings = await _settings.GetSettingsAsync();
+            string prefix = settings.RadioModel + "|";
+            var keys = settings.RttyTunerWidths.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+            if (keys.Count == 0) return;
+            foreach (var k in keys) settings.RttyTunerWidths.Remove(k);
+            await _settings.SaveSettingsAsync(settings);
+            _logger.LogInformation("RTTY tuner: kept IF widths forgotten for every band ({Count})", keys.Count);
+        }
+
+        private string BandNow() => _bands.BandForFrequency(_state.FrequencyA);
+
+        private static string WidthKey(ApplicationSettings settings, string? mode, string band)
+            => $"{settings.RadioModel}|{mode}|{band}";
+
+        internal static string? KeptWidth(ApplicationSettings settings, string? mode, string band)
+            => settings.RttyTunerWidths.TryGetValue(WidthKey(settings, mode, band), out var code)
+               && int.TryParse(code, out _) ? code : null;
+
+        // The width the operator's RTTY setup gives the band MAIN is on, as an
+        // SH code, or null.
+        private string? SetupWidth(ApplicationSettings settings)
+            => RttySetupCat.WidthCode(settings.RttySetupCat, BandNow(), settings.RadioModel,
+                                      RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A"));
+
+        private async Task<string?> PutKeptWidthAsync(ApplicationSettings settings, string code, CancellationToken ct,
+                                                      bool force = false, bool fromSetup = false)
+        {
+            if (!force && _state.IfWidthA == code) return null;
+            string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
+            await _cat.SendCommandAsync(
+                CatCommands.FormatIfWidth(settings.RadioModel, p1, int.Parse(code)), "RttyTuner", ct);
+            _state.IfWidthA = code;
+            _logger.LogInformation("RTTY tuner: IF width code {Code} put back, {Why}", code,
+                                   fromSetup ? "from the RTTY setup" : "as set by hand");
+            return WidthHz(settings, _state.ModeA, code) is { } hz
+                ? (fromSetup ? $"IF filter {hz} Hz, from your RTTY setup." : $"IF filter {hz} Hz, as you set it.")
+                : null;
         }
 
         /// <summary>
@@ -351,13 +573,12 @@ namespace Yaesu_Web_Control.Services.Rtty
         ///
         /// <para><b>While the tuner is open the mode is the tuner's.</b> Leaving
         /// RTTY is done by closing it, which is also the only thing that puts
-        /// the operator's own mode back. Nothing is held in an AFSK session: see
-        /// <see cref="HeldMode"/>.</para>
+        /// the operator's own mode back. A move within the kind - RTTY to RTTY-R,
+        /// DATA-L to DATA-U - is left alone: see <see cref="SameKind"/>.</para>
         /// </summary>
         public async Task<string?> ReassertAsync(CancellationToken ct = default)
         {
-            if (_heldMode is null) return null;
-            if (RttyMarkCentre.SidebandForFskMode(_state.ModeA) is not null) return null;
+            if (_heldMode is not { } held || SameKind(_state.ModeA, held)) return null;
 
             await _gate.WaitAsync(ct);
             try
@@ -369,7 +590,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 // them.
                 if (_heldMode is not { } hold) return null;
                 var now = _state.ModeA;
-                if (RttyMarkCentre.SidebandForFskMode(now) is not null) return null;
+                if (SameKind(now, hold)) return null;
                 if (!_cat.IsConnected) return null;
 
                 await SetModeAsync(hold, ct);
@@ -382,22 +603,43 @@ namespace Yaesu_Web_Control.Services.Rtty
         }
 
         /// <summary>
-        /// Whether the radio is in a mode that cannot carry an RTTY tone pair at
-        /// all - and so the only modes this service will take the radio out of.
-        ///
-        /// <para>CW, because its filters go down to 50 Hz and an operator who was
-        /// just using CW is very likely sitting behind one of them. AM and FM
-        /// because their detectors destroy the phase relationship the figure is
-        /// drawn from. DATA-FM and the narrow variants for the same reason as FM.
-        /// Everything else - RTTY, RTTY-R, SSB, DATA, PSK - either is FSK already
-        /// or is a perfectly good way to receive an audio tone pair, and is left
-        /// alone.</para>
-        ///
-        /// <para>Wider than Icom Web Control's list, which has no C4FM and no
-        /// narrow FM or AM to name.</para>
+        /// The operator has picked <paramref name="mode"/> for RTTY, and is about
+        /// to put the radio in it. While the tuner is holding a mode, the hold
+        /// moves to the new one - otherwise the change would be undone as soon
+        /// as the radio reported it - and the filter is sized again on the next
+        /// start, because it belongs to the mode it was set in.
         /// </summary>
-        public static bool NeedsSwitching(string? mode) =>
-            RttyMarkCentre.SidebandForFskMode(mode) is null;
+        public async Task ChooseAsync(string mode, CancellationToken ct = default)
+        {
+            await _gate.WaitAsync(ct);
+            try
+            {
+                if (_heldMode is null) return;
+                _heldMode = mode;
+                _sizedFor = null;
+                _logger.LogInformation("RTTY tuner: operator chose {Mode}, now held", mode);
+            }
+            finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// Whether the tuner needs to change the radio's mode to
+        /// <paramref name="target"/> when it starts: whenever it is not that
+        /// mode. Until 2026-10-31 the other sideband of the same kind was left
+        /// alone (<see cref="SameKind"/>), from before the operator could choose
+        /// the sideband; Bruce VK2RT, in DATA-L, came back from the Radio panel
+        /// in DATA-U and it stayed there (#250). While the tuner runs, the hold
+        /// still accepts either sideband.
+        ///
+        /// <para>For RTTY that is every mode but RTTY and RTTY-R: CW, because its
+        /// filters go down to 50 Hz and an operator who was just using CW is very
+        /// likely sitting behind one of them; AM and FM because their detectors
+        /// destroy the phase relationship the figure is drawn from; and SSB and
+        /// DATA since 2026-10-13, when Colin asked for RTTY on open. For DATA it
+        /// is every mode but DATA-L and DATA-U.</para>
+        /// </summary>
+        public static bool NeedsSwitching(string? mode, string target) =>
+            !string.Equals(mode?.Trim(), target, StringComparison.OrdinalIgnoreCase);
 
         // ---- the radio -----------------------------------------------------
 

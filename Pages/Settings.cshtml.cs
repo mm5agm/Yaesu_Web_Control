@@ -137,6 +137,9 @@ namespace Yaesu_Web_Control.Pages
             ModelState.Remove("Settings.AudioRadioRxDevice");
             ModelState.Remove("Settings.AudioRadioTxDevice");
             ModelState.Remove("Settings.HttpsSanHosts");
+            // The RTTY setup may be cleared: empty = nothing for CAT SET to send.
+            // Without this an emptied box refused the whole save (Bruce VK2RT, #250).
+            ModelState.Remove("Settings.RttySetupCat");
 
             if (!ModelState.IsValid)
             {
@@ -251,6 +254,7 @@ namespace Yaesu_Web_Control.Pages
                 current.OpenBrowserOnStartup = Settings.OpenBrowserOnStartup;
                 current.SerialPort        = Settings.SerialPort;
                 current.BaudRate          = Settings.BaudRate;
+                current.PowerOffAtExit    = Settings.PowerOffAtExit;
                 current.WebAddress        = Settings.WebAddress;
                 current.SdrDeviceKeyA     = Settings.SdrDeviceKeyA ?? string.Empty;
                 current.SdrDeviceKeyB     = Settings.SdrDeviceKeyB ?? string.Empty;
@@ -330,7 +334,11 @@ namespace Yaesu_Web_Control.Pages
                 // stay where it is put.
                 current.RttyContestMode    = Settings.RttyContestMode;
                 current.RttyTunerSetMode   = Settings.RttyTunerSetMode;
+                current.RttyTunerMode      = Yaesu_Web_Control.Services.Rtty.RttyTunerModeService.Normalise(Settings.RttyTunerMode)
+                                             ?? current.RttyTunerMode;
                 current.RttyAutoCentreMark = Settings.RttyAutoCentreMark;
+                current.RttySetupCat       = (Settings.RttySetupCat ?? "").Trim();
+                current.RttySetupOnBand    = Settings.RttySetupOnBand;
 
                 // DX cluster settings — copy through. Normalise callsign to upper case.
                 current.DxClusterEnabled         = Settings.DxClusterEnabled;
@@ -531,6 +539,8 @@ namespace Yaesu_Web_Control.Pages
             // Stop the host. Hosted services (MeterPollingService, the tray icon,
             // etc.) get their StopAsync calls; the multiplexer's serial port is
             // closed cleanly via RadioInitializationService.StopAsync.
+            // A restart is not a close: the radio stays on.
+            Yaesu_Web_Control.Services.AppLifecycle.RestartRequested = true;
             _lifetime.StopApplication();
             return new EmptyResult();
         }

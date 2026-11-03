@@ -29,6 +29,7 @@ ${bc(500)}${bc(600)}${bc(700)}
 html,body{margin:0;background:${v('page')}}
 .rp-page{min-height:100vh;box-sizing:border-box;background:${v('page')};font-family:${SANS};color:${v('text')};overflow:hidden}
 .rp-scale{width:1600px;transform-origin:0 0;padding:20px;box-sizing:border-box}
+.rp-board-grip{position:absolute;right:0;bottom:0;width:26px;height:26px;cursor:nwse-resize;touch-action:none;z-index:50;background:linear-gradient(135deg,transparent 52%,${v('legend-dim')} 52% 58%,transparent 58% 68%,${v('legend-dim')} 68% 74%,transparent 74% 84%,${v('legend-dim')} 84% 90%,transparent 90%)}
 .rp-panel{box-sizing:border-box;padding:22px 26px 24px;border-radius:18px;background:${v('panel')};border:1px solid ${v('panel-border')};box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 18px 40px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:18px}
 .rp-panel *{box-sizing:border-box}
 .rp-panel button{font-family:${SANS}}
@@ -70,6 +71,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-top{height:50px;display:flex;align-items:center;justify-content:space-between;gap:24px}
 .rp-brand{display:flex;align-items:baseline;gap:14px}
 .rp-brand-short{font-size:34px;font-weight:700;letter-spacing:.18em;color:${v('title')}}
+.rp-brand-ver{font:500 14px ${SANS};letter-spacing:.04em;color:${v('legend-dim')}}
 .rp-brand-model{font:600 23px ${SANS};letter-spacing:.1em;color:${v('accent')}}
 .rp-lamps{display:flex;align-items:center;gap:18px}
 .rp-lamps>span,.rp-lampkey{display:flex;align-items:center;gap:7px}
@@ -78,6 +80,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-menu{position:relative}
 .rp-menu-list{position:absolute;right:-4px;top:calc(100% + 8px);z-index:99999;min-width:240px;display:flex;flex-direction:column;padding:6px 0;border-radius:6px;background:${v('bar-bg')};border:1px solid ${v('well-border')};box-shadow:0 10px 28px rgba(0,0,0,.6)}
 .rp-menu-list[hidden]{display:none}
+.rp-menu-list.rp-menu-left{left:-4px;right:auto}
 .rp-menu-group{padding:8px 16px 4px;font:600 13px ${SANS};letter-spacing:.14em;color:${v('legend-dim')}}
 .rp-menu-item{padding:7px 16px 7px 28px;font:500 17px ${SANS};color:${v('text')};text-decoration:none;white-space:nowrap}
 .rp-keylist{top:0;max-height:70vh;overflow-y:auto}
@@ -111,7 +114,7 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-skey{appearance:none;border:1px solid ${v('key-border')};background:${v('key-bg')};color:${v('key-fg')};border-radius:6px;height:40px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;padding:0;box-shadow:0 2px 0 ${v('key-shadow')}}
 .rp-skey .rp-led{width:22px;height:4px}
 .rp-skey-label{font:600 14px ${SANS};letter-spacing:.06em;white-space:nowrap}
-.rp-skey .rp-sub{font-size:11px;min-height:11px;line-height:11px}
+.rp-skey .rp-sub{font-size:11px;min-height:11px;line-height:11px;color:${v('key-fg')};opacity:.75}
 .rp-skey.suits{border-color:${v('highlight')}}
 .rp-skey:active{transform:translateY(2px);box-shadow:none}
 .rp-win{position:absolute;z-index:10;border-radius:8px;overflow:hidden;background:${v('panel')};border:1px solid ${v('key-border')};box-shadow:0 18px 44px rgba(0,0,0,.75);display:flex;flex-direction:column;min-width:200px;min-height:120px}
@@ -128,7 +131,9 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-wpanel-title{font:700 14px ${SANS};letter-spacing:.14em;color:${v('lcd-fg')};white-space:nowrap;margin-right:auto;overflow:hidden;text-overflow:ellipsis}
 .rp-wbtn{appearance:none;border:1px solid ${v('chip-border')};background:${v('soft-bg')};color:${v('soft-fg')};border-radius:3px;width:22px;height:18px;font:600 12px sans-serif;cursor:pointer;padding:0;line-height:1;flex:none}
 .rp-wbtn[hidden]{display:none}
-.rp-wbtn.rp-wx{border-color:${v('key-border')};background:${v('key-bg')};color:${v('chipbtn-fg')}}
+.rp-wbtn.rp-wx{border-color:${v('key-border')};background:${v('key-bg')};position:relative;font-size:0}
+.rp-wbtn.rp-wx::before,.rp-wbtn.rp-wx::after{content:'';position:absolute;left:50%;top:50%;width:12px;height:2px;border-radius:1px;background:${v('tx')};transform:translate(-50%,-50%) rotate(45deg)}
+.rp-wbtn.rp-wx::after{transform:translate(-50%,-50%) rotate(-45deg)}
 .rp-wnote{font:500 14px ${SANS};color:${v('legend-dim')}}
 .rp-wpanel-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:7px;padding:8px 10px;overflow:auto;font:500 15px ${SANS};color:${v('text')}}
 /* What goes in a window panel: the adapter builds these, the theme colours them. */
@@ -208,6 +213,7 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-spectrum{flex:1;min-height:200px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}
 .rp-spectrum canvas,.rp-waterfall canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .rp-passband{position:absolute;top:0;bottom:0;background:${v('passband')};border-left:1px solid ${v('passband-edge')};border-right:1px solid ${v('passband-edge')};display:none}
+.rp-pbcentre{position:absolute;top:0;bottom:0;width:1px;background:${v('passband-edge')};display:none}
 .rp-cursor{position:absolute;top:0;bottom:0;left:50%;width:1px;background:${v('cursor')}}
 .rp-spot{position:absolute;transform:translateX(-50%);font:600 16px ${SANS};letter-spacing:.06em;color:${v('spot-fg')};background:${v('spot-bg')};border-radius:3px;padding:2px 7px;white-space:nowrap}
 .rp-spec-label{position:absolute;left:10px;top:8px;font:400 15px ${MONO};color:${v('spec-label')}}
@@ -229,7 +235,7 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-spec-tools .rp-wkey.on{background:${v('tx')};border-color:${v('tx')};color:${v('tx-fg')}}
 .rp-specpane{position:relative}
 .rp-specpane.held .rp-spectrum{outline:2px solid ${v('tx')};outline-offset:-2px}
-.rp-spec-settings{display:none;position:absolute;left:6px;bottom:42px;z-index:6;padding:10px 12px;gap:6px;flex-direction:column;border-radius:6px;background:${v('bar-bg')};border:1px solid ${v('well-border')};color:${v('soft-fg')};font:500 13px ${SANS};box-shadow:0 6px 18px rgba(0,0,0,.45);cursor:default}
+.rp-spec-settings{display:none;position:absolute;left:6px;bottom:42px;z-index:6;padding:10px 12px;gap:6px;flex-direction:column;border-radius:6px;background:${v('soft-bg')};border:1px solid ${v('soft-border')};color:${v('soft-fg')};font:500 13px ${SANS};box-shadow:0 6px 18px rgba(0,0,0,.45);cursor:default}
 .rp-spec-settings.open{display:flex}
 .rp-spec-row{display:grid;grid-template-columns:64px 150px 56px;align-items:center;gap:8px}
 .rp-spec-row input[type=range]{width:150px}
@@ -245,6 +251,9 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-sdrview.both .rp-specpane.sel{border-color:${v('highlight')}}
 .rp-sdrview.both .rp-spectrum{min-height:0}
 .rp-sdrview.both .rp-waterfall{height:56px}
+/* setWaterfall(id, false): a strip that keeps the span, HOLD and SCOPE keys */
+.rp-specpane.no-wf .rp-waterfall{height:36px;background:none;border-color:transparent}
+.rp-specpane.no-wf .rp-waterfall>:not(.rp-spec-tools){display:none}
 .rp-altview{flex:1;min-height:360px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}
 .rp-viewtabs{position:absolute;right:6px;bottom:6px;display:flex;gap:2px;padding:2px;border-radius:5px;background:${v('bar-bg')};border:1px solid ${v('well-border')};z-index:3}
 .rp-viewtab{font:600 13px ${SANS};letter-spacing:.1em;text-transform:uppercase;color:${v('legend-dim')};background:none;border:0;border-radius:3px;padding:3px 9px;cursor:pointer}
@@ -253,8 +262,11 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-modes{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
 
 .rp-right{display:flex;flex-direction:column;align-items:center;gap:14px}
+.rp-dial-vfo{display:inline-block;margin-left:10px;padding:0 7px;border:1px solid currentColor;border-radius:4px;font:700 15px ${MONO};letter-spacing:0;color:${v('vfo-a')}}
+.rp-dial-vfo[data-vfo=B]{color:${v('vfo-b')}}
 .rp-dial{width:300px;height:300px;border-radius:50%;background:repeating-conic-gradient(${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg);box-shadow:0 10px 24px rgba(0,0,0,.7),inset 0 0 0 1px ${v('dial-rim')};display:flex;align-items:center;justify-content:center}
-.rp-dial-inner{width:250px;height:250px;border-radius:50%;background:${v('dial-inner')};box-shadow:inset 0 2px 0 rgba(255,255,255,.07),inset 0 -6px 14px rgba(0,0,0,.45);position:relative}
+.rp-dial-inner{width:250px;height:250px;border-radius:50%;background:${v('dial-inner')};box-shadow:inset 0 2px 0 rgba(255,255,255,.07),inset 0 -6px 14px rgba(0,0,0,.45);position:relative;transform:rotate(var(--rp-face-rot,0deg))}
+.rp-dial-inner::before{content:'';position:absolute;inset:0;border-radius:50%;background:${v('dial-sheen')};transform:rotate(calc(var(--rp-face-rot,0deg) * -1));pointer-events:none}
 .rp-dial-dimple{position:absolute;width:52px;height:52px;border-radius:50%;left:154px;top:42px;background:${v('dial-dimple')};box-shadow:inset 0 3px 6px rgba(0,0,0,.7)}
 .rp-dial.dual{background:repeating-conic-gradient(from var(--rp-ring-rot,0deg),${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg)}
 .rp-turn{cursor:grab;touch-action:none;user-select:none}
@@ -327,18 +339,22 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-spec-away{position:absolute;inset:0;z-index:4;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:1px dashed ${v('screen-line')};border-radius:4px;background:${v('spec-bg')};font:600 20px ${SANS};letter-spacing:.14em;text-transform:uppercase;color:${v('spec-label')}}
 .rp-spec-away.on{display:flex}
 
-.rp-spop{height:100vh;display:flex;flex-direction:column}
-.rp-spop-top{height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 10px;background:${v('key-bg')};border-bottom:1px solid ${v('key-border')}}
-.rp-spop-title{font:700 16px ${SANS};letter-spacing:.1em;color:${v('title')};white-space:nowrap}
+.rp-spop{height:100vh;display:flex;flex-direction:column;position:relative}
+.rp-spop-grip{position:absolute;right:0;bottom:0;width:24px;height:24px;cursor:nwse-resize;touch-action:none;z-index:5;background:linear-gradient(135deg,transparent 52%,${v('legend-dim')} 52% 58%,transparent 58% 68%,${v('legend-dim')} 68% 74%,transparent 74% 84%,${v('legend-dim')} 84% 90%,transparent 90%)}
+.rp-spop-top{height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 10px;background:${v('key-bg')};border-bottom:1px solid ${v('key-border')}}
+.rp-spop-title{font:700 18px ${SANS};letter-spacing:.1em;color:${v('key-fg')};white-space:nowrap}
 .rp-spop-tabs{display:flex;gap:2px;padding:2px;border-radius:5px;background:${v('bar-bg')};border:1px solid ${v('well-border')}}
-.rp-spop-tab{font:600 14px ${SANS};letter-spacing:.1em;text-transform:uppercase;color:${v('legend-dim')};background:none;border:0;border-radius:3px;padding:3px 12px;cursor:pointer}
+.rp-spop-tab{font:600 16px ${SANS};letter-spacing:.1em;text-transform:uppercase;color:${v('legend-dim')};background:none;border:0;border-radius:3px;padding:3px 12px;cursor:pointer}
 .rp-spop-tab.on{background:${v('bar-on')};color:${v('title')}}
 .rp-spop-gap{flex:1}
-.rp-spop-key{appearance:none;border:1px solid ${v('soft-border')};background:${v('soft-bg')};color:${v('soft-fg')};border-radius:5px;min-height:28px;padding:2px 10px;font:600 14px ${SANS};letter-spacing:.06em;cursor:pointer}
+.rp-spop-key{appearance:none;border:1px solid ${v('soft-border')};background:${v('soft-bg')};color:${v('soft-fg')};border-radius:5px;min-height:32px;padding:2px 12px;font:600 16px ${SANS};letter-spacing:.06em;cursor:pointer}
 .rp-spop-key.on{background:${v('soft-on-bg')};border-color:${v('highlight')};color:${v('soft-on-fg')}}
 .rp-spop-x{min-width:30px;background:${v('accent-bg')};color:${v('accent-soft')};border-color:transparent}
 .rp-spop-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:10px}
 .rp-spop-holder{flex:1;min-height:0;display:flex}
+/* A pane with no waterfall needs room for its trace only: about what the
+   trace has in a pane with one (1 of the 1 + 1.2 below), the rest to that pane */
+.rp-spop-holder:has(>.rp-pane.no-wf){flex:.45}
 /* window-popout.js: one window group in a page of its own. The board's
    frame is undone; the panel boxes fill the page. */
 .rp-wpop-board{flex:1;min-height:0;padding:0;border:0;border-radius:0;box-shadow:none;gap:0}
@@ -346,9 +362,35 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-pane{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:6px}
 .rp-pane .rp-spectrum{flex:1;min-height:80px}
 .rp-pane .rp-waterfall{height:auto;flex:1.2;min-height:60px}
-.rp-pane-bar{display:flex;align-items:center;gap:10px;min-height:26px}
-.rp-pane-label{flex:1;font:400 15px ${MONO};color:${v('spec-label')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rp-pane.no-wf .rp-waterfall{display:none}
+.rp-pane-grip{flex:none;height:8px;margin:-2px 0;border-radius:3px;cursor:ns-resize;touch-action:none;background:linear-gradient(${v('legend-dim')},${v('legend-dim')}) center/40px 2px no-repeat}
+.rp-pane-grip:hover{background-color:${v('soft-bg')}}
+.rp-pane.no-wf .rp-pane-grip{display:none}
+.rp-pane.no-spec .rp-spectrum,.rp-pane.no-spec .rp-axis,.rp-pane.no-spec .rp-pane-grip{display:none}
+.rp-pane.no-spec .rp-waterfall{flex:1 1 0 !important}
+.rp-pane.no-wf .rp-spectrum{flex:1 1 0 !important}
+.rp-jump{position:absolute;top:50%;transform:translateY(-50%);z-index:4;width:30px;height:48px;padding:0;border:1px solid ${v('screen-line')};border-radius:4px;background:${v('spec-bg')};color:${v('spec-label')};font:700 18px ${SANS};line-height:1;cursor:pointer;opacity:.6}
+.rp-jump:hover,.rp-jump:focus-visible{opacity:1}
+.rp-jump-dn{left:4px}
+.rp-jump-up{right:4px}
+/* In the pop-out each pane sits on the radio's screen, as on the board: its
+   label and scale are screen colours, which on the page itself (grey in
+   Silver) could not be read */
+.rp-spop .rp-pane{position:relative;padding:6px 8px 8px;border-radius:6px;background:${v('screen')};border:1px solid ${v('screen-line')}}
+.rp-spop .rp-axis{font-size:17px;min-height:18px}
+.rp-pane>.rp-spec-settings{left:auto;right:8px;top:44px;bottom:auto;font-size:16px}
+.rp-pane>.rp-spec-settings .rp-spec-row{grid-template-columns:84px 180px 70px}
+.rp-pane>.rp-spec-settings .rp-spec-row input[type=range]{width:180px}
+.rp-pane-bar{display:flex;align-items:center;gap:10px;min-height:32px}
+.rp-pane-label{flex:1;font:400 18px ${MONO};color:${v('chip-fg')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rp-pane-tools{display:flex;gap:6px}
-.rp-spop-span{font:500 14px ${SANS};background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};border:1px solid ${v('key-border')};border-radius:4px;padding:2px 6px}
+.rp-pane-bar.has-span .rp-pane-label{flex:0 1 auto}
+.rp-pane-bar.has-span .rp-pane-tools{margin-left:auto}
+.rp-pane-spanwrap{position:relative;flex:none;display:inline-flex}
+.rp-pane-spanwrap::after{content:'▾';position:absolute;right:4px;top:50%;transform:translateY(-50%);pointer-events:none;font:400 14px ${MONO};color:${v('chip-fg')}}
+.rp-pane-span{appearance:none;-webkit-appearance:none;background:transparent;border:0;border-radius:4px;margin:0;padding:1px 20px 1px 4px;font:400 18px ${MONO};color:${v('chip-fg')};cursor:pointer}
+.rp-pane-span:hover,.rp-pane-span:focus-visible{background:${v('accent-bg')};outline:none}
+.rp-pane-span option{background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};font:500 15px ${SANS}}
+.rp-spop-span{font:500 16px ${SANS};min-height:32px;background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};border:1px solid ${v('key-border')};border-radius:4px;padding:2px 6px}
 `;
 }

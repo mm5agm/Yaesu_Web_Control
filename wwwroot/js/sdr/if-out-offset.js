@@ -103,6 +103,22 @@ export function loSlideHz(model, f) {
 }
 
 /**
+ * Where the spectrum is centred from the dial, in Hz of RF: the filter's
+ * centre in DATA-L and DATA-U, so the signal being read sits in the middle
+ * and a narrow span shows it (Bruce VK2RT, Discussion #250, 2026-10-27);
+ * 0, the dial, in every other mode and on an unmeasured radio. The SDR's
+ * crop is cut round the same point (YaesuIfOutOffset.ViewIfHz).
+ *
+ * @param {string} model
+ * @param {object} filter        see loSlideHz
+ * @returns {number}
+ */
+export function viewOffsetHz(model, filter) {
+    const mode = (filter?.mode || '').toUpperCase();
+    return mode === 'DATA-L' || mode === 'DATA-U' ? loSlideHz(model, filter) : 0;
+}
+
+/**
  * The full axis correction for one panel: `true RF = displayed RF + result`.
  * Null when the radio is unmeasured or the SDR centre is not known yet.
  *

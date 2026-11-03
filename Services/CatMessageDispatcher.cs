@@ -8,11 +8,6 @@
         private readonly RadioStateService _stateService;
         private readonly ILogger<CatMessageDispatcher> _logger;
 
-        // BI says on/off, the CW BK-IN TYPE menu says Semi/Full; CwBreakIn
-        // ("0"/"1"/"2") is built from the two.
-        private bool _bkInOn;
-        private bool _bkInFull;
-
         // Callback for initialization complete
         public Action? OnInitializationComplete { get; set; }
 
@@ -668,6 +663,25 @@
                         break;
                     case "MG":
                         // MG{NNN}; — MIC Gain 000-100
+                        //
+                        // Checked against every supported radio's CAT manual
+                        // (2026-10-20) because the #228 fix relies on the radio
+                        // pushing MG unprompted. The frame is identical on all
+                        // of them, and MG is in the Auto Information set on all
+                        // of them: the command lists show all four columns
+                        // (Set / Read / Ans / AI) marked for MG on the
+                        // FTdx101MP/D, FTdx10, FT-710, FTDX3000, FTDX5000 and
+                        // FT-991A. So a front-panel MIC GAIN change reaches this
+                        // case on every model.
+                        //
+                        // Range is the one difference: every manual says
+                        // 000-100 except the FTDX5000, which documents 000-255
+                        // (its operating manual still presents MIC GAIN to the
+                        // operator as 0-100). YWC clamps to 0-100 for all
+                        // models, and the slider is 0-100, so an FTDX5000
+                        // reading above 100 would show as 100. That predates
+                        // #228; widen it only after a bench check of what the
+                        // radio's own display shows for MG150 on that model.
                         if (message.Length >= 6 && int.TryParse(message.Substring(2, 3), out int mgVal))
                             _stateService.MicGain = Math.Clamp(mgVal, 0, 100);
                         break;
@@ -728,8 +742,8 @@
                         // reported as "2" when that menu last read FULL.
                         if (message.Length >= 4)
                         {
-                            _bkInOn = message[2] != '0';
-                            _stateService.CwBreakIn = !_bkInOn ? "0" : _bkInFull ? "2" : "1";
+                            _stateService.CwBreakInOn = message[2] != '0';
+                            _stateService.CwBreakIn = !_stateService.CwBreakInOn ? "0" : _stateService.CwBreakInFull ? "2" : "1";
                         }
                         break;
                     case "SD":
@@ -745,8 +759,8 @@
                             && message.StartsWith("EX" + bkAddr, StringComparison.Ordinal)
                             && message.Length > 2 + bkAddr.Length)
                         {
-                            _bkInFull = message[2 + bkAddr.Length] == '1';
-                            if (_bkInOn) _stateService.CwBreakIn = _bkInFull ? "2" : "1";
+                            _stateService.CwBreakInFull = message[2 + bkAddr.Length] == '1';
+                            if (_stateService.CwBreakInOn) _stateService.CwBreakIn = _stateService.CwBreakInFull ? "2" : "1";
                         }
                         // PROC TYPE: 0 = COMP, 1 = AMC - see AmcCodes.
                         else if (AmcCodes.ProcTypeExAddress(_stateService.RadioModel) is string ptAddr

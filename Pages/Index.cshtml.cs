@@ -91,6 +91,10 @@ namespace Yaesu_Web_Control.Pages
 
         public string BandPlan { get; set; } = "Region1";
 
+        /// <summary>The operator's RTTY mode: what the tuner switches to, and
+        /// what the RTTY Contest band keys use.</summary>
+        public string RttyMode { get; set; } = Services.Rtty.RttyTunerModeService.RttyMode;
+
         /// <summary>When false, tuning by clicking the spectrum or a DX spot
         /// leaves the mode alone instead of setting it from the band plan.
         /// Settings &gt; Band Plan; discussion #169.</summary>
@@ -169,6 +173,7 @@ namespace Yaesu_Web_Control.Pages
             VoiceNudgeStepHzB = settings.VoiceNudgeStepHzB;
             BandPlan = settings.BandPlan switch { "UK" => "Region1", "USA" => "Region2", var v => v };
             AutoModeChangeOnTune = settings.AutoModeChangeOnTune;
+            RttyMode = Services.Rtty.RttyTunerModeService.TargetMode(settings);
             RadioModel = settings.RadioModel;
             InstalledRoofingFilters = settings.InstalledRoofingFilters;
             VideoDisplayEnabled = settings.VideoDisplayEnabled;

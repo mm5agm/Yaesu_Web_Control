@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
-using Yaesu_Web_Control.Models;
+using RadioWebControl.Core.Models;
 
-namespace Yaesu_Web_Control.Services.Flex
+namespace RadioWebControl.Core.Services.Flex
 {
     /// <summary>
     /// Contract for storing named Flex UI workspace arrangements.

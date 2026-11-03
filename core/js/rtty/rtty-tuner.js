@@ -18,7 +18,7 @@
 // Radio-agnostic: it talks to /api/rtty and nothing else. The host page
 // provides the dialog and the elements named in the constructor defaults.
 
-import { RTTY_SHIFTS as SHIFTS, DEFAULT_RTTY_SETTINGS, loadRttySettings, saveRttySettings } from './rtty-settings.js';
+import { RTTY_SHIFTS as SHIFTS, DEFAULT_RTTY_SETTINGS, loadRttySettings, saveRttySettings, normaliseRttySettings } from './rtty-settings.js';
 
 const POLL_MS    = 50;     // 20 redraws a second
 const POINTS     = 500;    // about 21 ms at 24,000 points a second: one sweep
@@ -29,6 +29,18 @@ const RADIO_MS   = 4000;  // how often to re-read the radio's RTTY menu while op
 const FETCH_MS   = 2000;   // a frame request that takes longer than this is abandoned
 const RESTART_MS = 3000;   // at most one automatic restart this often
 const COMPACT_KEY = 'rttyTunerCompact';   // localStorage: the tones-only view
+
+// Mark red, space amber, as the contest mock-up has them: the trace, the arm
+// labels and the numbers under the face all use the same two, so the eye can
+// tell which arm is which without reading. Each piece of the trace is mixed
+// between the two by how far it runs along each axis, so the mark arm comes
+// out red, the space arm amber and the swings between them orange.
+const MARK_RGB  = [248, 113, 113];
+const SPACE_RGB = [245, 165, 36];
+const MARK_CSS  = `rgb(${MARK_RGB})`;
+const SPACE_CSS = `rgb(${SPACE_RGB})`;
+const HUES      = 8;      // steps between space and mark
+const rgbAt = t => MARK_RGB.map((m, i) => Math.round(SPACE_RGB[i] + (m - SPACE_RGB[i]) * t));
 
 // How much of what the receiver passes lands in the two tone filters, in dB.
 // RTTY on tune puts nearly all of it there; noise, or a signal off to one side,
@@ -70,8 +82,6 @@ export class RttyTuner {
         this._autoBusy  = false;     // an Auto analysis is outstanding
         this._pushBusy    = false;   // a radio-tones write is outstanding
         this._pushPending = null;    // the newest tones to write once it finishes
-        this._pushQuiet   = false;   // hand the note back rather than post it
-        this._pushNote    = null;    // what the radio took, for the caller to fold in
         this._modeNoteShown = null;  // the host's last note about the radio, once said
         this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
         this._restartAt   = 0;       // Date.now() of the last automatic restart
@@ -102,6 +112,7 @@ export class RttyTuner {
         this._ctx = this._canvas.getContext('2d');
         this._loadSettings();
         this._showSettings();
+        this._seeded = this._seedFromServer();
 
         // The operator changing Mark or Shift here changes them on the radio
         // too, so the two do not have to be kept in step by hand. Reverse has
@@ -280,6 +291,31 @@ export class RttyTuner {
 
     _saveSettings() { saveRttySettings(this._settings); }
 
+    // The tones the server last ran the tuner on, over this browser's own.
+    // Storage is kept per address - http and https, localhost and 127.0.0.1,
+    // another browser - and one never set holds 2125, which the first start
+    // handed to the shared tuner and every other window then followed (Bruce
+    // VK2RT, Discussion #250). Every start waits for this. Optional: an app
+    // with no such endpoint answers 404, and storage stands.
+    async _seedFromServer() {
+        const abort = new AbortController();
+        const bail  = setTimeout(() => abort.abort(), 2000);
+        try {
+            const res = await fetch('/api/rtty/tuner/tones', { signal: abort.signal });
+            if (res.status !== 200) return;
+            const t = normaliseRttySettings(await res.json());
+            const s = this._settings;
+            if (t.markHz === s.markHz && t.shiftHz === s.shiftHz && t.baud === s.baud && t.reverse === s.reverse) return;
+            if (document.activeElement === this._markEl) return;
+            this._settings = t;
+            const untouched = t.markHz === DEFAULT_RTTY_SETTINGS.markHz && t.shiftHz === DEFAULT_RTTY_SETTINGS.shiftHz;
+            this._radioApplied = untouched ? { ...t } : null;
+            this._showSettings();
+            this._saveSettings();
+        } catch { /* storage stands */ }
+        finally { clearTimeout(bail); }
+    }
+
     // Which shifts this radio can be SET to, taken from the options the host page
     // put in its Shift control. The IC-7300 offers three (170/200/425, CI-V
     // 00 40); another rig offers another set, and neither list belongs in shared
@@ -348,6 +384,7 @@ export class RttyTuner {
     // ── Host ────────────────────────────────────────────────────────────────
 
     async _send(what) {
+        if (what === 'start' && this._seeded) await this._seeded;
         // Remember what we are asking for BEFORE the request goes out. Frames
         // arriving in the meantime still describe the old filters, and
         // _adoptServerSettings must not mistake one of them for somebody else
@@ -487,20 +524,13 @@ export class RttyTuner {
             this._saveSettings();
             this._send('start');
 
-            // The radio's menu goes with it where it can, and clears
-            // _radioApplied either way so the four-second sync does not drag any
-            // of this back.
-            //
-            // Awaited, and asked to stay quiet, because there is one status line
-            // and two things to say. Left to post its own note it would land a
-            // few hundred ms after the summary below, overwrite it, and reset the
-            // hold to its own - and the part of the summary worth reading is the
-            // one it was wiping: the warning about which tone is mark, which is
-            // the only part the operator has to act on.
+            // The radio's menu is left alone. The radio transmits FSK on its
+            // mark and shift, so a 425 written for a utility station heard on
+            // receive would go out on the operator's next call (DDK9,
+            // 2026-10-28); the server says when the shifts differ, in advice.
+            // _radioApplied is cleared so the four-second sync does not drag
+            // Auto's figures back to the menu's; From radio hands it back.
             this._radioApplied = null;
-            this._pushNote = null;
-            this._pushQuiet = true;
-            try { await this._pushToRadio(); } finally { this._pushQuiet = false; }
 
             const shift = r.snappedShiftHz == null ? `${shiftHz} Hz measured` : `${shiftHz} Hz`;
             const baud  = r.speedUnmeasured
@@ -516,7 +546,6 @@ export class RttyTuner {
             const doubt = r.toneMargin <= 0.08
                 ? ' Which tone is mark is a guess here - if it does not copy, try Rev.'
                 : '';
-            const note = this._pushNote ? ` ${this._pushNote}` : '';
 
             // Said plainly, because the radio has just retuned itself and an
             // operator who is not told why has a radio that moved on its own.
@@ -534,7 +563,7 @@ export class RttyTuner {
 
             // Longer than the usual hold: this is up to four clauses, and the ones
             // that ask the operator to do something are at the end of them.
-            this._setStatus(`Auto: ${parts.join(', ')}.${centre}${note}${advice}${doubt}`, 14000);
+            this._setStatus(`Auto: ${parts.join(', ')}.${centre}${advice}${doubt}`, 14000);
         } catch {
             this._setStatus('Cannot reach the server.', 5000);
         } finally {
@@ -657,14 +686,7 @@ export class RttyTuner {
     async _pushToRadio() {
         if (!this._radioEl) return;                  // this app has no radio endpoint
 
-        // Quiet mode hands the note back in _pushNote instead of posting it, so a
-        // caller with its own one-line summary can fold this into it. A field
-        // rather than an argument because the latest-wins continuation at the end
-        // of this function re-enters with none, and it has to stay quiet too.
-        const say = text => {
-            if (this._pushQuiet) this._pushNote = text;
-            else this._setStatus(text, 4000);
-        };
+        const say = text => this._setStatus(text, 4000);
 
         const want = { markHz: this._settings.markHz, shiftHz: this._settings.shiftHz };
         if (this._pushBusy) { this._pushPending = want; return; }
@@ -873,14 +895,20 @@ export class RttyTuner {
     _resize() {
         const c = this._canvas;
         if (!c) return;
-        const dpr = window.devicePixelRatio || 1;
+        // The window the canvas is in now: On top in the RTTY Contest view
+        // moves the whole panel into another window. Its size and its pixel
+        // ratio are what count, and a move to a screen with another scale
+        // changes the ratio without changing the box, so watch both.
+        const win = c.ownerDocument.defaultView || window;
+        const dpr = win.devicePixelRatio || 1;
+        if (win !== this._win || dpr !== this._dpr) this._watchWindow(win, dpr);
         // Two layouts. In the flow, the canvas is as wide as the panel and as
         // tall as it is wide, up to a cap. Positioned out of the flow - the
         // host page does that once the panel has been sized, and in a pop-out
         // window - it is the largest square that fits the box around it,
         // however big the operator makes the window.
         const box = c.parentElement;
-        const boxed = !!box && getComputedStyle(c).position === 'absolute';
+        const boxed = !!box && win.getComputedStyle(c).position === 'absolute';
         const css = boxed
             ? Math.max(100, Math.floor(Math.min(box.clientWidth, box.clientHeight)) - 2)
             : Math.max(160, Math.min(c.clientWidth || 280, 480));
@@ -893,35 +921,47 @@ export class RttyTuner {
         this._css = css;
     }
 
+    _watchWindow(win, dpr) {
+        this._onWindow ??= () => { this._resize(); this._draw(); };
+        if (win !== this._win) {
+            this._win?.removeEventListener('resize', this._onWindow);
+            win.addEventListener('resize', this._onWindow);
+            this._win = win;
+        }
+        this._dprQuery?.removeEventListener('change', this._onWindow);
+        this._dprQuery = win.matchMedia?.(`(resolution: ${dpr}dppx)`);
+        this._dprQuery?.addEventListener('change', this._onWindow);
+        this._dpr = dpr;
+    }
+
     _draw() {
         const ctx = this._ctx;
         if (!ctx || !this._css) return;
+        // Moved into another window since the last resize: size it there.
+        if (this._win && this._canvas.ownerDocument.defaultView !== this._win) this._resize();
         const s = this._css, mid = s / 2, rad = s * 0.44;
 
         ctx.clearRect(0, 0, s, s);
-        ctx.fillStyle = '#0b0f0b';
+        ctx.fillStyle = '#0b1220';
         ctx.fillRect(0, 0, s, s);
 
-        // Graticule, square this time: the old scopes had a ruled grid.
-        ctx.strokeStyle = '#1f3a24';
+        // A ring and the two axes: the cross is all there is to read.
         ctx.lineWidth = 1;
+        ctx.strokeStyle = '#26324a';
         ctx.beginPath();
-        for (let g = -4; g <= 4; g++) {
-            const d = rad * g / 4;
-            ctx.moveTo(mid - rad, mid + d); ctx.lineTo(mid + rad, mid + d);
-            ctx.moveTo(mid + d, mid - rad); ctx.lineTo(mid + d, mid + rad);
-        }
+        ctx.arc(mid, mid, rad, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.strokeStyle = '#2f5a36';
+        ctx.strokeStyle = '#1a2438';
         ctx.beginPath();
         ctx.moveTo(mid - rad, mid); ctx.lineTo(mid + rad, mid);
         ctx.moveTo(mid, mid - rad); ctx.lineTo(mid, mid + rad);
         ctx.stroke();
 
-        ctx.fillStyle = '#3f7a48';
         ctx.font = '10px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = MARK_CSS;
         ctx.textAlign = 'right';
         ctx.fillText('MARK', mid + rad, mid - 4);
+        ctx.fillStyle = SPACE_CSS;
         ctx.textAlign = 'left';
         ctx.fillText('SPACE', mid + 4, mid - rad + 10);
 
@@ -946,23 +986,47 @@ export class RttyTuner {
         for (let j = 0; j < n; j++) {
             const sw = this._sweeps[j];
             const age = (j + 1) / n;                     // newest = 1
-            const a = (quiet ? 0.3 : 1) * (0.02 + 0.13 * age * age);
-            ctx.strokeStyle = `rgba(60, 255, 100, ${a.toFixed(3)})`;
+            const a = ((quiet ? 0.3 : 1) * (0.02 + 0.13 * age * age)).toFixed(3);
+            const styles = [];
+            for (let h = 0; h <= HUES; h++) styles.push(`rgba(${rgbAt(h / HUES)}, ${a})`);
             // One path is lit once however often it crosses itself, so a
             // sweep is stroked in pieces of about half a tone cycle: short
             // enough not to overlap themselves, so the retraces add up.
             for (let i = 0; i + 2 < sw.length; i += CHUNK * 2) {
+                const end = Math.min(sw.length, i + CHUNK * 2 + 2);
+                let x0 = sw[i], x1 = x0, y0 = sw[i + 1], y1 = y0;
+                for (let p = i + 2; p < end; p += 2) {
+                    x0 = Math.min(x0, sw[p]); x1 = Math.max(x1, sw[p]);
+                    y0 = Math.min(y0, sw[p + 1]); y1 = Math.max(y1, sw[p + 1]);
+                }
+                const run = (x1 - x0) + (y1 - y0);
+                ctx.strokeStyle = styles[run > 0 ? Math.round(HUES * (x1 - x0) / run) : HUES >> 1];
                 ctx.beginPath();
                 ctx.moveTo(mid + sw[i] * k, mid - sw[i + 1] * k);
-                const end = Math.min(sw.length, i + CHUNK * 2 + 2);
                 for (let p = i + 2; p < end; p += 2) ctx.lineTo(mid + sw[p] * k, mid - sw[p + 1] * k);
                 ctx.stroke();
             }
         }
         ctx.restore();
 
-        if (this._info) this._info.textContent = this._caption();
+        if (this._info) this._showCaption();
         if (f) this._setStatus(this._statusText(f));
+    }
+
+    /** The caption, with the mark and space numbers in their arms' colours. */
+    _showCaption() {
+        const f = this._last, el = this._info;
+        if (!f) { el.textContent = this._caption(); return; }
+        const tone = (hz, css) => {
+            const b = el.ownerDocument.createElement('b');
+            b.style.color = css;
+            b.style.fontWeight = 'inherit';
+            b.textContent = Math.round(hz);
+            return b;
+        };
+        const db = v => (v <= -119 ? '---' : v.toFixed(0));
+        el.replaceChildren('Mark ', tone(f.markHz, MARK_CSS), '  Space ', tone(f.spaceHz, SPACE_CSS),
+            ` Hz   M ${db(f.markDb)}  S ${db(f.spaceDb)}  in ${db(f.inputDb)} dBFS`);
     }
 
     _caption() {

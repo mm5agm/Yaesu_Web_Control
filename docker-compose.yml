@@ -42,6 +42,11 @@ services:
     devices:
       # Pass the radio's USB-serial adapter into the container (same path inside).
       - ${YWC_SERIAL_DEVICE:-/dev/ttyUSB0}:${YWC_SERIAL_DEVICE:-/dev/ttyUSB0}
+      # Optional, for CW paddle keying: the radio's second (Standard) port,
+      # which YWC keys by DTR. Uncomment only if you use the paddle; Docker
+      # will not start with a device that isn't there. A /dev/serial/by-id
+      # path survives the radio being power-cycled, where ttyUSB numbers can move.
+      # - ${YWC_KEY_DEVICE:-/dev/ttyUSB1}:${YWC_KEY_DEVICE:-/dev/ttyUSB1}
       # Host ALSA devices (radio USB audio codec for Remote Audio).
       # To pin one card only, replace with e.g. /dev/snd/controlC1 + pcmC1D0c/p.
       - /dev/snd:/dev/snd

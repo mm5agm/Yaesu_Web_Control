@@ -111,5 +111,23 @@ namespace Yaesu_Web_Control.Services
             int  pitchHz = 300 + Math.Clamp(cwPitchCode, 0, 75) * 10;
             return ifOut + LoSlideHz(model, mode, widthHz, ifShiftHz, pitchHz, dataShiftHz);
         }
+
+        /// <summary>
+        /// The IF frequency the spectrum is centred on: the dial
+        /// (<see cref="DialIfHz"/>), except in DATA-L and DATA-U, where it is
+        /// the centre of the filter, so the signal being read sits in the
+        /// middle and a narrow span still shows it (Bruce VK2RT, Discussion
+        /// #250, 2026-10-27). The radio holds its filter centre still at the
+        /// IF OUT, so in those modes that is the IF OUT itself. Must match
+        /// viewOffsetHz in if-out-offset.js, which draws the panes from the
+        /// same point. Null when the model's IF OUT has not been measured.
+        /// </summary>
+        public static long? ViewIfHz(string model, string vfo, string? mode, string? ifWidthCode, int ifShiftHz, int cwPitchCode,
+                                     int dataShiftHz = SsbCarrierPointHz101)
+        {
+            if ((mode ?? "").ToUpperInvariant() is "DATA-L" or "DATA-U")
+                return RadioCapabilities.SdrIfOutHz(model, vfo);
+            return DialIfHz(model, vfo, mode, ifWidthCode, ifShiftHz, cwPitchCode, dataShiftHz);
+        }
     }
 }

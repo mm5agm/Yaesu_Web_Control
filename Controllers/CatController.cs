@@ -1530,7 +1530,8 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         [HttpPost("ifwidth/{receiver}")]
-        public async Task<IActionResult> SetIfWidth(string receiver, [FromBody] IfWidthRequest request)
+        public async Task<IActionResult> SetIfWidth(string receiver, [FromBody] IfWidthRequest request,
+                                                    [FromServices] Yaesu_Web_Control.Services.Rtty.RttyTunerModeService tunerMode)
         {
             // 0-99 allows probing post-firmware codes beyond the official 0-25 range.
             if (!int.TryParse(request.Code, out int codeNum) || codeNum < 0 || codeNum > 99)
@@ -1544,6 +1545,8 @@ namespace Yaesu_Web_Control.Controllers
                 await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(_radioStateService.RadioModel, VfoP1Outgoing(receiver), codeNum), "WebUI", CancellationToken.None);
                 if (VfoIsB(receiver)) _radioStateService.IfWidthB = request.Code;
                 else                  _radioStateService.IfWidthA = request.Code;
+                // A width chosen while the RTTY tuner is open is kept for it.
+                if (!VfoIsB(receiver)) await tunerMode.WidthSetByHandAsync(request.Code);
                 return Ok();
             }
             catch (Exception ex)
@@ -3053,6 +3056,10 @@ namespace Yaesu_Web_Control.Controllers
                               : on == "0" ? "0"
                               : type == null ? (request.Mode == "0" ? "1" : request.Mode)
                               : type == "1" ? "2" : "1";
+                // What was read back, for the dispatcher too: it pairs the
+                // radio's own BI reports with these.
+                if (on != null) _radioStateService.CwBreakInOn = on != "0";
+                if (type != null) _radioStateService.CwBreakInFull = type == "1";
                 _radioStateService.CwBreakIn = actual;
                 return Ok(new { mode = actual });
             }

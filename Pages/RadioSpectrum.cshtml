@@ -20,6 +20,7 @@
 <body>
     <div id="radioSpectrum"></div>
 
+    <script>window.ywcAutoModeChangeOnTune = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AutoModeChangeOnTune));</script>
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script type="module">

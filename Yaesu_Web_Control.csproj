@@ -285,9 +285,9 @@
   </Target>
 
   <PropertyGroup>
-    <Version>2.5.3</Version>
-    <FileVersion>2.5.3.0</FileVersion>
-    <AssemblyVersion>2.5.3.0</AssemblyVersion>
+    <Version>2.5.4</Version>
+    <FileVersion>2.5.4.0</FileVersion>
+    <AssemblyVersion>2.5.4.0</AssemblyVersion>
     <!-- The git tag CI is building (v2.5.2-pre2), passed as -p:YwcBuildTag=...
          by release.yml, build-dmg.sh and the Dockerfile. Empty on a local
          build. AppVersion.Display reads the metadata below so a pre-release
@@ -366,6 +366,29 @@
                       Lines="# Generated at build time from the Radio_Web_Control_Core subtree.;# core/js is the single source of truth - see core/js/README.md.;# Edit these in core/js and push the subtree. Never edit the copy here.;.gitignore;@(_SharedCoreJs-&gt;'%(Filename)%(Extension)')" />
     <ItemGroup>
       <Content Include="@(_SharedCoreJs->'wwwroot\js\%(RecursiveDir)%(Filename)%(Extension)')"
+               Exclude="@(Content)">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+
+  <!-- The paddle adapter's firmware from the core subtree
+       (core/firmware/paddle-adapter/dist), served for the CW Paddle page's
+       Install / Update box. Copied and git-ignored the same way as core/js
+       above, for the same reasons. -->
+  <Target Name="CopyCoreFirmware" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <_CoreFirmware Include="core\firmware\paddle-adapter\dist\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CoreFirmware)"
+          DestinationFolder="wwwroot\firmware\paddle-adapter"
+          SkipUnchangedFiles="true" />
+    <WriteLinesToFile File="wwwroot\firmware\paddle-adapter\.gitignore"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true"
+                      Lines="# Generated at build time from core/firmware/paddle-adapter/dist.;# Never edit the copy here.;.gitignore;@(_CoreFirmware-&gt;'%(Filename)%(Extension)')" />
+    <ItemGroup>
+      <Content Include="@(_CoreFirmware->'wwwroot\firmware\paddle-adapter\%(Filename)%(Extension)')"
                Exclude="@(Content)">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>

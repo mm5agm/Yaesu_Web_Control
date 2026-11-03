@@ -65,6 +65,17 @@ namespace YaesuWebControl.Tests
                 YaesuIfOutOffset.DialIfHz("FTdx101MP", "A", mode, "13", shiftHz, 40, dataShiftHz));
         }
 
+        [Theory]
+        [InlineData("DATA-L", 1500,   0, 9_005_000)]   // the filter centre, which the radio holds at IF OUT
+        [InlineData("DATA-U", 1000, 300, 9_005_000)]   // whatever DATA SHIFT and IF shift say
+        [InlineData("USB",    1500,   0, 9_006_500)]   // every other mode: the dial, as DialIfHz
+        [InlineData("CW-U",   1500,   0, 9_005_250)]
+        public void The_view_is_the_filter_centre_in_DATA_modes_and_the_dial_otherwise(string mode, int dataShiftHz, int shiftHz, long expected)
+        {
+            Assert.Equal(expected, YaesuIfOutOffset.ViewIfHz("FTdx101MP", "A", mode, "13", shiftHz, 40, dataShiftHz));
+            Assert.Null(YaesuIfOutOffset.ViewIfHz("FTdx10", "A", mode, "13", shiftHz, 40, dataShiftHz));
+        }
+
         [Fact]
         public void An_unmeasured_model_gets_no_slide()
         {

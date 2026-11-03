@@ -150,6 +150,30 @@ export function resolveModeShortcut(key, mods = {}) {
 
 // ── Context guards ───────────────────────────────────────────────────────────
 
+// The TX toggle key (Settings > TX toggle key) belongs to site.js, which keys
+// the radio on it. No shortcut may act on that key too: today site.js's
+// listener happens to run first and marks the event handled, but that rests
+// on script order, and a held key's repeats reach here unmarked. Matches
+// exactly when site.js would fire, plus the repeats it ignores.
+function isTxToggleKey(e) {
+    const k = window.ywcTxToggleKey;
+    if (k == null || k === '' || e.ctrlKey || e.metaKey || e.altKey) return false;
+    if (k === 'Space' || k === ' ') return e.key === ' ' || e.code === 'Space';
+    return k.length === 1 && e.key.length === 1
+        ? e.key.toLowerCase() === k.toLowerCase()
+        : e.key === k || e.code === k;
+}
+
+/** The help table, plus a row saying which key TX has taken, if any. */
+function helpRows() {
+    const k = window.ywcTxToggleKey;
+    if (k == null || k === '') return SHORTCUT_HELP;
+    return [...SHORTCUT_HELP, {
+        group: 'Help', keys: k === 'Space' || k === ' ' ? 'Space' : k,
+        action: 'Transmit on / off (set in Settings) - no shortcut acts on this key',
+    }];
+}
+
 function isTypingIntoEditable() {
     const active = document.activeElement;
     if (active) {
@@ -843,7 +867,7 @@ function ensureHelpDialog() {
     ].join(';');
 
     const groups = [];
-    for (const row of SHORTCUT_HELP) {
+    for (const row of helpRows()) {
         let g = groups.find(x => x.name === row.group);
         if (!g) { g = { name: row.group, rows: [] }; groups.push(g); }
         g.rows.push(row);
@@ -1279,7 +1303,7 @@ export function initKeyboardShortcuts() {
     // Capture phase so help-dialog ↑/↓ / swallow beats other Index key handlers
     // (frequency digit edit, IF shift, etc.).
     document.addEventListener('keydown', (e) => {
-        if (e.defaultPrevented) return;
+        if (e.defaultPrevented || isTxToggleKey(e)) return;
         if (isHelpOpen()) {
             if (e.key === 'Escape') {
                 e.preventDefault();

@@ -18,6 +18,7 @@ namespace Yaesu_Web_Control.Controllers
         private readonly RttyAutoService _auto;
         private readonly RttyRadioToneService _tones;
         private readonly RadioStateService _state;
+        private readonly ISettingsService _settings;
         private readonly ILogger<RttyController> _logger;
 
         public RttyController(RttyTunerService tuner,
@@ -25,6 +26,7 @@ namespace Yaesu_Web_Control.Controllers
                               RttyAutoService auto,
                               RttyRadioToneService tones,
                               RadioStateService state,
+                              ISettingsService settings,
                               ILogger<RttyController> logger)
         {
             _tuner = tuner;
@@ -32,6 +34,7 @@ namespace Yaesu_Web_Control.Controllers
             _auto = auto;
             _tones = tones;
             _state = state;
+            _settings = settings;
             _logger = logger;
         }
 
@@ -61,11 +64,172 @@ namespace Yaesu_Web_Control.Controllers
             {
                 var error = await _tuner.StartAsync(req.MarkHz, req.ShiftHz, req.Reverse, req.Baud, id);
                 if (error != null) return BadRequest(new { error });
+                await KeepTonesAsync(req, id);
                 return Ok(_tuner.Frame(0, id));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to start the RTTY tuner");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// The tones the tuner last ran on, which a tuner opening in any window
+        /// starts from (ApplicationSettings.RttyTunerTones). 204 before the
+        /// tuner has ever run.
+        /// </summary>
+        [HttpGet("tuner/tones")]
+        public async Task<IActionResult> Tones()
+        {
+            var t = (await _settings.GetSettingsAsync()).RttyTunerTones;
+            if (t is null) return NoContent();
+            return Ok(new { markHz = t.MarkHz, shiftHz = t.ShiftHz, reverse = t.Reverse, baud = t.Baud });
+        }
+
+        /// <summary>
+        /// The width kept for MAIN's mode on the band it's on (an SH code), or null when the
+        /// tuner works it out: what WIDTH's AUTO key shows.
+        /// </summary>
+        [HttpGet("tuner/width")]
+        public async Task<IActionResult> KeptWidth([FromServices] RttyTunerModeService tunerMode)
+        {
+            var (mode, code) = await tunerMode.KeptWidthNowAsync();
+            return Ok(new { mode, code });
+        }
+
+        /// <summary>AUTO on WIDTH: forget the kept width, so the tuner sizes the filter again.</summary>
+        [HttpDelete("tuner/width")]
+        public async Task<IActionResult> ForgetWidth([FromServices] RttyTunerModeService tunerMode)
+        {
+            try
+            {
+                return Ok(new { message = await tunerMode.ForgetWidthAsync(HttpContext.RequestAborted) });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to put the RTTY tuner's width back to automatic");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // Keep the tones a start was given, when they are new. Logged with the
+        // page that sent them, so a mark that changes when nobody changed it
+        // can be traced to the window that did it.
+        private async Task KeepTonesAsync(StartRequest req, string? client)
+        {
+            var settings = await _settings.GetSettingsAsync();
+            var was = settings.RttyTunerTones;
+            if (was is not null && was.MarkHz == req.MarkHz && was.ShiftHz == req.ShiftHz
+                && was.Reverse == req.Reverse && was.Baud == req.Baud) return;
+
+            _logger.LogInformation(
+                "RTTY tuner tones now mark {Mark} Hz, shift {Shift} Hz, {Baud} baud{Rev} (were {Was}), from {Page}, client {Client}",
+                req.MarkHz, req.ShiftHz, req.Baud, req.Reverse ? ", reversed" : "",
+                was is null ? "none" : $"{was.MarkHz}/{was.ShiftHz}",
+                Request.Headers.Referer.ToString(), client ?? "shared");
+            settings.RttyTunerTones = new Models.RttyTones
+            {
+                MarkHz = req.MarkHz, ShiftHz = req.ShiftHz, Reverse = req.Reverse, Baud = req.Baud,
+            };
+            await _settings.SaveSettingsAsync(settings);
+        }
+
+        /// <summary>
+        /// Whether there's an RTTY setup in Settings, and whether a band key
+        /// sends it: the contest page asks when it's back in view, so CAT SET
+        /// goes once the setup is emptied in Settings (Bruce VK2RT, #250).
+        /// </summary>
+        [HttpGet("setup")]
+        public async Task<IActionResult> SetupState()
+        {
+            var settings = await _settings.GetSettingsAsync();
+            return Ok(new { any = !string.IsNullOrWhiteSpace(settings.RttySetupCat), onBand = settings.RttySetupOnBand });
+        }
+
+        /// <summary>
+        /// Send the operator's RTTY setup (Settings, <see cref="RttySetupCat"/>)
+        /// for <paramref name="band"/>: the lines for every band, then that
+        /// band's. Refused whole if any command could transmit or write a
+        /// memory, and while the radio is transmitting. <paramref name="reset"/>
+        /// is the CAT SET key: the widths kept for each band are forgotten
+        /// first, so every band goes back to the setup's width (Bruce VK2RT,
+        /// #250). After the setup, the width kept for the band goes back on.
+        /// </summary>
+        [HttpPost("setup")]
+        public async Task<IActionResult> SendSetup([FromQuery] string? band, [FromQuery] bool reset,
+                                                   [FromServices] ICatClient cat,
+                                                   [FromServices] RttyTunerModeService tunerMode)
+        {
+            var settings = await _settings.GetSettingsAsync();
+            var (commands, problems) = RttySetupCat.For(settings.RttySetupCat, band);
+            if (problems.Count > 0)
+                return BadRequest(new { error = "The RTTY setup in Settings was not sent. " + string.Join(". ", problems) + "." });
+            if (commands.Count == 0)
+                return BadRequest(new { error = "There is no RTTY setup" + (band is null ? "" : $" for {band}") + " in Settings." });
+            if (!cat.IsConnected) return StatusCode(503, new { error = "The radio is not connected." });
+            if (_state.IsTransmitting) return Conflict(new { error = "Not while transmitting." });
+
+            try
+            {
+                // Not waited on: a set command has no answer, and waiting 150 ms
+                // for each made a band change slow (Bruce VK2RT, #250).
+                foreach (var c in commands)
+                    await cat.SendWithoutReplyAsync(c + ";", "RttySetup", HttpContext.RequestAborted);
+                _logger.LogInformation("RTTY setup sent for {Band}: {Count} commands", band ?? "no band", commands.Count);
+                if (reset) await tunerMode.ForgetAllWidthsAsync();
+                // After the setup, so a width set by hand on this band wins over
+                // an SH line in it, and before the read-back, so the screen shows
+                // the width the radio ends up with.
+                try { await tunerMode.BandChangedAsync(commands.Any(c => c.StartsWith("SH", StringComparison.Ordinal)), HttpContext.RequestAborted); }
+                catch (Exception ex) { _logger.LogWarning(ex, "RTTY setup: putting the band's width back failed"); }
+                // A set command has no answer, so what the setup changed is read
+                // back for every page to show: the radio had the width from an SH
+                // line while the screen still showed the one before (Bruce VK2RT, #250).
+                // The frequency too: an FA line put the radio on 14.090 while the
+                // screen kept the band key's 14.080, as the FTdx101 doesn't report
+                // a change made over CAT (Bruce VK2RT, #250).
+                var receivers = _state.IsSingleReceiver ? new[] { "A" } : new[] { "A", "B" };
+                var reads = new List<string> { "PC;", "FA;", "FB;" };
+                foreach (var r in receivers)
+                {
+                    string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, r);
+                    reads.AddRange([$"MD{RadioCapabilities.ModeP1(r)};", $"SH{p1};", $"IS{p1};"]);
+                }
+                foreach (var q in reads)
+                {
+                    try { await cat.SendCommandAndDispatchAsync(q, "RttySetup", HttpContext.RequestAborted); }
+                    catch (Exception ex) { _logger.LogDebug(ex, "RTTY setup: reading {Command} back failed", q); }
+                }
+                return Ok(new { sent = commands.Count });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send the RTTY setup");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// A band key on RTTY Contest with no setup sent after it: put back the
+        /// width kept for the new band, or let the tuner size the filter, and
+        /// read the width back for the screen (Bruce VK2RT, #250 2026-11-01).
+        /// </summary>
+        [HttpPost("tuner/band")]
+        public async Task<IActionResult> BandChanged([FromServices] RttyTunerModeService tunerMode, [FromServices] ICatClient cat)
+        {
+            if (!cat.IsConnected) return StatusCode(503, new { error = "The radio is not connected." });
+            try
+            {
+                var message = await tunerMode.BandChangedAsync(setupSetWidth: false, HttpContext.RequestAborted);
+                string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
+                try { await cat.SendCommandAndDispatchAsync($"SH{p1};", "RttyTuner", HttpContext.RequestAborted); }
+                catch (Exception ex) { _logger.LogDebug(ex, "RTTY band change: reading the width back failed"); }
+                return Ok(new { message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to put the band's width back");
                 return StatusCode(500, new { error = ex.Message });
             }
         }
@@ -301,6 +465,32 @@ namespace Yaesu_Web_Control.Controllers
                 _logger.LogError(ex, "Failed to read the radio's RTTY tone settings");
                 return Ok(new { ok = false, reason = ex.Message });
             }
+        }
+
+        public sealed record ModeRequest(string? Mode);
+
+        /// <summary>
+        /// The operator picked an RTTY mode - RTTY-L, RTTY-U, DATA-L or DATA-U -
+        /// and is about to put the radio in it. Saved as the mode the tuner
+        /// switches to and the RTTY Contest band keys use, and handed to a
+        /// running tuner so it holds the new mode rather than putting the old
+        /// one back. Writes nothing to the radio: the page does that next, for
+        /// whichever receiver is on screen.
+        /// </summary>
+        [HttpPost("mode")]
+        public async Task<IActionResult> SetMode([FromBody] ModeRequest? req)
+        {
+            if (RttyTunerModeService.Normalise(req?.Mode) is not { } mode)
+                return BadRequest(new { error = "Mode must be one of " + string.Join(", ", RttyTunerModeService.Modes) + "." });
+
+            var settings = await _settings.GetSettingsAsync();
+            if (settings.RttyTunerMode != mode)
+            {
+                settings.RttyTunerMode = mode;
+                await _settings.SaveSettingsAsync(settings);
+            }
+            await _tuner.ChooseModeAsync(mode, HttpContext.RequestAborted);
+            return Ok(new { mode });
         }
 
         public sealed record RadioTonesRequest(int MarkHz, int ShiftHz);

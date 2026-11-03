@@ -89,5 +89,30 @@ namespace RadioWebControl.Core.Tests.Cw
             Assert.EndsWith("CQ DE MM5AGM", decoded);
             Assert.DoesNotContain("EEEE", decoded);
         }
+
+        /// <summary>
+        /// The same quiet gap, but with too few blips in front of it to fill
+        /// the windows - the gap between two overs on a busy frequency. There
+        /// is no verdict, so the stale clock above cannot run, and before the
+        /// fix the blips came out in front of the next CQ: "EEE EE CQ TEST"
+        /// on bench/iwc-2way-test-1642z-5min.wav after 7.7 s of nothing.
+        /// </summary>
+        [Fact]
+        public void Drops_a_few_blips_held_across_a_quiet_gap_with_no_verdict()
+        {
+            var gen = new CwSignalGenerator();
+            var audio = CwSignalGenerator.Concat(
+                gen.LeadIn(),
+                gen.Generate("EEE EE", 30.0),
+                gen.Silence(8.0),
+                gen.Generate("CQ DE MM5AGM", 20.0),
+                gen.Silence(0.5));
+            gen.AddNoise(audio, 20.0);
+
+            var decoded = Decode(audio);
+            _out.WriteLine($"\"{decoded}\"");
+
+            Assert.Equal("CQ DE MM5AGM", decoded);
+        }
     }
 }

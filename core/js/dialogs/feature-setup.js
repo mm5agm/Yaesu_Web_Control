@@ -1,22 +1,29 @@
 /*
- * feature-setup.js - "set this up now" pop-outs for Home-page panels.
+ * feature-setup.js - "set this up now" pop-outs for panels that cannot work
+ * until something is chosen in Settings.
  *
- * Some panels on Home are always visible but cannot do anything until
- * something is chosen in Settings: the CW reader needs the radio's USB
- * recording device, the DX spots panel needs a cluster host and a login
- * callsign. Telling the operator to go and find those fields is a poor
- * answer when we know exactly which field is missing, so each panel can
- * instead offer to fix its own prerequisite here and stay where it is.
+ * Shared by Yaesu Web Control and Icom Web Control. Edit it here, in the
+ * core, never in a wwwroot copy.
  *
- * The dialog is built in JS rather than in the Razor page so that a panel
- * can adopt it without a markup change, and so that the shared CW panel in
- * core/ can reach it through one optional global rather than importing
- * anything YWC-specific.
+ * Some panels are always visible but cannot do anything until a setting is
+ * filled in: the CW reader needs the radio's USB recording device, the DX
+ * spots panel needs a cluster host and a login callsign. Telling the
+ * operator to go and find those fields is a poor answer when we know exactly
+ * which field is missing, so each panel can instead offer to fix its own
+ * prerequisite here and stay where it is.
  *
- * Writes go through /api/feature-setup, which whitelists the exact fields
- * each pop-out is allowed to touch. This is not a general settings editor
- * and should not become one - anything beyond a single missing
- * prerequisite belongs on the Settings page.
+ * The dialog is built in JS rather than in a Razor page so that a panel can
+ * adopt it without a markup change, and so that the shared CW panel can
+ * reach it through one optional global rather than importing anything.
+ *
+ * The host app provides /api/feature-setup:
+ *   GET  state       { dxCluster: { enabled, host, port, callsign },
+ *                      cwAudio: { rxDevice, devices: [{ key, name, likelyRadio }] } }
+ *   POST dx-cluster  { enabled, host, port, callsign } -> { success, message | error }
+ *   POST audio-rx    { device }                        -> { success, message | error }
+ * Each write whitelists the exact fields it may touch. This is not a general
+ * settings editor and should not become one - anything beyond a single
+ * missing prerequisite belongs on the Settings page.
  */
 
 const API = "/api/feature-setup";
@@ -67,7 +74,7 @@ function buildDialog() {
             const r = await onSave();
             if (r && r.success) {
                 setMessage(r.message || "Saved.", "text-success");
-                document.dispatchEvent(new CustomEvent("ywc:feature-setup-saved",
+                document.dispatchEvent(new CustomEvent("rwc:feature-setup-saved",
                     { detail: { kind: dlg.dataset.kind } }));
                 setTimeout(() => dlg.close(), 1400);
             } else {
@@ -148,7 +155,9 @@ async function openDxCluster() {
     dlg.querySelector("#fsDxHost").value = dx.host || "";
     dlg.querySelector("#fsDxPort").value = dx.port || 7300;
     dlg.querySelector("#fsDxCall").value = dx.callsign || "";
-    dlg.querySelector("#fsDxEnabled").checked = dx.enabled !== false;
+    // Ticked when the cluster has never been set up: whoever opened this
+    // wants spots, and an unticked box would save a cluster that stays off.
+    dlg.querySelector("#fsDxEnabled").checked = dx.enabled !== false || !dx.host;
 
     onSave = () => postJson(`${API}/dx-cluster`, {
         enabled:  dlg.querySelector("#fsDxEnabled").checked,
@@ -165,21 +174,22 @@ async function openDxCluster() {
    The reader takes a capture-only hold on the radio's RX endpoint, so the
    only thing it can be missing is that recording device. The TX device is
    deliberately not offered here: touching it could break an existing
-   Remote Audio setup, and the reader never needs it. */
+   Remote Audio setup, and the reader never needs it.
+
+   The device list comes with the state, from the host app, because each
+   app names its devices the way its own capture code matches them. */
 
 async function openCwAudio() {
     buildDialog();
-    const [state, devices] = await Promise.all([
-        getJson(`${API}/state`),
-        getJson("/api/audio/devices")
-    ]);
-    const current = (state.cwAudio && state.cwAudio.rxDevice) || "";
-    const inputs = (devices && devices.inputs) || [];
+    const state = await getJson(`${API}/state`);
+    const cw = state.cwAudio || {};
+    const current = cw.rxDevice || "";
+    const inputs = cw.devices || [];
 
     const options = inputs.map(d => {
         const sel = d.key === current ? " selected" : "";
         const hint = d.likelyRadio ? " (looks like the radio)" : "";
-        return `<option value="${escapeAttr(d.key)}"${sel}>${escapeHtml(d.displayName || d.name)}${hint}</option>`;
+        return `<option value="${escapeAttr(d.key)}"${sel}>${escapeHtml(d.name)}${hint}</option>`;
     }).join("");
 
     bodyEl.innerHTML = `
@@ -216,8 +226,8 @@ function escapeAttr(s) {
 
 /* -- Public entry point -------------------------------------------------
    `kind` is one of "dx-cluster" or "cw-audio". Unknown kinds are ignored
-   rather than throwing, because callers may be shared code that cannot
-   know which pop-outs this app provides. */
+   rather than throwing, because callers may not know which pop-outs this
+   app provides. */
 
 export async function openFeatureSetup(kind) {
     try {
@@ -231,9 +241,8 @@ export async function openFeatureSetup(kind) {
     }
 }
 
-/* The shared CW panel in core/ is used by more than one app, so it must not
-   import anything from this repo. It calls this global if the host app
-   happens to provide it, and carries on unchanged if it does not. */
+/* The shared CW panel calls this global if the page has loaded this module,
+   and carries on unchanged if it has not. */
 window.radioFeatureSetup = {
     open: openFeatureSetup,
     provides: kind => kind === "dx-cluster" || kind === "cw-audio"

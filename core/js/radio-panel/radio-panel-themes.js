@@ -17,6 +17,8 @@ const CONSOLE = {
         panel: '#1c1e22', 'panel-border': '#34373d',
         legend: '#c3c9d0', 'legend-dim': '#9aa1a9', sub: '#a3aab2',
         accent: '#ffb02e', 'accent-soft': '#ffd58a', 'accent-bg': '#3a2c12',
+        // The VFO the main dial tunes: A, and B in a hue that cannot pass for A.
+        'vfo-a': '#ffb02e', 'vfo-b': '#5cc8ff',
 
         'key-bg': '#2a2d32', 'key-border': '#3c4048', 'key-shadow': '#111215', 'key-fg': '#e1e5ea',
         'led-off': '#3d3220', 'led-on': '#ffb02e',
@@ -46,7 +48,10 @@ const CONSOLE = {
         'meter-red': '#b3261e', needle: '#141414', 'meter-hub': '#24262a',
 
         'dial-a': '#30333a', 'dial-b': '#1a1c20', 'dial-rim': '#3a3e45',
-        'dial-inner': '#26292e', 'dial-dimple': '#1d1f23',
+        'dial-inner': '#b4bac1', 'dial-dimple': 'radial-gradient(circle at 45% 40%, #6c7279, #c4c9cf 78%)',
+        // The face's brushed-metal sheen, lit from a fixed place so it stays
+        // put as the knob turns; 'none' for a plain face.
+        'dial-sheen': 'radial-gradient(circle at 50% 28%, rgba(255,255,255,.35), transparent 55%), radial-gradient(circle, transparent 60%, rgba(0,0,0,.3)), conic-gradient(#f2f4f6, #9aa0a7 12%, #e4e7ea 25%, #8c9299 38%, #eef0f2 50%, #979da4 62%, #e1e4e7 75%, #8e949b 88%, #f2f4f6)',
         'knob-outer': '#15171a', 'knob-mid': '#2c2f35', 'knob-ring': '#41454d',
         'knob-cap': '#25282d', 'knob-mark': '#ffb02e',
     },
@@ -61,6 +66,7 @@ const NIGHT = {
         panel: '#0b0606', 'panel-border': '#2a1210',
         legend: '#b84a3e', 'legend-dim': '#8a3a30', sub: '#9a4236',
         accent: '#ff4a36', 'accent-soft': '#ff8a78', 'accent-bg': '#2a0c08',
+        'vfo-a': '#ff4a36', 'vfo-b': '#ffa898',
 
         'key-bg': '#160909', 'key-border': '#2e1411', 'key-shadow': '#000000', 'key-fg': '#d8584a',
         'led-off': '#2a0e0b', 'led-on': '#ff4a36',
@@ -90,7 +96,7 @@ const NIGHT = {
         'meter-red': '#ff2a1a', needle: '#ffb0a0', 'meter-hub': '#0d0505',
 
         'dial-a': '#1e0b09', 'dial-b': '#0d0505', 'dial-rim': '#2e1411',
-        'dial-inner': '#140707', 'dial-dimple': '#0a0303',
+        'dial-inner': '#140707', 'dial-dimple': '#0a0303', 'dial-sheen': 'none',
         'knob-outer': '#0a0303', 'knob-mid': '#1a0909', 'knob-ring': '#2e1411',
         'knob-cap': '#120606', 'knob-mark': '#ff4a36',
     },
@@ -105,6 +111,7 @@ const SILVER = {
         panel: '#c4c8cd', 'panel-border': '#9ca0a5',
         legend: '#2a2e33', 'legend-dim': '#555a60', sub: '#41464c',
         accent: '#8a5a00', 'accent-soft': '#b07a1a', 'accent-bg': '#e6d3a4',
+        'vfo-a': '#8a5a00', 'vfo-b': '#0b4f8a',
 
         'key-bg': '#2a2c30', 'key-border': '#15171a', 'key-shadow': '#7d8186', 'key-fg': '#f2f4f6',
         'led-off': '#4a3d22', 'led-on': '#ffb02e',
@@ -134,7 +141,10 @@ const SILVER = {
         'meter-red': '#b3261e', needle: '#141414', 'meter-hub': '#2a2c30',
 
         'dial-a': '#4a4e54', 'dial-b': '#2a2d31', 'dial-rim': '#5a5e64',
-        'dial-inner': '#3a3d42', 'dial-dimple': '#24272b',
+        'dial-inner': '#b4bac1', 'dial-dimple': 'radial-gradient(circle at 45% 40%, #6c7279, #c4c9cf 78%)',
+        // The face's brushed-metal sheen, lit from a fixed place so it stays
+        // put as the knob turns; 'none' for a plain face.
+        'dial-sheen': 'radial-gradient(circle at 50% 28%, rgba(255,255,255,.35), transparent 55%), radial-gradient(circle, transparent 60%, rgba(0,0,0,.3)), conic-gradient(#f2f4f6, #9aa0a7 12%, #e4e7ea 25%, #8c9299 38%, #eef0f2 50%, #979da4 62%, #e1e4e7 75%, #8e949b 88%, #f2f4f6)',
         'knob-outer': '#22252a', 'knob-mid': '#45484e', 'knob-ring': '#5a5e64',
         'knob-cap': '#2e3135', 'knob-mark': '#ffb02e',
     },
@@ -149,6 +159,7 @@ const DAYLIGHT = {
         panel: '#f6f7f9', 'panel-border': '#c3c9d1',
         legend: '#2d343c', 'legend-dim': '#5b636d', sub: '#46505a',
         accent: '#c4520a', 'accent-soft': '#e07a30', 'accent-bg': '#fde6d2',
+        'vfo-a': '#c4520a', 'vfo-b': '#1a5fb4',
 
         'key-bg': '#e6e9ed', 'key-border': '#b9c0c8', 'key-shadow': '#a9b0b8', 'key-fg': '#1b2128',
         'led-off': '#d6cbbd', 'led-on': '#e8660c',
@@ -178,7 +189,10 @@ const DAYLIGHT = {
         'meter-red': '#c42218', needle: '#141414', 'meter-hub': '#46505a',
 
         'dial-a': '#eef0f3', 'dial-b': '#c9cfd6', 'dial-rim': '#a9b0b8',
-        'dial-inner': '#dde1e6', 'dial-dimple': '#c3c9d1',
+        'dial-inner': '#c4c9cf', 'dial-dimple': 'radial-gradient(circle at 45% 40%, #6c7279, #c4c9cf 78%)',
+        // The face's brushed-metal sheen, lit from a fixed place so it stays
+        // put as the knob turns; 'none' for a plain face.
+        'dial-sheen': 'radial-gradient(circle at 50% 28%, rgba(255,255,255,.35), transparent 55%), radial-gradient(circle, transparent 60%, rgba(0,0,0,.3)), conic-gradient(#f2f4f6, #9aa0a7 12%, #e4e7ea 25%, #8c9299 38%, #eef0f2 50%, #979da4 62%, #e1e4e7 75%, #8e949b 88%, #f2f4f6)',
         'knob-outer': '#b9c0c8', 'knob-mid': '#e6e9ed', 'knob-ring': '#a9b0b8',
         'knob-cap': '#f6f7f9', 'knob-mark': '#e8660c',
     },
@@ -193,6 +207,7 @@ const GREEN = {
         panel: '#0a120c', 'panel-border': '#1c3322',
         legend: '#7ccf8a', 'legend-dim': '#4f8a5a', sub: '#62a86e',
         accent: '#5cff7a', 'accent-soft': '#a0ffb0', 'accent-bg': '#0f2a15',
+        'vfo-a': '#5cff7a', 'vfo-b': '#ffe066',
 
         'key-bg': '#111c13', 'key-border': '#24402a', 'key-shadow': '#000000', 'key-fg': '#9be8a8',
         'led-off': '#14301a', 'led-on': '#5cff7a',
@@ -222,7 +237,7 @@ const GREEN = {
         'meter-red': '#ff5a3a', needle: '#e0ffe6', 'meter-hub': '#14261a',
 
         'dial-a': '#1a261c', 'dial-b': '#0a120c', 'dial-rim': '#24402a',
-        'dial-inner': '#121c14', 'dial-dimple': '#08100a',
+        'dial-inner': '#121c14', 'dial-dimple': '#08100a', 'dial-sheen': 'none',
         'knob-outer': '#08100a', 'knob-mid': '#16241a', 'knob-ring': '#24402a',
         'knob-cap': '#101a12', 'knob-mark': '#5cff7a',
     },
@@ -237,6 +252,7 @@ const CONTRAST = {
         panel: '#000000', 'panel-border': '#ffffff',
         legend: '#ffffff', 'legend-dim': '#d0d0d0', sub: '#e0e0e0',
         accent: '#ffd400', 'accent-soft': '#ffe866', 'accent-bg': '#332a00',
+        'vfo-a': '#ffd400', 'vfo-b': '#00e5ff',
 
         'key-bg': '#000000', 'key-border': '#ffffff', 'key-shadow': '#000000', 'key-fg': '#ffffff',
         'led-off': '#333333', 'led-on': '#ffd400',
@@ -266,7 +282,7 @@ const CONTRAST = {
         'meter-red': '#ff2020', needle: '#ffd400', 'meter-hub': '#ffffff',
 
         'dial-a': '#222222', 'dial-b': '#000000', 'dial-rim': '#ffffff',
-        'dial-inner': '#111111', 'dial-dimple': '#444444',
+        'dial-inner': '#111111', 'dial-dimple': '#444444', 'dial-sheen': 'none',
         'knob-outer': '#000000', 'knob-mid': '#222222', 'knob-ring': '#ffffff',
         'knob-cap': '#111111', 'knob-mark': '#ffd400',
     },
