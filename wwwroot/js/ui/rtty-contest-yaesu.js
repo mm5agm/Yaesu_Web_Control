@@ -90,16 +90,16 @@ export function startYaesuRttyContest(root, cfg) {
         controls: [
             { id: 'power', label: 'PWR', kind: 'range', min: 5, max: maxPowerW, step: 1, unit: ' W',
               title: 'RF power. Drag and let go, or turn the mouse wheel over it' },
+            // MONI under PWR, the other transmit control (Bruce VK2RT, #250 2026-11-02/03).
+            { id: 'moni', label: 'MONI', kind: 'range', min: 0, max: 100, step: 1,
+              toggle: 'Monitor on or off: hear your own transmit audio. It does not transmit. Kept, and put back each time this page opens and after your RTTY setup is sent',
+              title: 'Monitor level. Drag and let go, or turn the mouse wheel over it. Kept, and put back after your RTTY setup is sent' },
             { id: 'width', label: 'WIDTH', kind: 'list', perReceiver: true,
               title: 'IF width of the receiver on screen',
               auto: 'Each band starts on the width an SH command in your RTTY setup gives it, or with none, the RTTY tuner works the width out for the signal. A width you set on MAIN in your RTTY mode is kept for the band, until you press AUTO or CAT SET' },
             { id: 'shift', label: 'SHIFT', kind: 'range', perReceiver: true, min: -1000, max: 1000, step: 20, reset: 0,
               format: v => `${v > 0 ? '+' : ''}${v} Hz`,
               title: 'IF shift of the receiver on screen. Double-click to centre it' },
-            // MONI under INNER on the VFO WHEEL (Bruce VK2RT, #250 2026-11-02).
-            { id: 'moni', label: 'MONI', kind: 'range', box: 'wheel', min: 0, max: 100, step: 1,
-              toggle: 'Monitor on or off: hear your own transmit audio. It does not transmit. Kept, and put back each time this page opens and after your RTTY setup is sent',
-              title: 'Monitor level. Drag and let go, or turn the mouse wheel over it. Kept, and put back after your RTTY setup is sent' },
         ],
         onControl: (id, value, vfo) => setControl(id, value, vfo),
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
