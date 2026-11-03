@@ -4522,6 +4522,8 @@ Open it with **CW Paddle** in the top bar, or **MENU → CW → CW Paddle** on t
 - **A paddle-to-MIDI adapter**, one of these two:
   - a **HaliKey MIDI** ([§23.2](#232-the-halikey-midi)). It is hard to get outside the USA.
   - an **ESP32-S3 board** that you program from this page ([§23.3](#233-an-esp32-s3-board-as-the-adapter)). The boards are cheap and sold everywhere, and you need no tools beyond the browser and three wires.
+
+  You can have both plugged in at once, for example while you make an ESP32 adapter for a friend. Each one appears in **Device** once connected. Pick one, or leave *All MIDI inputs* and either paddle keys.
 - **Chrome or Edge.** Firefox and Safari have no Web MIDI.
 - **HTTPS if the browser is on another computer.** Browsers allow MIDI only on `https://` pages and on `localhost`. Set up HTTPS as in [§18.3](#183-https-for-remote-browsers) and open `https://<shack-PC>:8443/CwPaddle`.
 - **The radio's USB cable to the shack PC**, the one YWC already uses for CAT. The keying goes over the same cable.
