@@ -255,11 +255,16 @@ export async function flashImage({ port, image, onProgress = () => {}, onLog = (
         await loader.writeReg(S3_RTC_CNTL_OPTION1, 0, S3_FORCE_DOWNLOAD_BOOT);
         // Not loader.after('hard_reset'): in esptool-js 0.7.1 it only lowers
         // RTS, so nothing resets until the port closes. RTS high resets the
-        // chip; letting go with DTR low starts the firmware.
-        await transport.setDTR(false);
-        await transport.setRTS(true);
-        await new Promise(r => setTimeout(r, 100));
-        await transport.setRTS(false);
+        // chip; letting go with DTR low starts the firmware. The chip's own
+        // USB port goes with the reset, often before the last call is through:
+        // an error from here on means it went. Whether the firmware started is
+        // for the caller to see, by asking it over MIDI.
+        try {
+            await transport.setDTR(false);
+            await transport.setRTS(true);
+            await new Promise(r => setTimeout(r, 100));
+            await transport.setRTS(false);
+        } catch { /* the board has gone: it restarted */ }
     } catch (e) {
         throw e instanceof FlashError ? e : new FlashError(stage, e?.message || String(e));
     } finally {

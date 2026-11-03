@@ -109,6 +109,16 @@ test('flashing writes at 0, checks by MD5, resets into the firmware and lets go 
     assert.deepEqual(logs, ['writing']);
 });
 
+test('the port vanishing during the reset is the reset working, not a failure', async () => {
+    const { esptool, calls } = fakeEsptool();
+    esptool.Transport.prototype.setRTS = async function (v) {
+        calls.push(`rts ${v}`);
+        if (!v) throw new Error('The device has been lost.');
+    };
+    await flashImage({ port: {}, image: new Uint8Array(8), esptool });
+    assert.equal(calls.at(-1), 'disconnect');
+});
+
 test('a failed flash says what to do, and still lets go of the port', async () => {
     for (const [failAt, stage] of [['connect', 'connect'], ['write', 'write']]) {
         const { esptool, calls } = fakeEsptool({ failAt });
