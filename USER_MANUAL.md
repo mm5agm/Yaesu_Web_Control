@@ -209,7 +209,7 @@ The application was written for operators who want a large, clean, touchscreen-f
 
 - Large, readable frequency displays with digit-by-digit mouse-wheel tuning and an on-screen frequency keyboard
 - Full dual-receiver control (VFO A and VFO B)
-- Live S-meter, power, SWR, ALC, and compression meters (plus PA temperature, IDD, and VDD on FTdx101MP, FTdx101D, and FTDX3000, and IDD and VDD on the FT-991A)
+- Live S-meter, power, SWR, ALC, and compression meters (plus IDD and VDD on every model, and PA temperature on the FTdx101MP, FTdx101D and FTDX3000)
 - Real-time two-way sync — changes on the radio front panel appear immediately in the app, and vice versa
 - Band and segment selectors for fast QSY to CW, FT8, SSB, or RTTY
 - **Per-band memory** for IF Width, IF Shift, and Mode — switching to a band automatically restores your preferred filter and mode for that band
@@ -502,17 +502,17 @@ A scrollable row of meters is displayed above the VFO panels. The leftmost slots
 | ALC | Automatic Level Control voltage — only active during transmit |
 | Temp | PA temperature in °C |
 | IDD | PA drain current in amps |
-| VDD | PA supply voltage in volts. The dial is 40–55 V on the FTdx101MP, whose 200 W final runs from an internal 50 V supply, and 10–16 V on the FTdx101D and FTDX3000, which run from 13.8 V |
+| VDD | PA supply voltage in volts. The dial is 40–55 V on the FTdx101MP and FTDX5000, whose 200 W finals run from 50 V, and 10–16 V on the FTdx101D, FTDX3000, FTdx10, FT-710 and FT-991A, which run from 13.8 V |
 
 > **Why the radio's own front-panel meter is stuck on COMP/SWR while YWC is running.** On the FTdx101MP and FTdx101D, the radio's documented CAT command for reading SWR directly returns stale or wrong values, so YWC works around it by repeatedly telling the radio to display Compression and SWR on its own meter and reading both at once — about twice a second, for as long as YWC is connected. This is what YWC needs to show you an accurate SWR reading, but it also means you can't pick a different meter pair from the radio's own front panel while YWC is running; whatever you select gets overridden within half a second. This is expected behaviour, not a fault — there's no radio-side setting that avoids it.
 
 **FTDX3000** — single S-meter (VFO A) plus the same seven TX meters — FTDX3000 is a single-receiver radio, so there is no VFO B S-meter.
 
-**FTdx10, FT-710** — single S-meter (VFO A) plus four TX meters (SWR, Power, Compression, ALC). The Temp, IDD, and VDD meters are not shown because those radios have a different power amplifier design that runs on 13.8 V; the high-voltage PA meters do not apply.
+**FTdx10, FT-710** — single S-meter (VFO A) plus SWR, Power, Compression, ALC, IDD and VDD. There is no Temp meter, because neither radio has a temperature reading over CAT. Their IDD and VDD scales are not yet calibrated against a real radio; if yours reads wrong, the Meter Calibration page can correct it.
 
 **FT-991A** - single S-meter (VFO A) plus SWR, Power, Compression, ALC, IDD and VDD. There is no Temp meter, because the FT-991A has no temperature reading over CAT.
 
-All meters update in real time — about five times a second at the default 200 ms **Meter Poll Interval** (Settings → Radio Connection). Not everything is read on every cycle: the S-meter(s) and transmit state are, while PA temperature, IDD, VDD and the antenna selection are read every two seconds, because they change slowly and reading them costs bus time the meters need. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
+All meters update in real time — about five times a second at the default 200 ms **Meter Poll Interval** (Settings → Radio Connection). Not everything is read on every cycle: the S-meter(s) and transmit state are, while PA temperature, VDD and the antenna selection are read every two seconds, because they change slowly and reading them costs bus time the meters need. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
 
 > **Reading the SWR meter above 3:1.** The SWR dial is marked 1.0 to 3.0, so the
 > needle stops climbing once the SWR passes 3:1 — a 3:1 match and a 10:1 match
@@ -628,7 +628,9 @@ The height is remembered per VFO across browser reloads, and A and B are indepen
 
 > A very tall panel is more work for your browser to draw, because the waterfall has to be redrawn in full on every frame and there is simply more of it. On a desktop PC you will not notice. On a Raspberry Pi, or any low-powered machine, come down a size or two if the waterfall starts to stutter.
 
-**Hiding the VFO panels** - the **VFOs** button beside the title of each spectrum panel ("Spectrum - VFO A") hides both VFO panels (VFO A and VFO B) and shows them again, so the page can be just the spectrum, for example alongside RTTY Tune in a contest. The arrow on it points up while the panels show and down while they are hidden. Nothing on the radio changes, and keyboard shortcuts and voice control still work while the panels are hidden. The choice is remembered by the browser. If no spectrum is showing (no SDR configured, or the SDR has stopped) the VFO panels always show, so they can never be left hidden with no button to bring them back.
+**Hiding the spectrum** - the **Hide spectrum** button above the spectrum panels folds the spectrum and waterfall away, leaving only the button, which becomes **Show spectrum**, and a note of what each SDR is doing (for example "VFO A: Live"). The choice is remembered by the browser. The spectrum also folds by itself while no SDR is streaming (still connecting, disconnected, or a driver missing), so a dead panel doesn't take up the page, and it comes back by itself when the SDR starts sending. Press **Show spectrum** while it is folded that way to open the panel and read the reason on it; that isn't remembered. With no SDR configured at all, the spectrum section doesn't show.
+
+**Hiding the VFO panels** - the **VFOs** button beside the title of each spectrum panel ("Spectrum - VFO A") hides both VFO panels (VFO A and VFO B) and shows them again, so the page can be just the spectrum, for example alongside RTTY Tune in a contest. The arrow on it points up while the panels show and down while they are hidden. Nothing on the radio changes, and keyboard shortcuts and voice control still work while the panels are hidden. The choice is remembered by the browser. If no spectrum is showing (no SDR configured, the SDR has stopped, or the spectrum is folded) the VFO panels always show, so they can never be left hidden with no button to bring them back.
 
 **Resize spectrum vs waterfall** — Hover the horizontal boundary between the spectrum trace (top) and the waterfall (bottom); the cursor becomes a vertical-resize arrow. Drag up to give the spectrum more vertical room — useful when you're hunting weak signals close to the noise floor. Drag down to give the waterfall more history. The ratio is remembered per VFO across browser reloads, so the next time you open YWC the panel is back the way you left it. Two short grey grip-bars at the centre of the boundary mark the handle; they turn cyan while you're dragging.
 
@@ -1358,6 +1360,8 @@ Everything on it works the radio: the keys, the knobs, the main dial and the win
 **The main dial and the knobs.** Turn the mouse wheel over a knob, or drag it round, to turn it.
 
 - **The main dial** tunes the selected receiver one step at a time. On the FTdx101MP and FTdx101D the outer ring tunes MAIN and the inner knob tunes SUB, as on the radio. The **−** and **+** keys under it tune down or up by one step, landing on a whole step as a radio's dial does. Press **STEP** to go through 10 Hz, 50 Hz, 100 Hz, 500 Hz, 1 kHz, 5 kHz and 10 kHz; this browser remembers it.
+
+  Dragged, the dial behaves like a weighted knob. Turned slowly, each tenth of a turn is one step, so fine tuning is exact. Spin it faster than about one and a half turns a second and each step goes further, up to eight times as far at four turns a second. Let go while spinning fast and it runs on for a moment, slowing down; click it, or turn the mouse wheel over it, to stop it. After a slow turn it stops dead, and it never runs on while the radio is transmitting. The mouse wheel is always one step a notch. The idea comes from the tuning dial in Brian Clark's IC-7300-Scope. *New in v2.5.4-pre13.*
 - Each receiver has **AF/RF·SQL** (inner AF gain, outer RF gain), **SHIFT/WIDTH** and **NOTCH/CONT**.
 - **MIC/PROC**: the inner knob is the mic gain. The outer ring is the speech processor level or, while the processor is off, the AMC output level.
 - **POWER/MONI**: the inner knob is the RF power, the outer ring the monitor level. **SPEED/PITCH** is the CW keyer speed and pitch.
@@ -1412,18 +1416,23 @@ While it is open, its tuner keeps the radio in the mode chosen in **MODE** (belo
 **The top strip**
 
 - **The frequency** of the receiver on screen. Click it to type a frequency: `14.08` and `14080` and `14080000` all mean 14.080 MHz. Enter tunes there and Esc leaves it as it was. Hold the mouse over a digit and turn the wheel to move that digit up or down, as on the Radio panel.
-- **MODE** is a list of RTTY-L, RTTY-U, DATA-L and DATA-U: DATA-L for AFSK, where your RTTY software makes the tones. A pick is kept (it is the same setting as **RTTY mode** in Settings), the tuner holds the radio in it, and the band keys use it. A mode outside the four shows as itself, greyed. Then the tuner's **MARK / SHIFT**, then **RX** or **TX**.
+- **MODE** is a list of RTTY-L, RTTY-U, DATA-L and DATA-U: DATA-L for AFSK, where your RTTY software makes the tones. A pick is kept (it is the same setting as **RTTY mode** in Settings), the tuner holds the radio in it, and the band keys use it. A mode outside the four, CW say, shows as itself in amber, so you can see at a glance that the radio isn't in RTTY: open the list to pick one. *The MODE label and the amber since v2.5.4-pre15.* Then the tuner's **MARK / SHIFT**, then **RX** or **TX**.
 - **Meters:** S, and PO, SWR and ALC while transmitting. **METERS** hides or shows them.
 - **Main / Sub** chooses which receiver's spectrum is on screen, where there are two SDRs. The strip follows it. **BANDS** (below) can hide SUB.
 - **DX SPOTS** switches the spot tags on the spectrum on and off.
 - **SPAN** is a list in the label at the top of the spectrum, beside the frequency, and sets the SDR's span. As well as the radio's own spans it has **30 kHz** and **40 kHz**, to fill the jump from 20 to 50; they are on the Radio panel and in Settings too, but not on Classic's span buttons.
 - **LAYOUT** saves and recalls named layouts (below).
+- **The theme list**, beside LAYOUT, is this page's colour theme, the same themes as the Radio panel. Until you pick one here the page follows the Radio panel's theme; once you have, the two are separate. The page's windows follow it, and it is kept in this browser, not in a layout. *New in v2.5.4-pre15.*
 
 **The band keys**
 
 Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101D one for SUB. A key tunes that receiver to the RTTY part of the band and puts it in the mode chosen in **MODE**. The spot comes from your band plan's RTTY segment where it has one. Where it doesn't, the keys use 1.838, 10.140, 18.105, 24.925 and 50.300 MHz. The band plan the other GUIs use is not changed. **60 m and 4 m** (and **2 m** and **70 cm** on the FT-991A) have no RTTY spot here: their keys go to the radio's own band memory, as the band keys on the other GUIs do, and then to that mode. The key for the band each receiver is on is lit, however you got there.
 
 **BANDS**, in the scope row, opens a box with a tick for each band key on each row, and a **Show SUB** tick. Untick the bands you don't work and their keys go. Hiding SUB takes away its tab and its band row, and puts the page back on MAIN. The choices are kept in this browser; they are not part of a layout.
+
+**MEM**, next to BANDS, opens a list of your memories, the same ones the Memories page keeps. Click one to tune the receiver on screen, MAIN or SUB, to it. The memory that receiver is on is lit. The list stays open while you work, so you can hop between your spots. **EDIT** opens the Memories page in a new tab, to add, change or delete them; the list catches up when you come back. **×**, Escape or MEM again closes it. With more memories than fit on the screen, the list scrolls, all 99 if you have them. *New in v2.5.4-pre13, as Bruce VK2RT asked; scrolls since v2.5.4-pre14.*
+
+**A set of memories just for the contest.** MEM lists the memories you have loaded, so keep your contest spots in a bank of their own ([§8.5](#85-memory-banks)). On the Memories page, save the memories you use every day as a bank first (say *Everyday*). Then make the list just your contest spots and save that as another (say *RTTY Contest*). Load *RTTY Contest* before the contest and *Everyday* after it. Loading a bank replaces the memories you have now, which is why the everyday ones are saved first.
 
 **The scope row**
 
@@ -1434,6 +1443,7 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 - **STEP** is how far one notch of the mouse wheel moves the dial over the spectrum, 1 Hz to 1 kHz.
 - **TRACE** is how thick the spectrum's line is: 0.5, 0.8 (the start), 1.2 or 2.
 - **BANDS** chooses the band keys and whether SUB shows (above).
+- **MEM** lists your memories, to tune to one (above).
 - **POP OUT** opens the spectrum, the waterfall, or both, in a window of their own.
 
 **Tuning**
@@ -1446,8 +1456,8 @@ In **DATA-L** and **DATA-U** the spectrum is centred on the middle of the DATA p
 
 The RTTY tuner ([§22](#22-rtty)) is docked at the right, as in Contest Mode ([§22.7](#227-contest-mode-the-tuner-on-its-own)). The keys on its bar:
 
-- **DECODE** shows the decoded text in a box of its own under the tuner, and starts the decoder. Press it again to stop the decoder and hide the text. The text box has its own **POP OUT**.
-- **POP OUT** moves the tuner into a window of its own, the same window every GUI pops its tuner out to.
+- **DECODE** puts the decoded text in the tuning dial's place, under the tuner, and starts the decoder. The key then reads **VFO WHEEL**: press it to put the dial back, which stops the decoder. The text box has its own **POP OUT** (see *The tuning dial* below for how the two windows behave).
+- **RTTY TUNER** moves the tuner into a window of its own, the same window every GUI pops its tuner out to. It sits under the **POP OUT** keys for the spectrum and waterfall, and goes with them. While it is out, the key goes and a note keeps the tuner's place; **Reattach** in the window puts it back. *No DOCK on the page since v2.5.4-pre13; called POP OUT until v2.5.4-pre14.*
 - **ON TOP** puts it in a small window that stays above other programs, such as your logger, where the browser allows it (Chrome and Edge do).
 
 The docked tuner starts small, 300 px wide; its grabs make it bigger. Under it is a box with the three controls a contest operator reaches for most:
@@ -1460,15 +1470,19 @@ WIDTH and SHIFT follow the receiver on screen. A slider writes to the radio when
 
 **PWR is kept for each band.** Set it on a band and a band key puts it back the next time you go to that band. *New in v2.5.4-pre8.*
 
-**WIDTH is kept too.** A width you set on MAIN while the tuner is open is the one the tuner uses from then on, in that mode, instead of the width it would work out ([§22.8](#228-what-the-tuner-changes-on-your-radio)). Closing the tuner leaves it as you set it. Until v2.5.4-pre8 the tuner put its own width back each time it started. *New in v2.5.4-pre8.*
+**WIDTH is kept for each band.** A width you set on MAIN in your RTTY mode (the one chosen with MODE) is kept for the band you set it on, and stays kept after YWC restarts. A band key puts it back each time you go to that band, and the tuner uses it instead of the width it would work out ([§22.8](#228-what-the-tuner-changes-on-your-radio)). Closing the tuner leaves it as you set it. On a band where you haven't set one, an SH command in your RTTY setup gives the width; with no SH there, the tuner works it out. **CAT SET** forgets the widths kept on every band. While a band key is changing band, WIDTH shows the width it ends on, not the ones the radio passes through on the way. *New in v2.5.4-pre8; kept for each band, with the tuner closed too, since v2.5.4-pre12. Until then one width was kept for the mode on every band.*
 
-**The tuning dial.** Under those controls is the Radio panel's tuning dial, made smaller. Both parts tune the receiver on screen: the outer ring in big steps and the inner knob in small ones. Turn the mouse wheel over a part, or drag it round. Pick each part's step in the lists beside the dial, **OUTER** (100 Hz to start with) and **INNER** (10 Hz). The steps are kept in this browser. *New in v2.5.4-pre9.*
+**The tuning dial.** Under those controls is the Radio panel's tuning dial, made smaller, in a box headed **VFO WHEEL**. Both parts tune the receiver on screen: the outer ring in big steps and the inner knob in small ones. Turn the mouse wheel over a part, or drag it round. Pick each part's step in the lists beside the dial, **OUTER** (100 Hz to start with) and **INNER** (10 Hz). The steps are kept in this browser. *New in v2.5.4-pre9.* Dragged fast it speeds up, and runs on when let go mid-spin, as the Radio panel's dial does (section 5.23). *New in v2.5.4-pre13.* The box reaches down to the bottom of the window. *Since v2.5.4-pre14.*
 
-**AUTO**, at the end of the WIDTH row, is lit while the tuner works the width out itself, and dark while a width you set is kept; hold the mouse over it to see which width and mode. Press it to go back to the tuner's own width for the mode MAIN is in: the kept width is forgotten, the tuner sizes the filter again straight away if it is open, and closing it puts back the width from before it opened. Setting WIDTH by hand while the tuner is open keeps a width again. AUTO is only for MAIN, because the tuner only sets MAIN. *New in v2.5.4-pre9.*
+**MONI**, under PWR in the box below the tuner, switches the radio's monitor on and off and sets its level, so you can keep your own transmit audio quieter than the receiver and never wonder which you are hearing. It doesn't transmit. Your choice is kept in this browser: MONI is on each time the page opens unless you turned it off, and the level you last set is put back. Both are also put back after your RTTY setup is sent, by a band key or CAT SET, so an ML command in the setup doesn't undo them. The radio has one monitor, for MAIN and SUB alike. It stays on the page while the tuner is in a window of its own, as PWR does. *New in v2.5.4-pre14, as Bruce VK2RT asked; moved under PWR in v2.5.4-pre16.*
+
+The dial and the decoded text share that place, one at a time: **DECODE** on the tuner's bar shows the text, and **VFO WHEEL** shows the dial again. Each has its own **POP OUT**, so either can go to a window of its own, on another monitor if you like, and the other then has the place to itself. A window stays out whichever is showing on the page. While it is out, its box on the page has no POP OUT, just a note saying where it went: putting it back is done from the window. **DOCK** in the dial's window, or **Reattach** in the text's, puts it back on the page if its place is showing there; if the other one is showing, it just closes the window. The decoder runs while the text is showing, on the page or in its window. *Heading, POP OUT and the swap new in v2.5.4-pre13, as Bruce VK2RT asked.*
+
+**AUTO**, at the end of the WIDTH row, is lit while the tuner works the width out itself, and dark while a width you set is kept; hold the mouse over it to see which width and band. Press it to go back to the band's starting width on the band MAIN is on: the width kept for that band is forgotten and, if your RTTY setup in Settings has an SH command, that width goes back on straight away. With no SH in the setup, the tuner sizes the filter again straight away if it is open, and closing it puts back the width from before it opened. Setting WIDTH by hand while the tuner is open keeps a width again. AUTO is only for MAIN, because the tuner only sets MAIN. *New in v2.5.4-pre9; AUTO goes back to the setup's SH width since v2.5.4-pre13.*
 
 **Your RTTY setup**
 
-If you keep a string of CAT commands that set the radio up for RTTY (filters, DNR, the scope, menu items), paste it into **RTTY setup** on the Settings page under **RTTY Tuner**. A **CAT SET** key then appears next to MENU on RTTY Contest, and sends it to the radio. The key shows **SENT**, or **NOT SENT** with the reason when you hold the mouse over it. *New in v2.5.4-pre8; called SETUP until v2.5.4-pre9, renamed so it isn't confused with SETUP in the radio's MENU.*
+If you keep a string of CAT commands that set the radio up for RTTY (filters, DNR, the scope, menu items), paste it into **RTTY setup** on the Settings page under **RTTY Tuner**. A **CAT SET** key then appears next to MENU on RTTY Contest, and sends it to the radio: the lines for every band, then the ones for the band on screen. It also forgets the widths kept on each band, so every band goes back to the setup's width. The key shows **SENT**, or **NOT SENT** with the reason when you hold the mouse over it. Empty the box and save, and the key goes when you come back to RTTY Contest; until v2.5.4-pre12 it stayed until the page was reloaded. *New in v2.5.4-pre8; called SETUP until v2.5.4-pre9, renamed so it isn't confused with SETUP in the radio's MENU.*
 
 - Commands end with `;`, as in the radio's CAT manual. They can be on one line or several.
 - A line that starts with a band and a colon is sent only on that band, after the lines with no band, which are sent on every band:
@@ -1494,7 +1508,7 @@ The other names are `radio`, `classic`, `experimental` and `settings`. If YWC is
 
 **Sizes, windows and layouts**
 
-Drag the right edge, the bottom edge or the bottom-right corner of the spectrum, or of the docked tuner, to size it. A box you haven't sized fills the room it has. Each part that pops out leaves the page, and comes back with **DOCK** in its window, or when its window closes.
+Drag the right edge, the bottom edge or the bottom-right corner of the spectrum, or of the docked tuner, to size it. A box you haven't sized fills the room it has. Each part that pops out leaves the page, and comes back with **DOCK** (or **Reattach**) in its window, or when its window closes.
 
 **LAYOUT** saves all of this by name, on the computer running YWC: the sizes, the choices above, which parts are in windows of their own, and where each window is. Recalling a layout puts every window back where it was, so each can go on its own monitor. If the browser blocks some of the windows, a bar says so with a key for each: one click opens one window.
 
@@ -1523,6 +1537,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 | Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), **FT-710** (100 W, single RX), or **FT-991A** (100 W, 50 W on 2 m / 70 cm, single RX) |
 | Serial Port | Path to the radio's **Enhanced** (CAT) USB/serial port. **Windows:** `COM3`, `COM4`, … (Device Manager: *Enhanced COM Port*). **macOS:** `/dev/cu.usbserial-…` (prefer `cu.*` over `tty.*`). **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or `/dev/serial/by-id/…`. If ports are missing or CAT never answers on Windows/macOS, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot — [§2.4](#24-usb-serial-driver-windows--macos--linux). Linux can normally skip that. |
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
+| Turn the radio off when Yaesu Web Control closes | Off by default. Switches the radio off when YWC closes, whether you choose **Exit** from the tray icon or YWC exits by itself after the last browser has gone. **Restart Now** leaves the radio on. YWC always switches the radio on when it starts, so you don't need a setting for that. *New in v2.5.4-pre13.* |
 | Meter Poll Interval (ms) | Minimum cycle period for CAT meter polls (delay between cycle starts). Default: **200** ms. Valid range: 50–1000. The next cycle starts after this interval minus the time the previous cycle took, so the setting is a target period rather than a raw wait after each poll. Lower values give a faster S-meter update rate but increase CAT bus traffic — if you share the port with WSJT-X or rigctld, reducing this below ~100 ms raises the chance of collisions where both programs try to read the bus at the same time. Raise it (e.g. to 500) if you see erratic readings or CAT timeouts when running digital modes. |
 | Band Plan | **IARU Region 1** (Europe, Africa, Middle East — includes 4m), **IARU Region 2** (Americas), **IARU Region 3** (Asia-Pacific), or **Japan** (JARL). Affects which bands and segment frequencies are shown. UK is Region 1; USA, Canada, and South America are Region 2; Australia, New Zealand, and most of Asia (except Japan) are Region 3. |
 | Change mode automatically when tuning from the band plan | On by default. Clicking the spectrum or a DX spot also sets the mode the band plan gives for that frequency. Turn it **off** for contest or off-band-plan work — RTTY above 14.100 and 40m SSB around 7.050 both fight the automatic change, and an unwanted change can move transmit audio from your data software to the microphone. Picking a named segment from a VFO band dropdown still sets that segment's mode either way. See §5.4. |
@@ -4456,7 +4471,7 @@ Three things, and two of them are put back. Both of the automatic ones can be sw
 
 The reason it does this rather than just warning you is worth knowing: the tuner opens on whatever the radio was last doing, and what the radio was last doing is often CW with a 250 Hz filter. A passband that narrow cannot carry a 170 Hz shift's keying sidebands, let alone a 450 Hz shift's — and the figure then draws a perfectly convincing ellipse out of one tone and the skirt of the other, which looks exactly like a correctly tuned signal. **A tuning indicator that lies is worse than none**, so the conditions it needs are set rather than hoped for.
 
-**The IF filter**, and only ever wider. A width you set by hand while the tuner is open is kept instead, for that mode, and left as it is when the tuner closes, until you press **AUTO** beside WIDTH ([§5.24](#524-rtty-contest)). Changing to RTTY brings your own stored RTTY filter width with it, which is better evidence about your band than any formula, and it is touched only if it is too narrow to have carried the shift you are set to. Narrowing is left to you: a narrow filter is how you dig a signal out of a crowded band, and only you know the band.
+**The IF filter**, and only ever wider. A width you set by hand in your RTTY mode is kept instead, for that band, and left as it is when the tuner closes, until you press **AUTO** beside WIDTH ([§5.24](#524-rtty-contest)). Changing to RTTY brings your own stored RTTY filter width with it, which is better evidence about your band than any formula, and it is touched only if it is too narrow to have carried the shift you are set to. Narrowing is left to you: a narrow filter is how you dig a signal out of a crowded band, and only you know the band.
 
 > **Where the filter sits.** In RTTY-L the FTdx101MP centres its IF filter on the middle of the tone pair **its own RTTY menu** expects: MARK FREQUENCY plus half the SHIFT FREQUENCY. With the usual 2125 Hz and 170 Hz that is about 2210 Hz. It does not follow the tuner's **Mark** box, only the radio's menu. I proved that on 2026-10-13 on a real station, with the dial left alone: with the menu at 2125/170 the pair around 2208 Hz came through and a pair around 1485 Hz was more than 20 dB down. Changing only the menu to 1275/425 swapped them round.
 >

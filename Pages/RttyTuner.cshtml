@@ -91,14 +91,12 @@
         //
         // From the RTTY Contest view (?contest=true) the tuner's window has
         // no Decode section: the view's decoded text has its own window
-        // (&decode=true), which reads while the view's DECODE key is on. The
-        // view keeps that under this name (contest-view.js, with YWC's
-        // prefix), and starts and stops the decoder; this window only shows it.
+        // (&decode=true), which reads while it is open: the view starts the
+        // decoder while its text shows, here or there, and stops it; this
+        // window only shows it.
         const dialog = document.getElementById('rttyTunerDialog');
         const contest = dialog?.classList.contains('rtty-contest');
         const fromView = @(Model.Contest ? "true" : "false");
-        const DECODE_KEY = 'ywc.rttyContest.decode';
-        const decodeOn = () => { try { return localStorage.getItem(DECODE_KEY) === '1'; } catch { return false; } };
         let reader = null, modePaused = false;
         if (contest && !fromView) {
             fetch('/api/rtty/reader/stop', { method: 'POST' }).catch(() => { });
@@ -106,11 +104,7 @@
             reader = new RttyReader();
             reader.init();
         }
-        const pauseReader = () => reader?.setPaused(modePaused || (decodeOnly && !decodeOn()));
-        if (decodeOnly) {
-            pauseReader();
-            window.addEventListener('storage', e => { if (e.key === DECODE_KEY) pauseReader(); });
-        }
+        const pauseReader = () => reader?.setPaused(modePaused);
 
         // One panel as far as the mode watcher is concerned: pausing the window
         // has to stop both pollers, or the reader would keep asking for text

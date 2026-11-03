@@ -26,6 +26,13 @@
         public bool AutoShutdownWhenNoBrowsers { get; set; } = true;
 
         /// <summary>
+        /// When true, YWC sends PS0; as it closes (tray Exit or the no-browser
+        /// auto-shutdown), switching the radio off. Settings' Restart Now leaves
+        /// it on. Off by default.
+        /// </summary>
+        public bool PowerOffAtExit { get; set; } = false;
+
+        /// <summary>
         /// When true, the SDR workers stop about 3 s after the last browser
         /// disconnects, so another program can open the SDR straight away,
         /// and start again when a browser reconnects. Default false: the SDRs
@@ -309,10 +316,11 @@
         public string RttyTunerMode { get; set; } = "RTTY-L";
 
         // IF widths the operator set by hand while the tuner was open, as SH
-        // codes keyed "model|mode". The tuner uses one in place of the width it
-        // would work out (RttyTunerModeService.WidthSetByHandAsync). Bruce
-        // VK2RT, Discussion #257. Not on the Settings page; that page's save
-        // leaves it as it is.
+        // codes keyed "model|mode|band". The tuner uses one in place of the
+        // width it would work out (RttyTunerModeService.WidthSetByHandAsync).
+        // Bruce VK2RT, Discussion #257; per band since #250, 2026-11-01, and
+        // older "model|mode" keys are no longer read. Not on the Settings
+        // page; that page's save leaves it as it is.
         public Dictionary<string, string> RttyTunerWidths { get; set; } = new();
 
         // The tones the RTTY tuner last ran on. Browser storage is kept per

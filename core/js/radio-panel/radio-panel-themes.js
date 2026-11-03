@@ -48,7 +48,10 @@ const CONSOLE = {
         'meter-red': '#b3261e', needle: '#141414', 'meter-hub': '#24262a',
 
         'dial-a': '#30333a', 'dial-b': '#1a1c20', 'dial-rim': '#3a3e45',
-        'dial-inner': '#26292e', 'dial-dimple': '#1d1f23',
+        'dial-inner': '#b4bac1', 'dial-dimple': 'radial-gradient(circle at 45% 40%, #6c7279, #c4c9cf 78%)',
+        // The face's brushed-metal sheen, lit from a fixed place so it stays
+        // put as the knob turns; 'none' for a plain face.
+        'dial-sheen': 'radial-gradient(circle at 50% 28%, rgba(255,255,255,.35), transparent 55%), radial-gradient(circle, transparent 60%, rgba(0,0,0,.3)), conic-gradient(#f2f4f6, #9aa0a7 12%, #e4e7ea 25%, #8c9299 38%, #eef0f2 50%, #979da4 62%, #e1e4e7 75%, #8e949b 88%, #f2f4f6)',
         'knob-outer': '#15171a', 'knob-mid': '#2c2f35', 'knob-ring': '#41454d',
         'knob-cap': '#25282d', 'knob-mark': '#ffb02e',
     },
@@ -93,7 +96,7 @@ const NIGHT = {
         'meter-red': '#ff2a1a', needle: '#ffb0a0', 'meter-hub': '#0d0505',
 
         'dial-a': '#1e0b09', 'dial-b': '#0d0505', 'dial-rim': '#2e1411',
-        'dial-inner': '#140707', 'dial-dimple': '#0a0303',
+        'dial-inner': '#140707', 'dial-dimple': '#0a0303', 'dial-sheen': 'none',
         'knob-outer': '#0a0303', 'knob-mid': '#1a0909', 'knob-ring': '#2e1411',
         'knob-cap': '#120606', 'knob-mark': '#ff4a36',
     },
@@ -138,7 +141,10 @@ const SILVER = {
         'meter-red': '#b3261e', needle: '#141414', 'meter-hub': '#2a2c30',
 
         'dial-a': '#4a4e54', 'dial-b': '#2a2d31', 'dial-rim': '#5a5e64',
-        'dial-inner': '#3a3d42', 'dial-dimple': '#24272b',
+        'dial-inner': '#b4bac1', 'dial-dimple': 'radial-gradient(circle at 45% 40%, #6c7279, #c4c9cf 78%)',
+        // The face's brushed-metal sheen, lit from a fixed place so it stays
+        // put as the knob turns; 'none' for a plain face.
+        'dial-sheen': 'radial-gradient(circle at 50% 28%, rgba(255,255,255,.35), transparent 55%), radial-gradient(circle, transparent 60%, rgba(0,0,0,.3)), conic-gradient(#f2f4f6, #9aa0a7 12%, #e4e7ea 25%, #8c9299 38%, #eef0f2 50%, #979da4 62%, #e1e4e7 75%, #8e949b 88%, #f2f4f6)',
         'knob-outer': '#22252a', 'knob-mid': '#45484e', 'knob-ring': '#5a5e64',
         'knob-cap': '#2e3135', 'knob-mark': '#ffb02e',
     },
@@ -183,7 +189,10 @@ const DAYLIGHT = {
         'meter-red': '#c42218', needle: '#141414', 'meter-hub': '#46505a',
 
         'dial-a': '#eef0f3', 'dial-b': '#c9cfd6', 'dial-rim': '#a9b0b8',
-        'dial-inner': '#dde1e6', 'dial-dimple': '#c3c9d1',
+        'dial-inner': '#c4c9cf', 'dial-dimple': 'radial-gradient(circle at 45% 40%, #6c7279, #c4c9cf 78%)',
+        // The face's brushed-metal sheen, lit from a fixed place so it stays
+        // put as the knob turns; 'none' for a plain face.
+        'dial-sheen': 'radial-gradient(circle at 50% 28%, rgba(255,255,255,.35), transparent 55%), radial-gradient(circle, transparent 60%, rgba(0,0,0,.3)), conic-gradient(#f2f4f6, #9aa0a7 12%, #e4e7ea 25%, #8c9299 38%, #eef0f2 50%, #979da4 62%, #e1e4e7 75%, #8e949b 88%, #f2f4f6)',
         'knob-outer': '#b9c0c8', 'knob-mid': '#e6e9ed', 'knob-ring': '#a9b0b8',
         'knob-cap': '#f6f7f9', 'knob-mark': '#e8660c',
     },
@@ -228,7 +237,7 @@ const GREEN = {
         'meter-red': '#ff5a3a', needle: '#e0ffe6', 'meter-hub': '#14261a',
 
         'dial-a': '#1a261c', 'dial-b': '#0a120c', 'dial-rim': '#24402a',
-        'dial-inner': '#121c14', 'dial-dimple': '#08100a',
+        'dial-inner': '#121c14', 'dial-dimple': '#08100a', 'dial-sheen': 'none',
         'knob-outer': '#08100a', 'knob-mid': '#16241a', 'knob-ring': '#24402a',
         'knob-cap': '#101a12', 'knob-mark': '#5cff7a',
     },
@@ -273,7 +282,7 @@ const CONTRAST = {
         'meter-red': '#ff2020', needle: '#ffd400', 'meter-hub': '#ffffff',
 
         'dial-a': '#222222', 'dial-b': '#000000', 'dial-rim': '#ffffff',
-        'dial-inner': '#111111', 'dial-dimple': '#444444',
+        'dial-inner': '#111111', 'dial-dimple': '#444444', 'dial-sheen': 'none',
         'knob-outer': '#000000', 'knob-mid': '#222222', 'knob-ring': '#ffffff',
         'knob-cap': '#111111', 'knob-mark': '#ffd400',
     },

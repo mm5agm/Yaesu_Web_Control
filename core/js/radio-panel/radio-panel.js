@@ -734,8 +734,8 @@ export function mountRadioPanel(root, opts = {}) {
         dial.append(well);
     } else dial.append(dialInner);
     dial.title = dualDial
-        ? 'Tune: mouse wheel or drag. The outer ring tunes MAIN (VFO-A), the inner knob SUB (VFO-B)'
-        : 'Tune: mouse wheel or drag';
+        ? 'Tune: mouse wheel or drag. The outer ring tunes MAIN (VFO-A), the inner knob SUB (VFO-B). Spin it fast to go further'
+        : 'Tune: mouse wheel or drag. Spin it fast to go further';
     const dialTags = {};
     const dialTagRow = h('div', 'rp-dial-tags');
     if (dualDial)
@@ -747,27 +747,29 @@ export function mountRadioPanel(root, opts = {}) {
             dialTags[vfo] = { t, lamp };
         }
     // The wheel over the dial tunes, and so does dragging it round like the
-    // real knob: one step per 10 degrees, clockwise up. With a dual dial, the
-    // inner knob tunes SUB and the outer ring MAIN.
-    const dialRot = { A: 0, B: 0 };
+    // real knob: one step per 10 degrees, clockwise up, more when spun fast,
+    // and it runs on when let go mid-spin, but not while transmitting. With a
+    // dual dial, the inner knob tunes SUB and the outer ring MAIN.
+    const dialRot = { A: 0, B: 0, face: 0 };
     if (act)
         turnable(dial, {
             deg: 10,
+            spin: () => !st.tx,
             partAt: (x, y) => {
                 if (!dualDial) return undefined;
                 const rc = dial.getBoundingClientRect(), kc = dialKnob.getBoundingClientRect();
                 return Math.hypot(x - (rc.left + rc.width / 2), y - (rc.top + rc.height / 2)) <= kc.width / 2 ? 'B' : 'A';
             },
             // Turn the part being tuned: the ring's knurling for MAIN, the
-            // knob and its dimple for SUB (or the single dial).
+            // knob's knurling for SUB. The silver face and its dimple turn
+            // with either, so the dial is seen to move whichever VFO it tunes.
             onTurn: (vfo, d) => {
                 const k = vfo ?? 'B';
                 dialRot[k] = (dialRot[k] + d) % 360;
+                dialRot.face = (dialRot.face + d) % 360;
+                dialInner.style.setProperty('--rp-face-rot', dialRot.face + 'deg');
                 if (vfo === 'A') dial.style.setProperty('--rp-ring-rot', dialRot.A + 'deg');
-                else {
-                    dialInner.style.transform = `rotate(${dialRot.B}deg)`;
-                    dialKnob?.style.setProperty('--rp-knob-rot', dialRot.B + 'deg');
-                }
+                else dialKnob?.style.setProperty('--rp-knob-rot', dialRot.B + 'deg');
             },
             onStep: (vfo, dir) => act('dial', dir > 0 ? 'up' : 'down', vfo),
         });

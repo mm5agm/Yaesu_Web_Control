@@ -311,6 +311,24 @@ pages, pop-outs or `core/js`. The browser driver it uses is shared, in
 `Tests/test-api.ps1` is a separate, manual API-poking script — not part of
 the automated suite.
 
+**Running with no radio.** Start YWC with `YWC_USE_STUB_RADIO=1` and
+`CatMultiplexerService` talks to `Services/StubRadio.cs` instead of opening
+the COM port; the log says `STUB RADIO` at connect. The stub stands in for
+whatever model Settings names. It answers reads with real FTdx101MP values,
+keeps every set so it reads back, reports sets back under AI1, and goes
+silent after PS0 until PS1. It is a CAT-level stand-in, not a model of the
+radio: menus (`EX`) and anything it has no value for answer `?;`, and the
+SDR spectrum, USB audio and TFT video still need the hardware. Use it for
+page, layout, HTTP and SignalR work; anything about how a real radio
+answers still has to be checked on one.
+
+```bash
+YWC_USE_STUB_RADIO=1 dotnet run --no-build --framework net10.0-windows --project Yaesu_Web_Control.csproj
+```
+
+The seam is `ICatTransport` (`Services/CatTransport.cs`): the COM port is
+`SerialCatTransport`, the stub is the other implementation.
+
 ---
 
 ## Release Process

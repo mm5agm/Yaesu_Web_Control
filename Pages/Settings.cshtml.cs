@@ -254,6 +254,7 @@ namespace Yaesu_Web_Control.Pages
                 current.OpenBrowserOnStartup = Settings.OpenBrowserOnStartup;
                 current.SerialPort        = Settings.SerialPort;
                 current.BaudRate          = Settings.BaudRate;
+                current.PowerOffAtExit    = Settings.PowerOffAtExit;
                 current.WebAddress        = Settings.WebAddress;
                 current.SdrDeviceKeyA     = Settings.SdrDeviceKeyA ?? string.Empty;
                 current.SdrDeviceKeyB     = Settings.SdrDeviceKeyB ?? string.Empty;
@@ -538,6 +539,8 @@ namespace Yaesu_Web_Control.Pages
             // Stop the host. Hosted services (MeterPollingService, the tray icon,
             // etc.) get their StopAsync calls; the multiplexer's serial port is
             // closed cleanly via RadioInitializationService.StopAsync.
+            // A restart is not a close: the radio stays on.
+            Yaesu_Web_Control.Services.AppLifecycle.RestartRequested = true;
             _lifetime.StopApplication();
             return new EmptyResult();
         }

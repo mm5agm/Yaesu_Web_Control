@@ -5,13 +5,13 @@ namespace Yaesu_Web_Control.Pages
 {
     /// <summary>
     /// One part of the RTTY Contest view in a window of its own, for another
-    /// monitor: /rtty-contest/window?p=spectrum|waterfall|both. Opened by the
+    /// monitor: /rtty-contest/window?p=spectrum|waterfall|both|wheel. Opened by the
     /// POP OUT keys on /rtty-contest; DOCK puts the part back there. The
     /// tuner pops out to /RttyTuner?contest=true, the window every GUI uses.
     /// </summary>
     public class RttyContestWindowModel : RttyContestModel
     {
-        private static readonly string[] Parts = { "spectrum", "waterfall", "both" };
+        private static readonly string[] Parts = { "spectrum", "waterfall", "both", "wheel" };
 
         [BindProperty(SupportsGet = true, Name = "p")]
         public string? Part { get; set; }
