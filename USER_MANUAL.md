@@ -152,6 +152,13 @@
     - 22.7 [Contest Mode: the tuner on its own](#227-contest-mode-the-tuner-on-its-own)
     - 22.8 [What the tuner changes on your radio](#228-what-the-tuner-changes-on-your-radio)
     - 22.9 [Troubleshooting](#229-troubleshooting)
+23. [CW Paddle](#23-cw-paddle)
+    - 23.1 [What you need](#231-what-you-need)
+    - 23.2 [The HaliKey MIDI](#232-the-halikey-midi)
+    - 23.3 [An ESP32-S3 board as the adapter](#233-an-esp32-s3-board-as-the-adapter)
+    - 23.4 [Keyer and sidetone](#234-keyer-and-sidetone)
+    - 23.5 [Keying the radio](#235-keying-the-radio)
+    - 23.6 [Troubleshooting](#236-troubleshooting)
 
 ---
 
@@ -4498,6 +4505,91 @@ The reason it does this rather than just warning you is worth knowing: the tuner
 | The text comes out as runs of the same wrong letter | **Rev** is the wrong way round for this station. Tick it, or untick it. |
 | **Auto** keeps saying it cannot make sense of it | It needs both tones inside the receiver's audio. Tune closer, and narrow the IF if it is wide open. If it refuses on everything, what you are listening to is probably not RTTY. |
 | **Auto** says the filter cannot carry the signal | Move the dial rather than widening further — see the note in [§22.8](#228-what-the-tuner-changes-on-your-radio). The tones are sitting too far from the middle of the passband for any width to reach both. |
+
+## 23. CW Paddle
+
+Send CW with your own paddle. The paddle goes into a small USB adapter that shows up as a MIDI device, and the adapter plugs into the computer the browser runs on. That can be the shack PC, or a laptop somewhere else in the house. The keyer and the sidetone run in the browser, so what you hear never waits on the network. YWC on the shack PC gets the keying and plays it on DTR of the radio's second USB COM port, which keys the radio.
+
+Open it with **CW Paddle** in the top bar, or **MENU → CW → CW Paddle** on the Radio panel and RTTY Contest. The address is `/CwPaddle`.
+
+> **New in v2.5.4-pre17, and still being tested.** It has been tested on the bench into a dummy load, with an ESP32-S3 adapter. Please tell us how it works with your paddle and radio.
+
+### 23.1 What you need
+
+- **A paddle.** Any iambic paddle, or a single-lever paddle.
+- **A paddle-to-MIDI adapter**, one of these two:
+  - a **HaliKey MIDI** ([§23.2](#232-the-halikey-midi)). It is hard to get outside the USA.
+  - an **ESP32-S3 board** that you program from this page ([§23.3](#233-an-esp32-s3-board-as-the-adapter)). The boards are cheap and sold everywhere, and you need no tools beyond the browser and three wires.
+- **Chrome or Edge.** Firefox and Safari have no Web MIDI.
+- **HTTPS if the browser is on another computer.** Browsers allow MIDI only on `https://` pages and on `localhost`. Set up HTTPS as in [§18.3](#183-https-for-remote-browsers) and open `https://<shack-PC>:8443/CwPaddle`.
+- **The radio's USB cable to the shack PC**, the one YWC already uses for CAT. The keying goes over the same cable.
+
+### 23.2 The HaliKey MIDI
+
+Plug the HaliKey in, press **Connect paddle**, and let the browser use MIDI devices. It sends note 20 for dit and note 21 for dah, which are the page's defaults, so it works straight away. **Device** can stay on *All MIDI inputs*, or be set to the HaliKey if you have other MIDI devices.
+
+### 23.3 An ESP32-S3 board as the adapter
+
+**Which boards.** An **ESP32-S3** board whose native USB port is on a socket. On boards with two USB sockets, such as the ESP32-S3-DevKitC-1 and its many copies, the native one is marked **USB** and the other is marked **COM** or **UART**. Original ESP32 boards (ESP-WROOM-32, such as ELEGOO's) and ESP32-C3 boards can't be adapters. Their USB socket is a serial chip only, and they can't be a MIDI device.
+
+**Wiring.** Connect the dit contact to **GPIO4**, the dah contact to **GPIO5**, and the paddle's common to **GND**. You need no resistors, because the board's own pull-ups are used. A 3.5 mm socket wired the same way lets you unplug the paddle.
+
+**Programming it.**
+
+1. Plug the board in by its **USB** socket.
+2. On the CW Paddle page, press **Install / Update** in the *Paddle adapter firmware* box.
+3. A panel says the browser will ask about MIDI devices. Press **Continue**, then **Allow** in the browser.
+4. A second panel says the browser will list the ESP32 boards. Press **Continue**, choose **USB JTAG/serial debug unit**, and press **Connect**. The list shows only ESP32 boards, never the radio's COM ports.
+5. Programming takes about a minute. Don't unplug the board. When it is done, the board restarts, and the page says *Done: YWC Paddle Adapter is running firmware 1.0.*
+
+A new board goes straight to step 4. If the list is empty, press **Cancel** in the list. Then hold the board's **BOOT** button while you plug it in, let go, and press **Install / Update** again.
+
+**Updates.** **Check adapter** asks the adapter which firmware it has, and says whether YWC carries a newer one. To update, press **Install / Update** again. The adapter restarts itself for the update, so BOOT isn't needed.
+
+Once programmed, the board is the MIDI device **YWC Paddle Adapter**. It sends the same notes as a HaliKey (20 and 21), so **Connect paddle** works with it straight away.
+
+### 23.4 Keyer and sidetone
+
+| Setting | What it does |
+|---|---|
+| **WPM** | Keyer speed, 5 to 50 words per minute. |
+| **Iambic** | **Mode B** (the default) or **Mode A**: what happens when you let go of both paddles while squeezing. |
+| **Swap paddles** | For left-handed operators, or a paddle wired the other way round. |
+| **Paddle stuck after** | A paddle held down this long (5 s by default) is treated as let go until it is released, so a paddle knocked over doesn't key the radio forever. |
+| **Sidetone, Pitch, Volume** | The tone made in the browser, with no delay. If the radio's MONI is on as well, you will hear the radio's own monitor a moment later, so most operators turn one of them off. |
+| **Dit note, Dah note, Channel** | The MIDI notes the adapter sends. Leave them at 20 and 21 unless you use some other MIDI adapter. |
+
+The settings are kept in the browser.
+
+### 23.5 Keying the radio
+
+**The page starts in dry run every time YWC starts.** In dry run the keyer and the sidetone work, and nothing reaches the radio. With **Send to the shack PC** ticked, YWC writes the keying to its log but opens no COM port. That is the place to practise, and to check the link over the network.
+
+To go on the air:
+
+1. **On the radio:** set **PC KEYING** to **DTR** from the radio's own MENU. On the FTdx101 this can't be set by CAT.
+2. Put the radio in **CW**.
+3. Tick **Send to the shack PC**.
+4. In **Key line**, choose the radio's **Standard** COM port, not the CAT port. The radio's USB gives two COM ports. The one YWC doesn't use for CAT is the Standard port. On Linux the ports are named where udev allows (Enhanced is the CAT port), and on the Mac only the `/dev/cu.*` ports are listed.
+
+> ⚠️ **Choosing a COM port in Key line transmits, even with BREAK-IN off.** On the FTdx101MP the radio goes to transmit on DTR whatever BREAK-IN is set to. Connect a dummy load, or be ready to be on the air. Choose **Dry run: log only** to stop keying.
+
+**The delay.** YWC holds the keying for 150 ms before playing it, so that network hiccups don't chop up your Morse. The radio therefore follows your sidetone by about 150 ms plus the network time. That doesn't matter for sending, but with full break-in you hear the band later by the same amount. The log under the page shows how much of the 150 ms the network used. *Some keying played late* means the network needed more than 150 ms.
+
+### 23.6 Troubleshooting
+
+| Symptom | What to try |
+|---|---|
+| *This browser has no Web MIDI* | Use Chrome or Edge, and open the page on `https://`, or on `localhost` on the shack PC. |
+| The browser never asks about MIDI, or says it is blocked | Click the icon left of the address, set **MIDI devices** to **Allow**, and reload the page. |
+| The DIT and DAH lamps don't light | Check **Device** and the notes. For an ESP32 adapter, check the wiring to GPIO4, GPIO5 and GND, and that the board is plugged in by its **USB** socket, not COM. |
+| *No paddle adapter found over MIDI* on a new board | A new board has no adapter firmware yet. Go straight to **Install / Update**. |
+| The board list is empty when installing | Hold **BOOT** while you plug the board in, let go, and press **Install / Update** again. If it is still empty, try another USB cable: some cables carry power only. |
+| *The board did not answer* | Unplug the board, plug it back in, and press **Install / Update** again. If that fails, use BOOT as above. |
+| The adapter stops answering after sitting idle | Unplug it and plug it back in. If it keeps happening, turn off USB selective suspend in the Windows power plan. |
+| Keying arrives but the radio doesn't transmit | Set **PC KEYING = DTR** on the radio's own menu, check that the radio is in CW, and check that Key line is the **Standard** port, not the CAT port. |
+| Morse on the air is choppy | The log says when the network went over the 150 ms buffer. Use a wired connection or a closer Wi-Fi access point. |
+
 ---
 
 
