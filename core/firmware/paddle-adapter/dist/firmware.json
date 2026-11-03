@@ -1,0 +1,7 @@
+{
+  "name": "YWC Paddle Adapter",
+  "version": "1.0",
+  "chip": "ESP32-S3",
+  "file": "ywc-paddle-adapter.bin",
+  "offset": 0
+}
