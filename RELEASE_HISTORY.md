@@ -13,6 +13,310 @@ a different and much older format.
 
 ---
 
+## 2026-11-03 - v2.5.4-pre16 (pre-release)
+
+*One change to RTTY Contest, from Bruce VK2RT's testing. Everything in v2.5.4-pre15 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **MONI is under PWR**, in the box below the tuner, instead of under INNER on the VFO WHEEL. It sits with PWR, the other control that only matters when you transmit, and works as before: on or off and the level are kept, and put back after your RTTY setup is sent. It doesn't transmit.
+
+RTTY Contest is receive only: transmit from your logger, or from MMTTY.
+
+## 2026-11-02 - v2.5.4-pre15 (pre-release)
+
+*Two changes to RTTY Contest. Everything in v2.5.4-pre14 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **Its own theme list**, beside LAYOUT. The page used to take whatever theme the Radio panel was last on. It still starts from that, but a theme picked here is kept for RTTY Contest and its windows alone.
+- **The MODE list is labelled**, and turns amber when the radio is in a mode outside RTTY-L, RTTY-U, DATA-L and DATA-U, such as CW from the last time it was used, so it is clear where to change it.
+
+RTTY Contest is receive only: transmit from your logger, or from MMTTY.
+
+## 2026-11-02 - v2.5.4-pre14 (pre-release)
+
+*More from Bruce VK2RT's testing of RTTY Contest. Everything in v2.5.4-pre13 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **MONI, under INNER on the VFO WHEEL**: a key to switch the radio's monitor on and off, and a slider for its level, so your own transmit audio can sit lower than the receiver. MONI is on each time the page opens unless you turned it off, and the level you set is put back. Both are put back after your RTTY setup is sent too, so an ML command in the setup doesn't undo them. It doesn't transmit.
+- **The MEM list scrolls.** With more memories than fit on the screen it ran off the bottom; all 99 can be reached now.
+- **The VFO WHEEL box reaches the bottom of the window.**
+- **The tuner's pop-out key reads RTTY TUNER**, under the POP OUT keys for the spectrum and waterfall, rather than a second POP OUT.
+
+RTTY Contest is receive only: transmit from your logger, or from MMTTY.
+
+## 2026-11-01 - v2.5.4-pre13 (pre-release)
+
+*More from Bruce VK2RT's testing of RTTY Contest, and a setting to switch the radio off when YWC closes. Everything in v2.5.4-pre12 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **MEM, next to BANDS**, opens a list of your memories. Click one to tune the receiver on screen, MAIN or SUB, to it; the memory it is on is lit. The list stays open while you work, and **EDIT** opens the Memories page in a new tab. To keep a set just for the contest, save it as a memory bank and load it before the contest ([§8.5](USER_MANUAL.md#85-memory-banks)).
+- **The tuning dial has a heading, VFO WHEEL, and its own POP OUT**, so it can go to a window of its own, on another monitor.
+- **DECODE swaps the dial for the decoded text**, in the same place under the tuner, and starts the decoder. The key then reads **VFO WHEEL**, to swap back. Either can be in a window while the other has the place.
+- **No DOCK left on the page.** While the tuner, the dial or the decoded text is in a window, its place on the page has only a note. **DOCK** or **Reattach** in the window puts it back.
+- **AUTO on WIDTH goes back to your RTTY setup's width.** With an SH command in the setup for the band, AUTO gives that width, as a band key does. With none, the tuner works it out as before.
+- **The dial spins.** Turned fast, each step goes further; let go mid-spin and it runs on briefly, as a weighted VFO knob does. A click stops it. The same on the Radio panel's main dial. Idea from the tuning dial in Brian Clark's IC-7300-Scope.
+
+**Everywhere else**
+
+- **Turn the radio off when YWC closes**, a new setting under Settings > Radio connection, off by default. YWC already switches the radio on when it starts.
+- **IDD and VDD meters on every model.** The FTdx10, FT-710 and FTDX5000 had them hidden. The FTDX5000 gets the 40-55 V VDD dial.
+- **Voice control no longer clips the first word after a pause.** The mic level now follows the loudest part of what you say, so a pause doesn't wind it up.
+- **Memories recalled to SUB on the FTdx101 set SUB's filter**, AGC, NB, NR and antenna, not MAIN's.
+- **Hide spectrum on the Classic page.** A button above the spectrum folds the spectrum and waterfall away, and the choice is kept. They also fold by themselves while no SDR is streaming, with a note of what each SDR is doing, and come back when it starts ([§5.4](USER_MANUAL.md#54-spectrum-display)).
+- **radio_state.json is not rewritten when nothing has changed**, which saves writes to a Raspberry Pi's SD card.
+
+RTTY Contest is receive only: transmit from your logger, or from MMTTY.
+
+## 2026-11-01 - v2.5.4-pre12 (pre-release)
+
+*Changes from Bruce VK2RT's testing of RTTY Contest. Everything in v2.5.4-pre11 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **WIDTH is kept for each band.** A width you set on MAIN in your RTTY mode is kept for that band, even after a restart, and a band key puts it back when you return to the band. With the tuner closed too. On a band where you haven't set one, an SH command in your RTTY setup gives the width, and with no SH the tuner works it out. Until now one width was kept for the mode and followed you to every band. Widths kept before this version are not used; set each band's once.
+- **CAT SET forgets the kept widths**, so every band goes back to the setup's width.
+- **WIDTH no longer flashes through other widths on a band key.** It shows the width the band change ends on.
+- **CAT SET goes when the RTTY setup is emptied.** Settings opens in a new tab from MENU, and RTTY Contest kept the key until it was reloaded. It looks again when you come back to it.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from RTTY Contest yet.
+
+## 2026-10-31 - v2.5.4-pre11 (pre-release)
+
+*One fix from Bruce VK2RT's testing of the RTTY setup. Everything in v2.5.4-pre10 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **The frequency on screen follows an FA line in the RTTY setup.** A band key went to the band's RTTY spot and then sent the setup, so a setup with its own frequency put the radio there while the screen kept the spot (14.090 on the radio, 14.080 on screen). The radio doesn't report a frequency change made over CAT, and the read-back after the setup didn't read the frequency. It does now.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from RTTY Contest yet.
+
+## 2026-10-31 - v2.5.4-pre10 (pre-release)
+
+*Two changes from Bruce VK2RT's testing of the RTTY setup. Everything in v2.5.4-pre9 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **Band changes with an RTTY setup are quicker.** Each command in the setup waited for an answer that a set command never gives, so ten lines added about 1.5 seconds to a band key. They are now sent without waiting; the radio is still read back afterwards so the screen shows what the setup changed.
+- **The SETUP key is now CAT SET**, so it isn't confused with SETUP in the radio's MENU. The setup itself and where you keep it are unchanged.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from RTTY Contest yet.
+
+## 2026-10-31 - v2.5.4-pre9 (pre-release)
+
+*Bruce VK2RT's tuning dial on RTTY Contest, FIXED spectrums that turn a page at the edge, AUTO beside WIDTH, and three fixes from his testing. Everything in v2.5.4-pre8 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **A tuning dial.** The Radio panel's concentric dial, made smaller, sits under PWR, WIDTH and SHIFT. The outer ring tunes in big steps and the inner knob in small ones: turn the mouse wheel over a part, or drag it round. The step for each part is chosen in a list beside the dial (OUTER starts at 100 Hz, INNER at 10 Hz) and remembered in the browser.
+- **AUTO beside WIDTH** puts the tuner's own width back. It is lit while the tuner works the width out and dark while a width you set is kept. Press it to forget the kept width for MAIN's mode.
+- **A cleared RTTY setup saves.** An empty setup box refused the whole Settings save, so the SETUP key never went away.
+- **WIDTH shows what the radio has after SETUP.** The setup was sent but nothing read the radio back, so an SH line changed the radio's width while the screen kept the old one. Mode, width, shift and power are now read back after the setup is sent.
+
+**RTTY Tuner** [§22](USER_MANUAL.md#22-rtty)
+
+- **The tuner goes to the exact mode you chose.** At start it accepted either sideband, so DATA-U was left as DATA-U when DATA-L was chosen. While the tuner runs, a change to the other sideband is still left alone.
+
+**Spectrum**
+
+- **FIXED turns a page at the edge.** Tune off one edge and the signal comes back near the other, so you carry on tuning the same way instead of the view jumping to centre. A band change, a typed frequency or a spot still centres.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from RTTY Contest yet.
+
+## 2026-10-30 - v2.5.4-pre8 (pre-release)
+
+*Bruce VK2RT's next four requests: his own RTTY setup string, PWR and WIDTH that stay where he puts them, a shortcut that opens RTTY Contest, and a fix for the tuner's Mark going back to 2125. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **Your RTTY setup.** Paste your CAT commands into **RTTY setup** in Settings, under RTTY Tuner. A **SETUP** key by MENU sends them. A line starting `20m:` goes only on 20 m, and a switch sends the setup after each band key. Nothing that can transmit or write a memory is sent: TX, MX, VX, KY, KM, PB, LM, AC, AM, BM, MW, MT, QI and PS refuse the whole setup.
+- **PWR is kept for each band**, and a band key puts it back.
+- **WIDTH stays where you put it.** A width set while the tuner is open is kept for that mode and used each time the tuner starts, instead of the one it worked out. Closing the tuner no longer puts the old width back.
+- **Open YWC on RTTY Contest from a shortcut**: add `rtty-contest` after the program in the shortcut's Target. `radio`, `classic`, `experimental` and `settings` work too.
+
+**RTTY Tuner** [§22](USER_MANUAL.md#22-rtty)
+
+- **Mark and Shift are kept by YWC, not only by each browser.** Every window and every address (http or https, localhost or the PC's name) starts from the last tones used, so one that had never been set can't put the Mark back to 2125. If it still happens, YWC's log names the page that changed it.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from RTTY Contest yet.
+
+## 2026-10-30 - v2.5.4-pre7 (pre-release)
+
+*Three more changes Bruce VK2RT asked for after trying pre6: a MENU key for Settings, 30 and 40 kHz spans, and FIXED holding to the edge. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **VIEWS and MENU keys next to the RTTY CONTEST title.** VIEWS goes to the other GUIs, as on the Radio panel. MENU has Settings, Application Setup, Memories, Labels, Meter Calibration, Diagnostics, the User Manual and About, each in a new tab, so the contest page keeps running behind it.
+- **FIXED holds the spectrum until the passband reaches the edge of the screen.** It used to re-centre when the dial got into the outer 15% on either side.
+- **The page shows the version**, pre-release suffix and all, as Classic and Experimental do.
+
+**Spectrum**
+
+- **30 kHz and 40 kHz spans**, to fill the jump from 20 to 50. They are on RTTY Contest, the Radio panel, its pop-out spectrum window and in Settings, but not on Classic's span buttons. Like every span of 100 kHz or less, they cost nothing: the SDR's picture is cut down, with no retune.
+
+**Radio panel** [§5.23](USER_MANUAL.md#523-radio-panel)
+
+- **A window's key brings it to the front when it is popped out**, instead of drawing a second copy on the panel.
+- **The panel shows the version**, as RTTY Contest now does.
+
+**CW Reader** [§20](USER_MANUAL.md#20-cw-reader)
+
+- **A Save button** saves the decoded text to a `.txt` file. In Chrome and Edge on the PC running YWC it opens in the folder you saved to last. [§20.4](USER_MANUAL.md#204-the-panel-controls).
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from RTTY Contest yet.
+
+## 2026-10-29 - v2.5.4-pre6 (pre-release)
+
+*FIXED fills the spectrum to both edges with an SDR, as Bruce VK2RT asked after trying pre5. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **With FIXED on, the side of the spectrum away from the dial is no longer blank.** The SDR's picture was cut out around the dial, so once the dial moved off the middle there was nothing to show on the far side. Now it is cut around the held picture. FIXED still re-centres when the dial gets into the outer 15% on either side.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from this GUI yet.
+
+## 2026-10-29 - v2.5.4-pre5 (pre-release)
+
+*Three changes Bruce VK2RT asked for after trying pre4: the tuner's buttons stay in Tones only, the scope's arms straighten at the same dial setting, and a FIXED spectrum. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **From radio and Auto are in the RTTY Tuner heading**, so they are still there when the tuner shows **Tones only**.
+- **The scope's arms no longer lean when the signal is on tune.** Each arm leaned about 4 degrees, so getting mark flat and then space upright put the dial in two places; on Bruce's FTdx101D they were 50 Hz apart. The tone filters are shaped differently now and both arms straighten at the same dial setting.
+- **FIXED**, in the row above the spectrum, holds the spectrum still while the dial moves: a click moves the passband and the dial line, not the picture. It moves on when the passband gets near an edge, or when you change the span or the band. It is kept in your layouts.
+- **The frequency readout is all one colour.**
+
+Known limits: receive has been tested on an FTdx101MP only, the scope change has been checked in tests but not yet on air, and nothing has been transmitted from this GUI yet.
+
+## 2026-10-27 - v2.5.4-pre4 (pre-release)
+
+*The spectrum centres on the DATA passband with a fine line at its middle, and Auto tunes to your Mark in DATA-L, as Bruce VK2RT asked after trying pre3. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **In DATA-L and DATA-U the spectrum is centred on the passband**, not the dial, so the signal you are reading sits in the middle and you can zoom right in; at a 2 kHz span it used to be off the screen. The dial line sits wherever the dial falls, off to one side, and **a fine line marks the middle of the orange band**: with Mark 1415 / 170 that is where the pair sits when it is tuned in, so put the signal on it. The same on the Radio panel. Other modes are centred on the dial as before.
+- **Auto tunes to your Mark in DATA-L and DATA-U** when MODE holds the radio there: one press moves the dial so the mark lands on the tuner's **Mark**, the same place a click puts it. Set the Mark to match your RTTY software (1415 for MMTTY) and the tones arrive where it expects them. If the signal is already within 25 Hz, Auto leaves the dial and the Mark alone. Tested receive-only on an FTdx101MP: from 200 Hz off either side, each press landed within 3 Hz.
+- **A click in DATA-U** puts the dial below the signal, so the tones fall inside the DATA passband; it used to tune onto the signal and the decoder printed noise.
+- **The tuner's trace is red for mark and amber for space** on a blue face, with the labels in the same colours.
+- **The DATA passband is drawn where the radio listens.** In DATA-L and DATA-U the shading sits on the radio's DATA SHIFT (1500 Hz by default) from the dial, not just beside it, so the tones fall inside it. The same on the Radio panel.
+- **SPAN** is a list in the spectrum's label, beside the frequency.
+
+Known limits: receive has been tested on an FTdx101MP only, and nothing has been transmitted from this GUI yet.
+
+## 2026-10-26 - v2.5.4-pre3 (pre-release)
+
+*RTTY Contest gets the controls Bruce VK2RT asked for after trying pre2. Install it over v2.5.3, pre1 or pre2; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **MODE** is a list: RTTY-L, RTTY-U, DATA-L or DATA-U. The tuner holds the radio in the mode you pick, and the band keys use it, so AFSK in DATA-L is no longer pulled back to RTTY-L. It is the same choice as **RTTY mode** in Settings.
+- **PWR, WIDTH and SHIFT** sit in a box under the tuner, and the docked tuner is much smaller.
+- **BANDS** chooses which band keys show on each row, and can hide SUB.
+- **Arrows** at the edges of the spectrum move the dial one span down or up.
+- **TRACE** sets how thick the spectrum line is.
+- **The decoded text** has a box of its own under the tuner, with its own POP OUT.
+
+**Radio panel**
+
+- **DATA-L and RTTY-U mode keys.**
+
+Known limits: as for pre2. Receive has been tested on an FTdx101MP only, and nothing has been transmitted from this GUI yet.
+
+## 2026-10-26 - v2.5.4-pre2 (pre-release)
+
+*A first look at RTTY Contest, a new GUI for RTTY contesting, for Bruce VK2RT and anyone else who wants to try it before the WAE DX RTTY Contest. Nothing else changes from v2.5.4-pre1. Install it over v2.5.3 or pre1; your settings are kept.*
+
+**RTTY Contest** - pick it from **Views** on the Radio panel, or go to `/rtty-contest`. [§5.24](USER_MANUAL.md#524-rtty-contest).
+
+- **One screen:** the frequency, mode, Mark/Shift and compact meters along the top, **Main / Sub**, **DX SPOTS** on and off, **SPAN**, the spectrum over the waterfall, and the RTTY tuner docked at the side.
+- **Band keys for MAIN and SUB** go to the RTTY part of the band in RTTY-L. 60 m and 4 m (2 m and 70 cm on the FT-991A) go to the radio's band memory, then RTTY-L.
+- **Tuning:** click a signal on the spectrum or the waterfall, turn the mouse wheel over the spectrum or over any digit of the frequency, or click the frequency and type one. A click never changes the mode ([#169](https://github.com/mm5agm/Yaesu_Web_Control/discussions/169)).
+- **REF, AUTO, RANGE and FIT** set the scale in dB above the noise floor. **WF ON TOP** swaps the spectrum and the waterfall. **FIXED** holds the spectrum still while the dial moves, so stations stay where you saw them.
+- **DECODE** on the tuner's bar shows the decoded text with the tuner.
+- **Pop-outs:** the spectrum, the waterfall, both, or the tuner each go into a window of their own. The tuner can also go **ON TOP**, above your logger, where the browser allows it.
+- **Sizes and layouts:** drag the edges and corner of the spectrum and the tuner. **LAYOUT** saves all of it by name, including which windows are open and where.
+- **The mouse wheel over a digit of the Radio panel's frequency** works as before; the panel and RTTY Contest now share that code.
+
+Known limits: while RTTY Contest is open its tuner holds the radio in RTTY, so CW Reader Mode can't switch to CW. The 60 m and 4 m keys have not yet been tried on the air. Receive has been tested on an FTdx101MP only, and nothing has been transmitted from this GUI yet.
+
+## 2026-10-23 - v2.5.4-pre1 (pre-release)
+
+*The Radio panel's CW window gets the memory keyer and a BREAK-IN key, the pop-out spectrum window tunes on a click or the mouse wheel, and the CW Reader prints less junk. Install it over v2.5.3; your settings are kept.*
+
+**Radio panel**
+
+- **The CW window has the memory keyer.** A **MEMORIES** panel beside KEYER has the five memory keys, M1 to M5, with their messages, **SAVE**, and a line saying whether a memory went on the air or only to the monitor. The messages are the same ones as in the Classic page's Memory Keyer. [§5.23](USER_MANUAL.md#523-radio-panel).
+- **BREAK-IN is a key.** Click it to step OFF → SEMI → FULL, and the mouse wheel over **SPEED** or **PITCH** steps them as the − and + keys do. A change of SEMI or FULL made on the radio's front panel now shows within a couple of seconds, and the app no longer shows FULL after you set SEMI. Not yet checked on every model.
+- **The pop-out spectrum window tunes like the panel.** Click it to tune there, and turn the mouse wheel to move the dial by the panel's **STEP** a notch. A line and a readout follow the mouse and show the frequency a click would send, with **→ dial** in RTTY. Each pane has the panel's **SCOPE** settings beside **HOLD**, the window can be resized from its corner, and its text is larger and readable in every theme. [§5.23](USER_MANUAL.md#523-radio-panel).
+- **A corner grip scales the Radio panel.** Drag it to any size; the size picker lists it as a percentage and keeps it.
+- The labels under the keys are drawn in each key's own colour, so they can be read on the dark keys.
+- **The manual explains the passband shading**: where the shaded passband sits for each mode, and why it can sit above or below the dial. [§5.23](USER_MANUAL.md#523-radio-panel).
+
+**CW Reader**
+
+- **Less junk between overs.** It no longer prints the lone weak E, I and T, or words made only of weak dits, that noise produces when nobody is sending, and it drops held text that nothing has followed for five seconds. A run of real dahs, such as a slow `TTT` or `MMM`, is no longer thrown away as chatter.
+
+**Fixed**
+
+- **The SWR needle on the Radio panel jumped to full scale on a good aerial while sending CW.** It now ignores readings taken when the radio puts out under 1 W, and averages the rest as the Classic page does.
+- **A slow sender heard straight after fast or fading signals had his callsign broken up** ("I W 2 B TA" for IW2BTA) in the CW Reader.
+- **Holding down a TX toggle key that is also a shortcut letter** (say j) ran that shortcut on every key repeat, so the radio was retuned while you transmitted. The **?** list now names the TX key.
+- **The Mic Gain slider didn't follow the radio** when MIC GAIN was turned on its front panel ([#228](https://github.com/mm5agm/Yaesu_Web_Control/issues/228)). It now follows, on Classic and the Experimental UI.
+- **A Radio panel window popped out to its own browser window never updated.** It drew and then sat still. It now gets live updates.
+- **The readout under the mouse went stale while the dial moved.** With the mouse held still over the spectrum, the readout now keeps showing the frequency under it as the trace moves.
+- **A pop-out window on a screen too short for it never kept its size**, and opened at the default size every time, which didn't fit either.
+- Spectrum panes say **Waiting for data** rather than **No SDR** until the first frame arrives.
+- The User Manual explains how to update the Docker container to a new release. [§2.3](USER_MANUAL.md#23-linux-docker-including-raspberry-pi).
+
+## 2026-10-16 - v2.5.3
+
+*Two new ways of working the radio beside the Classic page: Fabio Valente's (CR7CDC) Experimental UI, and a Radio panel laid out like the front of a transceiver. RTTY now prints the text as well as drawing the cross, and the CW Reader can tune a station in by itself. Everything in the v2.5.3 pre-releases is included. Install it over v2.5.2 or any pre-release; your settings are kept.*
+
+**New ways to work the radio**
+
+- **Experimental UI** (Fabio Valente, CR7CDC). **Experimental UI** in the top bar opens a dark, dockable workspace at `/flexui`. The VFOs, spectrum, meters, Radio Display, Radio Scope and the other controls are panels that can be dragged, docked, tabbed together, resized and popped out, and an arrangement can be saved as a named layout. Since pre7, a popped-out panel draws and works instead of staying blank ([#213](https://github.com/mm5agm/Yaesu_Web_Control/pull/213)), clicking a VFO's tab makes it the active band, the AF Gain sliders work, and the RTTY panel has the RTTY reader in it. [§5.22](USER_MANUAL.md#522-experimental-ui).
+- **Radio panel.** **Radio** in the top bar opens a third view at `/radio`, laid out like the front of the radio: the meter and keys down the left, the VFOs and spectrum in the middle, the main dial on the right and the knobs along the bottom. The keys, the knobs and the dial all work, with the mouse wheel or a drag. On the FTdx101 both receivers are on it, and the dial's outer ring tunes MAIN and its inner knob SUB. The keys under the meter open windows for CW, RTTY, memories, DX spots, meters, Remote Audio, the radio's own scope, and RX and TX setup; they can be moved, resized, torn apart and popped out to a second screen. The spectrum shows a pane per SDR, tunes on a click or the wheel, and shows exactly where a click will tune; it can be swapped for the radio's own screen, which can be clicked as on Radio Display. **TUNE** tunes the ATU and, because that transmits, asks for a second press. **VOX** switches VOX on and off. **M.STORE** saves the receiver into a memory bank in two clicks: press it, then click the bank. **MENU** in the top strip opens Settings, Memories, the manual and YWC's other pages in a new tab. [§5.23](USER_MANUAL.md#523-radio-panel).
+- **The Classic page is unchanged** and is still where YWC opens. All three can be open in different tabs at once.
+
+**RTTY**
+
+- **The RTTY Tuner reads the text.** A **Decode** pane beside the crossed figure prints what the tones say, using the Mark, Shift, Speed and Rev you tuned with. It also works on the Classic page, where an early version printed nothing. Receive only. [§22](USER_MANUAL.md#22-rtty).
+- **Auto works the settings out by listening.** It listens for about four seconds and measures both tones, the shift, the speed and which way round they are, then moves the dial so the pair sits in the middle of the radio's filter, and sizes the filter to the pair. When it can't make sense of the signal it says so and changes nothing. **From radio** takes the radio's own MARK and SHIFT settings. Two switches under Settings → RTTY Tuner say whether the tuner may set the mode and filter, and whether Auto may move the dial.
+- **The shaded passband is where the radio's filter really is.** The centre is measured for each model and follows IF SHIFT. On the FTdx101MP, in RTTY, it is the middle of the pair the radio's own RTTY menu expects (MARK plus half the SHIFT), which I proved by changing the menu and nothing else. [§22.8](USER_MANUAL.md#228-what-the-tuner-changes-on-your-radio).
+- **Contest Mode**, a switch under Settings → RTTY Tuner, trims the panel to the figure and holds it still, for a logger that has its own decoder. Bruce VK2RT asked for it after CQ WW RTTY. [§22.7](USER_MANUAL.md#227-contest-mode-the-tuner-on-its-own).
+- In RTTY-U the tuner listened for space at 1955 Hz instead of 2295, and the band plan put 20, 15 and 10 m RTTY in RTTY-U, where the radio reads amateur RTTY reversed. Both are fixed. The tuner also no longer freezes after its tab has been in the background.
+
+**CW**
+
+- **CW Reader Auto.** It finds the station, moves the dial so its tone sits on your CW pitch, and sets the filter for the speed it is sending: your Reader Mode width at most speeds, up to 500 Hz for fast CW. **Stop** puts your filter back; the dial stays on the station. [§20.6](USER_MANUAL.md#auto-tune-the-station-in-for-you).
+- **The CW Reader copies more.** It re-learns the speed when a new transmission starts, keeps the first letter when a station starts on a quiet band, and splits two letters the sender has run together instead of losing both. Slow, mostly-dit text such as "5NN" is no longer thrown away as noise.
+- **CW Send stops within a word or two**, and refuses to send when the transmit VFO isn't in CW, offering to switch it. The radio accepts the text in other modes and silently sends nothing. [§21](USER_MANUAL.md#21-cw-send).
+- **The break-in delay and Full break-in reach the radio** on the FTdx101, FTdx10 and FT-710. [§5.12](USER_MANUAL.md#512-cw-keyer-panel).
+- With voice announcements on, CW with break-in no longer says "transmit, receive" on every over.
+
+**Spectrum, Radio Display and pop-outs**
+
+- **Pop-out windows for a second monitor**: the CW Reader, CW Send, RTTY Tuner, Audio Filter and DX Spots list each have a **↗** button. **Reattach** puts them back at the size you left them, at any browser zoom. [§5.21](USER_MANUAL.md#521-pop-out-windows).
+- **The spectrum panel can be any height** from 40 to 1000 pixels, **can be dragged to tune**, and the **VFO panels, meters and Clarifier can be hidden** so the page is just the spectrum ([#171](https://github.com/mm5agm/Yaesu_Web_Control/discussions/171)). [§5.4](USER_MANUAL.md#54-spectrum-display).
+- **Free the SDR when the last browser closes**, a new setting under Settings > SDR, off by default. Settings now warns if the same SDR is chosen for both VFOs.
+- **FT-710: the radio's own scope in the spectrum panel, with no SDR** *(experimental)*, through the SCU-LAN10 menu and FTDI's LibFT4222. Checked on receive on a real FT-710; not yet while transmitting. [§6.3](USER_MANUAL.md#63-sdr-spectrum-display).
+- **Radio Display: click the meters to choose the TX meters** the radio shows ([#177](https://github.com/mm5agm/Yaesu_Web_Control/pull/177)). Two capture dongles of the same model are now told apart by the dongle, not by their place in the list, as long as each stays in the same USB socket. On the RTTY and CW decode screens the click zones no longer act on a screen they don't match ([#179](https://github.com/mm5agm/Yaesu_Web_Control/issues/179)). [§19](USER_MANUAL.md#19-radio-display).
+
+**Radios, meters and the rest**
+
+- **The FT-991A is a model of its own** ([#86](https://github.com/mm5agm/Yaesu_Web_Control/discussions/86)), with 2m, 70cm and C4FM, its own IF widths and shift, and power capped at 50 W on 2 m and 70 cm. Built from its CAT manual and still being tested on a real radio.
+- **Meter readings stay with their own meter.** A late reply could show the compression or SWR reading on the power gauge, or VFO A's S-meter on VFO B's. The power needle no longer stays up after you stop transmitting.
+- **WSJT-X, Log4OM and other rigctld programs are told the right mode.** CW, RTTY and DATA all read back as USB before, so FT8 on DATA-U showed as USB.
+- **CAT Disconnect closes the COM port**, so another program can open it; before, the key only turned red.
+- On the FTdx101MP/D, YWC sets the radio's own meters to PO and SWR while transmitting in CW, RTTY, PSK and DATA, where COMP went past full scale.
+- The FT-710 no longer shows an antenna list for its one antenna socket.
+- **The installer** offers the folder YWC is already in when upgrading ([#192](https://github.com/mm5agm/Yaesu_Web_Control/issues/192)), and Start menu search finds "Yaesu" again.
+
+The pre-release notes in [RELEASE_HISTORY.md](RELEASE_HISTORY.md) have the detail of each fix.
+
 ## 2026-10-07 - v2.5.3-pre7 (pre-release)
 
 *An Experimental UI beside the Classic one, meter readings that stay with their own meter, and capture dongles remembered by device instead of by their place in the list. Everything in v2.5.3-pre6 is included. Install it over v2.5.2 or an earlier pre-release; your settings are kept.*
