@@ -94,16 +94,18 @@ export function mountFirmwareBox(el, { firmwareUrl, appName = 'this app', before
         log.textContent = '';
         try {
             // An adapter on MIDI is asked to restart in download mode; a new
-            // board, or firmware before 1.0, goes straight to the port list.
-            // The list must open soon after the click (the browser allows
-            // it only then), so nothing here waits long.
+            // board, or one put in download mode with BOOT, goes straight to
+            // the port list. The list must open within about 5 s of the click
+            // (the browser allows it only then): the asking takes 3.2 s at most.
             try { await link.open(); } catch { /* no MIDI: the port list still works */ }
             if (link.present) {
                 beforeUpdate();
                 say('Restarting the adapter in download mode...');
                 const ok = await link.restartForUpdate();
                 logLine(ok ? 'Adapter restarting in download mode' : 'Adapter did not answer (firmware before 1.0?)');
-                if (ok) await new Promise(r => setTimeout(r, 600));
+                // Still running its firmware, so it would not be in the list.
+                if (!ok) throw new FlashError('connect');
+                await new Promise(r => setTimeout(r, 600));
             }
             say('Choose the board in the list (it may take a second to appear), then press Connect.');
             const port = await choosePort();

@@ -172,18 +172,31 @@ export class AdapterLink {
         });
     }
 
+    // _ask, tried again while there is no answer. An adapter Windows has
+    // suspended (no program had it open for a minute) misses the first ask:
+    // being woken, it leaves USB and joins again, which takes about a second.
+    async _askAgain(cmd, timeoutMs, tries) {
+        let text;
+        for (let i = 0; i < tries; i++) {
+            text = await this._ask(cmd, timeoutMs);
+            if (typeof text === 'string') return text;
+            if (text === undefined) await new Promise(r => setTimeout(r, timeoutMs));   // gone while it joins again
+        }
+        return text ?? null;
+    }
+
     // { name, version, build } (version '' when it did not answer: firmware
     // before 1.0), or null when no adapter is plugged in by its USB port.
-    async askVersion(timeoutMs = 800) {
+    async askVersion(timeoutMs = 800, tries = 4) {
         const out = this._ports('outputs')[0];
         if (!out) return null;
-        const text = await this._ask(CMD_VERSION, timeoutMs);
+        const text = await this._askAgain(CMD_VERSION, timeoutMs, tries);
         return { name: out.name, ...(text ? parseVersion(text) : { version: '', build: '' }) };
     }
 
     // True when the adapter said it is restarting in download mode.
-    async restartForUpdate(timeoutMs = 800) {
-        return typeof (await this._ask(CMD_DOWNLOAD, timeoutMs)) === 'string';
+    async restartForUpdate(timeoutMs = 800, tries = 4) {
+        return typeof (await this._askAgain(CMD_DOWNLOAD, timeoutMs, tries)) === 'string';
     }
 }
 

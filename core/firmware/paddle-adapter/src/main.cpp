@@ -44,6 +44,7 @@
 #include "USB.h"
 #include "esp32-hal-tinyusb.h"
 #include "soc/rtc_cntl_reg.h"
+#include "soc/usb_struct.h"
 #include <Adafruit_NeoPixel.h>
 
 enum Paddle : uint8_t { DIT = 0, DAH = 1 };
@@ -547,6 +548,33 @@ static void readMidi() {
     }
 }
 
+// Windows suspends a USB device that no program has open, after about a
+// minute. The core's USB driver for the S3 reports that suspend as an unplug,
+// so TinyUSB forgets its configuration and ignores the resume that follows:
+// the host then sends to endpoints nobody serves, and the adapter stays deaf
+// until it is reset. So when the bus has been awake a while and TinyUSB is
+// still not configured, the adapter leaves the bus and joins again, and the
+// host sets it up afresh. The wait lets an ordinary plug-in finish first.
+static volatile bool wasMounted = false;
+
+static void usbEvent(void *, esp_event_base_t, int32_t id, void *) {
+    if (id == ARDUINO_USB_STARTED_EVENT) wasMounted = true;
+}
+
+static void reviveAfterSuspend() {
+    static uint32_t awakeSince = 0;
+    const bool suspended = USB0.dsts & 1;   // DSTS bit 0: no traffic on the bus
+    if (!wasMounted || tud_mounted() || suspended) { awakeSince = 0; return; }
+    if (!awakeSince) { awakeSince = millis() | 1; return; }
+    if (millis() - awakeSince < 1000) return;
+    awakeSince = 0;
+    wasMounted = false;
+    Serial.printf("%9lu ms  host woke the USB port: joining again\n", (unsigned long)millis());
+    tud_disconnect();
+    delay(100);
+    tud_connect();
+}
+
 // --- Arduino ----------------------------------------------------------------
 
 void setup() {
@@ -554,6 +582,7 @@ void setup() {
     tinyusb_enable_interface(USB_INTERFACE_MIDI, TUD_MIDI_DESC_LEN, midiDescriptor);
     USB.manufacturerName("MM5AGM");
     USB.productName(DEVICE_NAME);
+    USB.onEvent(usbEvent);
     USB.begin();
 #if !USER_BUILD
     randomSeed(esp_random());
@@ -596,6 +625,7 @@ void loop() {
     // SysEx from YWC/IWC is acted on; anything else the host sends is read
     // and dropped so the endpoint never fills up.
     readMidi();
+    reviveAfterSuspend();
 
 #if !USER_BUILD
     runQueue();
