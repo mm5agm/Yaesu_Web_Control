@@ -8,6 +8,7 @@ import { IambicKeyer, ElementDecoder } from '../cw/iambic-keyer.js';
 import { Sidetone } from '../cw/sidetone.js';
 import { MidiPaddle } from '../cw/paddle-midi.js';
 import { KeyLink } from '../cw/key-link.js';
+import { mountFirmwareBox } from '../cw/paddle-firmware-box.js';
 
 const STORE = 'ywc.cwPaddle';
 const DEFAULTS = { device: '', ditNote: 20, dahNote: 21, channel: 0, swap: false,
@@ -267,5 +268,13 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 window.addEventListener('pagehide', () => { keyer.stop(); paddle.releaseAll(); link.stop(); });
+
+// The ESP32-S3 paddle adapter's firmware. Updating restarts the adapter, so
+// the keyer lets go first.
+mountFirmwareBox($('cwpFirmware'), {
+    firmwareUrl: '/firmware/paddle-adapter/',
+    appName: 'Yaesu Web Control',
+    beforeUpdate: () => { keyer.stop(); paddle.releaseAll(); log('Paddle adapter restarting for a firmware update: keyer stopped'); },
+});
 
 log('Page open.');
