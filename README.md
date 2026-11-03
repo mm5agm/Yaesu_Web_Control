@@ -11,7 +11,7 @@
 
 > **v2.5.3 brings two new ways of working the radio.** Fabio Valente's (CR7CDC) **Experimental UI** is a dark workspace of panels you can drag, dock, tab together and save as named layouts. The **Radio panel** is laid out like the front of a transceiver, with keys, knobs and a main dial that work, both receivers on the FTdx101, and windows for CW, RTTY, memories and the rest. The Classic page is unchanged and is still where YWC opens. RTTY now prints the text as well as drawing the cross, and its **Auto** button works the settings out from the signal; the CW Reader has an **Auto** button that tunes the station in. Everything is written up in the [v2.5.3 notes](#2026-10-16---v253).
 
-**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release), [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release), [v2.5.4-pre3](#2026-10-26---v254-pre3-pre-release), [v2.5.4-pre4](#2026-10-27---v254-pre4-pre-release), [v2.5.4-pre5](#2026-10-29---v254-pre5-pre-release), [v2.5.4-pre6](#2026-10-29---v254-pre6-pre-release), [v2.5.4-pre7](#2026-10-30---v254-pre7-pre-release), [v2.5.4-pre8](#2026-10-30---v254-pre8-pre-release), [v2.5.4-pre9](#2026-10-31---v254-pre9-pre-release), [v2.5.4-pre10](#2026-10-31---v254-pre10-pre-release), [v2.5.4-pre11](#2026-10-31---v254-pre11-pre-release), [v2.5.4-pre12](#2026-11-01---v254-pre12-pre-release), [v2.5.4-pre13](#2026-11-01---v254-pre13-pre-release) and [v2.5.4-pre14](#2026-11-02---v254-pre14-pre-release), [v2.5.4-pre15](#2026-11-02---v254-pre15-pre-release)):
+**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release), [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release), [v2.5.4-pre3](#2026-10-26---v254-pre3-pre-release), [v2.5.4-pre4](#2026-10-27---v254-pre4-pre-release), [v2.5.4-pre5](#2026-10-29---v254-pre5-pre-release), [v2.5.4-pre6](#2026-10-29---v254-pre6-pre-release), [v2.5.4-pre7](#2026-10-30---v254-pre7-pre-release), [v2.5.4-pre8](#2026-10-30---v254-pre8-pre-release), [v2.5.4-pre9](#2026-10-31---v254-pre9-pre-release), [v2.5.4-pre10](#2026-10-31---v254-pre10-pre-release), [v2.5.4-pre11](#2026-10-31---v254-pre11-pre-release), [v2.5.4-pre12](#2026-11-01---v254-pre12-pre-release), [v2.5.4-pre13](#2026-11-01---v254-pre13-pre-release), [v2.5.4-pre14](#2026-11-02---v254-pre14-pre-release), [v2.5.4-pre15](#2026-11-02---v254-pre15-pre-release) and [v2.5.4-pre16](#2026-11-03---v254-pre16-pre-release)):
 
 - **RTTY Contest, a new GUI for RTTY contesting** *(pre2 to pre4, still being tested)*. Only what a contest RTTY operator uses, on one screen: the frequency, band keys for MAIN and SUB, the spectrum over the waterfall, and the RTTY tuner docked at the side with its decoded text. Each part pops out into a window of its own, and named layouts put every window back on its own monitor. Bruce VK2RT asked for it. [§5.24](USER_MANUAL.md#524-rtty-contest).
 - **Three changes from Bruce VK2RT's testing** *(pre5)*. **From radio** and **Auto** are in the RTTY Tuner heading, so **Tones only** keeps them. The scope's arms no longer lean when the signal is on tune, so mark and space straighten at the same dial setting (on Bruce's FTdx101D they were 50 Hz apart). And **FIXED** on RTTY Contest holds the spectrum still while the dial moves.
@@ -351,6 +351,16 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 **Only the version you are installing is listed here.** Earlier releases are in
 [RELEASE_HISTORY.md](RELEASE_HISTORY.md); their installers are still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
+
+## 2026-11-03 - v2.5.4-pre16 (pre-release)
+
+*One change to RTTY Contest, from Bruce VK2RT's testing. Everything in v2.5.4-pre15 is included. Install it over v2.5.3 or any earlier pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **MONI is under PWR**, in the box below the tuner, instead of under INNER on the VFO WHEEL. It sits with PWR, the other control that only matters when you transmit, and works as before: on or off and the level are kept, and put back after your RTTY setup is sent. It doesn't transmit.
+
+RTTY Contest is receive only: transmit from your logger, or from MMTTY.
 
 ## 2026-11-02 - v2.5.4-pre15 (pre-release)
 
