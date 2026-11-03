@@ -18,6 +18,16 @@ two repositories.
   changing a character of it. Pure functions, tested in
   `tests/js/cw-tokens.test.mjs`; `docs/design/cw-decoder.md` §7.3 records the
   measurements behind it, including the suppression version that was rejected.
+- `cw/paddle-firmware.js` and `cw/paddle-firmware-box.js` — install and update
+  the paddle adapter's firmware (`firmware/paddle-adapter`) from the CW Paddle
+  page: SysEx over Web MIDI for its version and a restart into download mode,
+  then esptool-js over Web Serial, limited to Espressif's USB ID so a radio's
+  COM port can never be chosen. The box is the page's half; the app serves
+  `firmware/paddle-adapter/dist`. Tested in `tests/js/paddle-firmware.test.mjs`,
+  which also fails when `dist/` does not match the firmware source.
+- `vendor/esptool-js.js` — Espressif's esptool-js 0.7.1 bundle, unchanged but
+  for a licence header (Apache-2.0, `vendor/LICENSE-esptool-js`). Loaded only
+  when programming starts.
 - `popout/popout.js` — opens a panel in a window of its own (for a second
   monitor), remembers the window's size and position, and keeps the main page
   and the pop-out in step over a `BroadcastChannel`: `PopoutHost` in the main
