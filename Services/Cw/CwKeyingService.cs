@@ -140,6 +140,9 @@ namespace Yaesu_Web_Control.Services.Cw
         }
 
         /// <summary>For the page: the key line now, the CAT port, and the COM ports to choose from.</summary>
+        /// <summary>True while a real key line is chosen; false in the dry run.</summary>
+        public bool Live { get { lock (_lock) return _serial != null; } }
+
         public object LineStatus()
         {
             var ports = SerialCwKeyLine.Ports();

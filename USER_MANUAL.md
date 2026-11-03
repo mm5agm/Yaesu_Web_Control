@@ -4565,6 +4565,8 @@ Once programmed, the board is the MIDI device **YWC Paddle Adapter**. It sends t
 
 The settings are kept in the browser.
 
+What you send appears in the page's **What the keyer sent** box, and in the **CW Send** log on the main page ([section 21](#21-cw-send)), so the log shows both what you typed and what you keyed. Paddle lines are tagged *paddle*, or *paddle, dry run* while no key line is chosen. A pause of 3 seconds starts a new line.
+
 ### 23.5 Keying the radio
 
 **The page starts in dry run every time YWC starts.** In dry run the keyer and the sidetone work, and nothing reaches the radio. With **Send to the shack PC** ticked, YWC writes the keying to its log but opens no COM port. That is the place to practise, and to check the link over the network.
