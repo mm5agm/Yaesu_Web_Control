@@ -74,7 +74,8 @@ export function versionAdvice(found, carried) {
 
 // What to tell the user when programming fails. stage: 'port' (no port
 // chosen), 'gesture' (the list was asked for too long after the click),
-// 'connect', 'chip', 'write' or 'reset'.
+// 'connect', 'chip', 'write', 'reset' or 'cancelled' (the user stopped at
+// the step before the list).
 export function failureAdvice(stage, message = '') {
     const boot = 'Hold the BOOT button, plug the board\'s USB cable in (or press and let go of RST), let go of BOOT, then press Install again.';
     switch (stage) {
@@ -86,6 +87,7 @@ export function failureAdvice(stage, message = '') {
             if (/md5/i.test(message)) return 'The firmware was written but did not read back the same. Press Install again; if it happens again, try another USB cable.';
             return `Programming stopped part way (${message}). Check the cable, then press Install again. ${boot}`;
         case 'reset': return 'Written and checked, but the board did not restart. Unplug it and plug it back in.';
+        case 'cancelled': return 'Cancelled: nothing was written. An adapter already restarted for the update stays in download mode until it is programmed, unplugged or reset.';
         default: return message;
     }
 }
@@ -149,6 +151,14 @@ export class AdapterLink {
     }
 
     get present() { return this._ports('outputs').length > 0; }
+
+    // True once an adapter is listed, false after ms: the browser can take a
+    // moment to list one that has just joined USB again.
+    async waitPresent(ms) {
+        const end = performance.now() + ms;
+        while (!this.present && performance.now() < end) await new Promise(r => setTimeout(r, 250));
+        return this.present;
+    }
 
     // Sends cmd to the first adapter and waits for its reply: the reply's
     // text, '' for none expected, or null if it did not answer in time.
