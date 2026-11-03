@@ -81,7 +81,7 @@ To release a firmware change to the apps:
 2. Run `./make-dist.ps1`. It builds `user`, merges it into
    `dist/ywc-paddle-adapter.bin` and sets the version in `dist/firmware.json`.
    It never uploads.
-3. Run the core JS tests (`node --test tests/js` in core):
+3. Run the core JS tests (`node --test tests/js/*.test.mjs` in core):
    `paddle-firmware.test.mjs` fails if `dist/` does not match the source.
 4. Commit `dist/` with the source, and push core as usual.
 

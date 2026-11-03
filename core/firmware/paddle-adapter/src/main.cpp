@@ -43,6 +43,7 @@
 #include <Arduino.h>
 #include "USB.h"
 #include "esp32-hal-tinyusb.h"
+#include "soc/rtc_cntl_reg.h"
 #include <Adafruit_NeoPixel.h>
 
 enum Paddle : uint8_t { DIT = 0, DAH = 1 };
@@ -494,6 +495,20 @@ static void sysexReply(uint8_t cmd, const char *text) {
     tud_midi_stream_write(0, msg, n);
 }
 
+// Not the core's usb_persist_restart(RESTART_BOOTLOADER): it turns the USB
+// peripheral off while TinyUSB's task still uses it, and the board hangs
+// instead of restarting. Here USB is let go first, and the pins are handed to
+// the chip's own serial/JTAG port, which download mode uses; that setting
+// survives the restart.
+static void restartInDownloadMode() {
+    tud_disconnect();
+    delay(50);
+    CLEAR_PERI_REG_MASK(RTC_CNTL_USB_CONF_REG,
+        RTC_CNTL_SW_HW_USB_PHY_SEL | RTC_CNTL_SW_USB_PHY_SEL | RTC_CNTL_USB_PAD_ENABLE);
+    REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
+    esp_restart();
+}
+
 static void sysex(const uint8_t *m, size_t n) {
     if (n != sizeof kSysexHead + 2 || memcmp(m, kSysexHead, sizeof kSysexHead) || m[n - 1] != 0xF7) return;
     uint8_t cmd = m[sizeof kSysexHead];
@@ -506,11 +521,9 @@ static void sysex(const uint8_t *m, size_t n) {
         emuDown[DIT] = emuDown[DAH] = padDown[DIT] = padDown[DAH] = false;
         update(DIT, "  (restart)");
         update(DAH, "  (restart)");
-        // Long enough for the replies to reach the host before USB goes.
-        uint32_t until = millis() + 100;
-        while ((int32_t)(millis() - until) < 0) { tud_task(); delay(1); }
+        delay(100);   // for the replies to reach the host before USB goes
         Serial.flush();
-        usb_persist_restart(RESTART_BOOTLOADER);
+        restartInDownloadMode();
     }
 }
 

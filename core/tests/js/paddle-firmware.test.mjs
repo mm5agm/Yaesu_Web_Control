@@ -76,7 +76,12 @@ test('the port list asks only for Espressif\'s USB ID, never a radio\'s', async 
 
 function fakeEsptool({ chip = 'ESP32-S3 (QFN56)', failAt = null } = {}) {
     const calls = [];
-    class Transport { constructor(port) { this.port = port; } async disconnect() { calls.push('disconnect'); } }
+    class Transport {
+        constructor(port) { this.port = port; }
+        async setDTR(v) { calls.push(`dtr ${v}`); }
+        async setRTS(v) { calls.push(`rts ${v}`); }
+        async disconnect() { calls.push('disconnect'); }
+    }
     class ESPLoader {
         constructor(o) { this.o = o; }
         async main(mode) { calls.push(`main ${mode}`); if (failAt === 'connect') throw new Error('Failed to connect with the device'); return chip; }
@@ -89,16 +94,17 @@ function fakeEsptool({ chip = 'ESP32-S3 (QFN56)', failAt = null } = {}) {
             assert.equal(o.calculateMD5Hash(new Uint8Array([1, 2, 3])), createHash('md5').update(new Uint8Array([1, 2, 3])).digest('hex'));
             if (failAt === 'write') throw new Error('MD5 of file does not match data in flash!');
         }
-        async after(mode) { calls.push(`after ${mode}`); }
+        async writeReg(addr, value, mask) { calls.push(`reg ${addr.toString(16)} ${value} ${mask}`); }
     }
     return { esptool: { Transport, ESPLoader }, calls };
 }
 
-test('flashing writes at 0, checks by MD5, resets and lets go of the port', async () => {
+test('flashing writes at 0, checks by MD5, resets into the firmware and lets go of the port', async () => {
     const { esptool, calls } = fakeEsptool();
     const progress = [], logs = [];
     await flashImage({ port: {}, image: new Uint8Array(8), esptool, onProgress: f => progress.push(f), onLog: s => logs.push(s) });
-    assert.deepEqual(calls, ['main default_reset', 'write', 'after hard_reset', 'disconnect']);
+    // The force-download flag is cleared first, or the reset lands in download mode again.
+    assert.deepEqual(calls, ['main default_reset', 'write', 'reg 6000812c 0 1', 'dtr false', 'rts true', 'rts false', 'disconnect']);
     assert.deepEqual(progress, [0.5]);
     assert.deepEqual(logs, ['writing']);
 });

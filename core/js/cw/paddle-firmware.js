@@ -24,6 +24,8 @@ export const ESPRESSIF_VID = 0x303A;
 export const SYSEX_HEAD = [0xF0, 0x7D, 0x59, 0x50];   // 7D: non-commercial; 59 50: "YP"
 export const CMD_VERSION = 0x01;
 export const CMD_DOWNLOAD = 0x02;
+const S3_RTC_CNTL_OPTION1 = 0x6000812C;   // as esptool.py's esp32s3 target
+const S3_FORCE_DOWNLOAD_BOOT = 0x1;
 
 export function sysexRequest(cmd) {
     return [...SYSEX_HEAD, cmd, 0xF7];
@@ -223,7 +225,18 @@ export async function flashImage({ port, image, onProgress = () => {}, onLog = (
             calculateMD5Hash: md5Hex,
         });
         stage = 'reset';
-        await loader.after('hard_reset');
+        // The firmware's restart set the S3's force-download flag, and only a
+        // power-on clears it, so every reset would land in download mode
+        // again. esptool.py clears it here (arduino-esp32 issue 6762);
+        // esptool-js 0.7.1 does so for the S2 only.
+        await loader.writeReg(S3_RTC_CNTL_OPTION1, 0, S3_FORCE_DOWNLOAD_BOOT);
+        // Not loader.after('hard_reset'): in esptool-js 0.7.1 it only lowers
+        // RTS, so nothing resets until the port closes. RTS high resets the
+        // chip; letting go with DTR low starts the firmware.
+        await transport.setDTR(false);
+        await transport.setRTS(true);
+        await new Promise(r => setTimeout(r, 100));
+        await transport.setRTS(false);
     } catch (e) {
         throw e instanceof FlashError ? e : new FlashError(stage, e?.message || String(e));
     } finally {
