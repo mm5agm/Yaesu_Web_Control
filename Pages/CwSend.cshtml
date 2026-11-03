@@ -110,6 +110,7 @@
             if (update.property === 'ModeB')     panel.setMode('B', update.value);
             if (update.property === 'TxVfo')     panel.setTxVfo(update.value);
         });
+        conn.on('CwPaddleText', (text, live) => panel.paddleText(text, live));
         conn.start().catch(err => console.error('[cw-send-popout]', err));
     </script>
 </body>

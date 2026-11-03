@@ -144,7 +144,11 @@ function setLink(on) {
 }
 
 const sidetone = new Sidetone({ pitchHz: settings.pitch, volume: settings.volume / 100 });
-const decoder = new ElementDecoder(s => { $('cwpCopy').textContent += s; });
+// Each character also goes to the CW Send log in the other pages.
+const decoder = new ElementDecoder(s => {
+    $('cwpCopy').textContent += s;
+    if (hub.state === signalR.HubConnectionState.Connected) hub.send('CwPaddleText', s).catch(() => { });
+});
 
 function lightKey(start, end) {
     const now = performance.now();

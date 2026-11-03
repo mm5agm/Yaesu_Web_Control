@@ -70,6 +70,17 @@ namespace Yaesu_Web_Control.Hubs
         public string? CwSetKeyLine(string? port) => _cwKeying.SetKeyPort(port);
 
         /// <summary>
+        /// What the paddle page's keyer sent, read back as text there, passed
+        /// to the other pages for the CW Send log. Whether it reached the radio
+        /// is the server's word, not the page's: is a key line chosen.
+        /// </summary>
+        public Task CwPaddleText(string? text)
+        {
+            if (string.IsNullOrEmpty(text) || text.Length > 16) return Task.CompletedTask;
+            return Clients.Others.SendAsync("CwPaddleText", text, _cwKeying.Live);
+        }
+
+        /// <summary>
         /// Ask for the host-side spectrum of the radio's RX audio (the
         /// Filter Function Display's green bars). Returns null when frames
         /// will follow on RadioStateUpdate as property "FilterSpectrum", or
