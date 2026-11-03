@@ -372,6 +372,29 @@
     </ItemGroup>
   </Target>
 
+  <!-- The paddle adapter's firmware from the core subtree
+       (core/firmware/paddle-adapter/dist), served for the CW Paddle page's
+       Install / Update box. Copied and git-ignored the same way as core/js
+       above, for the same reasons. -->
+  <Target Name="CopyCoreFirmware" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <_CoreFirmware Include="core\firmware\paddle-adapter\dist\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CoreFirmware)"
+          DestinationFolder="wwwroot\firmware\paddle-adapter"
+          SkipUnchangedFiles="true" />
+    <WriteLinesToFile File="wwwroot\firmware\paddle-adapter\.gitignore"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true"
+                      Lines="# Generated at build time from core/firmware/paddle-adapter/dist.;# Never edit the copy here.;.gitignore;@(_CoreFirmware-&gt;'%(Filename)%(Extension)')" />
+    <ItemGroup>
+      <Content Include="@(_CoreFirmware->'wwwroot\firmware\paddle-adapter\%(Filename)%(Extension)')"
+               Exclude="@(Content)">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+
   <!-- ObjC helper for Radio Display FPS. C# objc_msgSend of CMTime aborts
        (NSException) on 59.94 fps HDMI pins; this dylib uses @try and the
        range's own minFrameDuration. -->

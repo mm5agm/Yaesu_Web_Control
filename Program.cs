@@ -812,8 +812,15 @@ try
     // revalidates it, so an unchanged file costs one conditional GET answered
     // with a 304 and no body. On a localhost or LAN app that is free, and it is
     // the price of never shipping a fix that fails to arrive.
+    //
+    // .bin is added for the paddle adapter's firmware (wwwroot/firmware), which
+    // the CW Paddle page's Install / Update box fetches: an unknown type is
+    // otherwise a 404.
+    var staticTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+    staticTypes.Mappings[".bin"] = "application/octet-stream";
     app.UseStaticFiles(new StaticFileOptions
     {
+        ContentTypeProvider = staticTypes,
         OnPrepareResponse = ctx =>
         {
             ctx.Context.Response.Headers.CacheControl = "no-cache, must-revalidate";
