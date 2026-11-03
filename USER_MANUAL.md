@@ -4510,9 +4510,11 @@ The reason it does this rather than just warning you is worth knowing: the tuner
 
 Send CW with your own paddle. The paddle goes into a small USB adapter that shows up as a MIDI device, and the adapter plugs into the computer the browser runs on. That can be the shack PC, or a laptop somewhere else in the house. The keyer and the sidetone run in the browser, so what you hear never waits on the network. YWC on the shack PC gets the keying and plays it on DTR of the radio's second USB COM port, which keys the radio.
 
+**It is for operating away from the radio.** If you sit at the radio, plug the paddle into the radio's KEY jack and use its own keyer: that has no delay and needs nothing from YWC. CW Paddle is for when the radio is somewhere else, such as a remote station, the shack at the bottom of the garden, or a laptop in another room, and you still want to send with a paddle.
+
 Open it with **CW Paddle** in the top bar, or **MENU → CW → CW Paddle** on the Radio panel and RTTY Contest. The address is `/CwPaddle`.
 
-> **New in v2.5.4-pre17, and still being tested.** It has been tested on the bench into a dummy load, with an ESP32-S3 adapter. Please tell us how it works with your paddle and radio.
+> **New in v2.5.4-pre17, and still being tested.** It has been tested on an FTdx101MP with an ESP32-S3 adapter, but not yet with a HaliKey or with the browser away from the shack. Please tell us how it works with your paddle and radio.
 
 ### 23.1 What you need
 
