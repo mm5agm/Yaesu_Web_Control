@@ -1418,6 +1418,10 @@ The Radio panel has none of the screen-reader or voice-control work of the Class
 
 *New in v2.5.4, and still being tested.*
 
+![The RTTY Contest screen on the German weather station DDK9: the spectrum over the waterfall with the two tones, the RTTY tuner docked at the side with a sharp cross at Mark 2448, Shift 450, 50 baud, reversed, and decoded text giving the callsign, the frequencies and a gale warning for the German Bight](pictures/RTTY_DDK9_RTTY_Contest.png)
+
+*The German weather station DDK9 on 10.1008 MHz. The decoded text is the station giving its callsign and frequencies, then a gale warning.*
+
 **RTTY Contest** has only what a contest RTTY operator uses, on one screen: the frequency, the spectrum over the waterfall, and the RTTY tuner docked at the side. Pick it from **Views** on the Radio panel ([§5.23](#523-radio-panel)), or go to `http://localhost:8080/rtty-contest`. **VIEWS**, next to the RTTY CONTEST title, goes back to the other GUIs. **MENU**, beside it, has the same pages as the Radio panel's MENU (Settings, Application Setup, Memories, Labels, Meter Calibration, Diagnostics, the User Manual and About), each in a new tab, so the contest page keeps running behind it.
 
 While it is open, its tuner keeps the radio in the mode chosen in **MODE** (below). CW Reader Mode can't switch the radio to CW while the page is open, so close it, or use another GUI, for CW.
