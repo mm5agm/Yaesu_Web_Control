@@ -1727,7 +1727,7 @@ To remove the cursor, **Shift-click on or near it** (within ~10 pixels). Each pa
 
 Each spectrum panel header has its own **1k / 2k / 5k / 10k / 20k / 50k / 100k / 200k / 500k / 1M / 2M** span buttons — the FTdx101's own scope list plus 2 MHz. Set VFO A to **2M** for a wide overview of the calling band and VFO B to **20k** zoomed in on the QSO you're working — both at the same time, independently. A change on one panel never touches the other.
 
-The Settings page Sample Rate dropdown still exists but now acts as a "reset both VFOs to this default" control. Use it to set a starting point; use the per-panel buttons to diverge from there.
+The Settings page Sample Rate dropdown still exists but now acts as a "reset both VFOs to this default" control. Use it to set a starting point; use the per-panel buttons to diverge from there. It only acts when you change it: saving Settings with it left alone keeps each VFO's own rate.
 
 **How the narrow spans work.** An RSP cannot be run at 1 kHz, and it should not be: the narrower the hardware rate, the slower the display. So from **100k** down the SDR stays at a fixed 125 kHz and the worker runs a 16,384-point FFT — 7.6 Hz per bin — over it, then sends the browser only the bins under the span you asked for. Stepping between 1k and 100k is therefore instant: nothing is retuned, the trace never blanks, and the frame rate stays the same at every span. Above 100k the SDR is retuned to the tightest rate that covers the span (250 kHz for 200k; 500k, 1M and 2M are the stream itself) and that VFO's panel pauses for a few seconds — see below.
 

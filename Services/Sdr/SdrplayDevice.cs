@@ -47,6 +47,8 @@ namespace Yaesu_Web_Control.Services.Sdr
         private const string DllName             = "sdrplay_api";
         private const int    DeviceStructSize    = 96;
         private const int    MaxDevices          = 4;
+
+        private static readonly object _scanLock = new();
         private const int    DevHandleOffset     = 88;
         private const int    HwVerOffset         = 64;
         private const int    DevParamsOffset     = 0;   // within DeviceParamsT
@@ -261,6 +263,19 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// of any problem encountered (DLL missing, service not running, etc.).
         /// </summary>
         public static IReadOnlyList<SdrDeviceInfo> EnumerateDevices(out string? diagnosticNote)
+        {
+            // The API is not safe to scan from two threads at once: one thread's
+            // sdrplay_api_Close under another's sdrplay_api_GetDevices is an access
+            // violation, which no catch here can stop and which takes the whole
+            // app down. Each Settings page open is a scan, so two page opens that
+            // overlap can do it.
+            lock (_scanLock)
+            {
+                return EnumerateDevicesLocked(out diagnosticNote);
+            }
+        }
+
+        private static IReadOnlyList<SdrDeviceInfo> EnumerateDevicesLocked(out string? diagnosticNote)
         {
             diagnosticNote = null;
             var devices = new List<SdrDeviceInfo>();
