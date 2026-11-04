@@ -3,7 +3,7 @@
 # pre-push: keep main at the last release.
 #
 # main only moves at release time. scripts/finish-release.ps1 enforces that
-# from the inside -- the version bump in five places, a README entry, and a
+# from the inside -- the version bump in five places, a release-notes entry, and a
 # tree check before it tags -- but nothing stopped the same two commands being
 # run by hand. On 2026-09-19 a mistyped cd ran Icom Web Control's docs merge
 # in this repo instead, and pushed 31 unreleased commits to main. Branch
@@ -41,7 +41,7 @@ ZERO='0000000000000000000000000000000000000000'
 
 # Anchored at the repo root. Anything matching may reach main on its own;
 # anything else needs a release merge.
-DOC_PATHS='^(README\.md|USER_MANUAL\.md|docs/|pictures/)'
+DOC_PATHS='^(README\.md|RELEASE_HISTORY\.md|USER_MANUAL\.md|docs/|pictures/)'
 
 status=0
 
@@ -80,7 +80,7 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
     printf '\n'
     printf '%s is meant to sit at the last release. To release, run\n' "$PROTECTED_BRANCH"
     printf '.\\scripts\\finish-release.ps1 -Version vX.Y.Z, which bumps the version,\n'
-    printf 'checks the README entry and makes the merge this hook recognises.\n\n'
+    printf 'checks the release notes and makes the merge this hook recognises.\n\n'
     printf 'If you are in the wrong repository, that is what this caught -- check\n'
     printf 'git remote -v before anything else.\n\n'
     printf 'To push anyway: git push --no-verify ...\n\n'
