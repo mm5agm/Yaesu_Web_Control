@@ -1885,8 +1885,6 @@ The app uses a generous parser that accepts spot lines from AR-Cluster, CC-Clust
 
 ![Successful Test cluster connection against dxspider.co.uk:7300 — the modal shows the full login transcript including the cluster's welcome banner, and the button below has turned solid green with the "Cluster connection successful" label](pictures/Settings_Test_Cluster.png)
 
-That picture shows my own login (MM5AGM, Colin). You'll see your own callsign and name.
-
 Outcomes:
 
 - 🟢 **Green button + "Cluster connection successful"** — the cluster accepted the connection and sent data. Safe to Save Settings.
