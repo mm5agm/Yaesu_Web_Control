@@ -1871,17 +1871,21 @@ This is one of only two parts of YWC that need an **internet connection** (the o
 Common things to put in this textarea:
 
 ```
-set/qra IO85CX            # your Maidenhead grid square — improves your spot list
-set/name Colin            # your name as it appears to other users
+set/qra YOUR-GRID         # your Maidenhead grid square, e.g. AB12CD — improves your spot list
+set/name YOUR-NAME        # your name as it appears to other users
 set/skimmer               # enable RBN/Skimmer spots on clusters that have an RBN feed (e.g. G6NHU-2)
 set/filter ...            # whatever spot filters you prefer
 ```
+
+Use your own callsign, grid square and name. The cluster uses these details to identify you.
 
 The app uses a generous parser that accepts spot lines from AR-Cluster, CC-Cluster, and DXSpider format servers. The cluster connection sends the configured callsign 1.5 seconds after the TCP socket opens — this handles servers whose login prompt has no newline (which would otherwise cause our reader to hang silently).
 
 **Test cluster connection** *(v2.2.2 and later)* — a yellow **Test cluster connection** button appears below the Post-login commands textarea. Click it and the app opens a TCP connection to the host/port/callsign you've typed into the form (**without** saving them first), sends your callsign, reads about ten seconds of output, then shows the full transcript in a popup so you can see exactly what the cluster said back. Use it to verify a new cluster before committing to it, to confirm a working cluster is still up after a network change, or to diagnose a connection problem.
 
 ![Successful Test cluster connection against dxspider.co.uk:7300 — the modal shows the full login transcript including the cluster's welcome banner, and the button below has turned solid green with the "Cluster connection successful" label](pictures/Settings_Test_Cluster.png)
+
+That picture shows my own login (MM5AGM, Colin). You'll see your own callsign and name.
 
 Outcomes:
 

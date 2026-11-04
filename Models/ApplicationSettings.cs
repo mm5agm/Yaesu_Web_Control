@@ -258,7 +258,7 @@
         public int DxSpotAgeMinutes { get; set; } = 15;
 
         // Cluster commands to send each time we log in. One per line.
-        // Useful for set/qra IO85CX, set/name Colin, set/filter, set/skimmer etc.
+        // Useful for set/qra YOUR-GRID, set/name YOUR-NAME, set/filter, set/skimmer etc.
         // Commands are sent in order after the callsign is accepted.
         public string? DxClusterPostLoginCommands { get; set; } = "";
 
