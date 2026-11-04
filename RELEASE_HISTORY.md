@@ -1,8 +1,7 @@
 # Yaesu Web Control - release history
 
-The notes for the version currently being installed are in
-[README.md](README.md#release-notes). Everything before it is kept here, so the
-README stays short. The installers are all still on the
+Every version's notes are kept here, newest first, so the README stays short. The
+installers are all still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
 
 This file exists because most of those release pages carry no notes of their own -
@@ -12,6 +11,59 @@ unchanged, and it is not [CHANGELOG.md](CHANGELOG.md), which is a closed archive
 a different and much older format.
 
 ---
+
+## 2026-11-03 - v2.5.4
+
+*RTTY Contest, a screen for RTTY contesting, and the CW Paddle, for sending CW from your own paddle when you operate remotely. Everything in the v2.5.4 pre-releases is included; their notes are in [RELEASE_HISTORY.md](RELEASE_HISTORY.md). Install it over v2.5.3 or any pre-release; your settings are kept.*
+
+**RTTY Contest** *(still being tested)* - pick it from **Views** on the Radio panel, or go to `/rtty-contest`. [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **One screen:** the frequency, mode, Mark/Shift and compact meters along the top, band keys for MAIN and SUB that go to each band's RTTY spot, the spectrum over the waterfall, and the RTTY tuner with its decoded text. Bruce VK2RT asked for it, and his testing shaped almost everything on it.
+- **MODE** holds the radio in RTTY-L, RTTY-U, DATA-L or DATA-U, and turns amber when the radio is in some other mode. In DATA-L and DATA-U the spectrum is centred on the passband, and Auto tunes the mark onto your Mark.
+- **A tuning dial** under the tuner, in a box headed VFO WHEEL, that spins like a weighted knob. **DECODE** swaps it for the decoded text.
+- **MEM** lists your memories, and a click tunes the receiver on screen to one. **MONI** switches the radio's monitor on and off and sets its level.
+- **PWR and WIDTH are kept for each band**, and a band key puts them back. **AUTO** beside WIDTH goes back to the starting width.
+- **CAT SET** sends the CAT commands you keep in Settings under RTTY setup, with lines for each band.
+- **FIXED** holds the spectrum still while the dial moves, and turns a page at the edge. **SPAN** includes 30 and 40 kHz.
+- **Pop-outs and layouts:** the spectrum, the waterfall, the tuner, the dial and the decoded text each go into a window of their own, and **LAYOUT** saves all of it by name. The page has its own theme list, and VIEWS and MENU keys by its title.
+- Receive has been tested on an FTdx101MP and an FTdx101D. RTTY Contest is receive only: transmit from your logger, or from MMTTY.
+
+**CW Paddle** *(new and still being tested)* [§23](USER_MANUAL.md#23-cw-paddle)
+
+- **Send CW from your own paddle** when you operate the radio remotely. The paddle goes into a USB adapter that shows up as a MIDI device: a **HaliKey MIDI**, or an **ESP32-S3 board** that you program from the page with one button. The keyer and sidetone run in the browser, and YWC keys the radio by DTR on its Standard COM port.
+- **Dry run at every start**, so you can practise without transmitting. Choosing a key line can put the radio in transmit at once, so have a dummy load or be ready to be on the air.
+- **What you send shows in the CW Send log**, on lines tagged *paddle*, beside what you type.
+- **HTTPS**, an option in Settings, lets a browser on another computer use the MIDI adapter.
+- Tested on an FTdx101MP with an ESP32-S3 adapter. At the radio, plug the paddle into its KEY jack as usual.
+
+**Radio panel** [§5.23](USER_MANUAL.md#523-radio-panel)
+
+- **The CW window has the memory keyer**: M1 to M5 with their messages, and **SAVE**. **BREAK-IN is a key** that steps OFF → SEMI → FULL, and the mouse wheel steps SPEED and PITCH.
+- **The pop-out spectrum window tunes on a click or the mouse wheel**, with a readout of the frequency under the mouse.
+- **A corner grip scales the panel** to any size, and the main dial spins like a weighted knob. Idea from the tuning dial in Brian Clark's IC-7300-Scope.
+- DATA-L and RTTY-U mode keys, and a window's key brings it to the front when it is popped out.
+
+**Everywhere else**
+
+- **The CW Reader has a Save button**, and prints less junk between overs.
+- **Turn the radio off when YWC closes**, a new setting under Settings > Radio connection, off by default.
+- **Hide spectrum on the Classic page.** A button above the spectrum folds it away; it also folds by itself while no SDR is streaming.
+- **IDD and VDD meters on every model.** The FTdx10, FT-710 and FTDX5000 had them hidden.
+- **Open YWC on the page you want** from a shortcut: add `rtty-contest`, `radio`, `classic`, `experimental` or `settings` after the program in its Target.
+- **Voice control no longer clips the first word after a pause.**
+- **radio_state.json is not rewritten when nothing has changed**, which saves writes to a Raspberry Pi's SD card.
+
+**Fixed**
+
+- Memories recalled to SUB on the FTdx101 set MAIN's IF width, shift, roofing filter, NB, NR, AGC and antenna instead of SUB's.
+- The SWR needle on the Radio panel jumped to full scale on a good aerial while sending CW.
+- In the CW Reader, a slow sender heard straight after fast or fading signals had the callsign broken up ("I W 2 B TA" for IW2BTA).
+- Holding down a TX toggle key that is also a shortcut letter ran that shortcut on every key repeat, so the radio was retuned while you transmitted.
+- The Mic Gain slider didn't follow MIC GAIN turned on the radio ([#228](https://github.com/mm5agm/Yaesu_Web_Control/issues/228)).
+- A Radio panel window popped out to its own browser window drew and then never updated.
+- Radio panel: CW BREAK-IN showed FULL after you set SEMI.
+- The readout of the frequency under the mouse went stale while the dial moved.
+- A pop-out window on a screen too short for it never kept its size.
 
 ## 2026-11-03 - v2.5.4-pre16 (pre-release)
 
