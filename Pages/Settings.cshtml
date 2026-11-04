@@ -2563,7 +2563,7 @@
                                     Login callsign
                                 </label>
                                 <input asp-for="Settings.DxClusterLoginCallsign" class="form-control"
-                                       placeholder="Your callsign, e.g. MM5AGM" autocomplete="off"
+                                       placeholder="Your callsign" autocomplete="off"
                                        style="text-transform: uppercase" />
                                 <div class="form-text">
                                     Sent to the cluster when it prompts for login. Use your own amateur
@@ -2587,11 +2587,11 @@
                             Post-login commands
                         </label>
                         <textarea asp-for="Settings.DxClusterPostLoginCommands" class="form-control font-monospace"
-                                  rows="4" placeholder="set/qra IO85CX&#10;set/name Colin"></textarea>
+                                  rows="4" placeholder="set/qra YOUR-GRID&#10;set/name YOUR-NAME"></textarea>
                         <div class="form-text">
                             One DXSpider command per line. Sent each time the app connects, after the callsign
-                            is accepted. Use this to set your Maidenhead grid (<code>set/qra IO85CX</code>),
-                            name (<code>set/name Colin</code>), or any spot filters you prefer. Lines starting
+                            is accepted. Use this to set your own Maidenhead grid (<code>set/qra YOUR-GRID</code>),
+                            name (<code>set/name YOUR-NAME</code>), or any spot filters you prefer. Lines starting
                             with <code>#</code> are ignored. Leading <code>/</code> is stripped.
                         </div>
                     </div>
