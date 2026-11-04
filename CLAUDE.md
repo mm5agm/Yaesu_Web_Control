@@ -348,20 +348,19 @@ properties. `finish-release.ps1` now refuses to release unless all five agree.
 
 Then update the documentation:
 
-- `README.md` — add the release-notes entry (date-first heading, e.g.
-  `## 2026-08-01 - v2.4.2`), and bump the per-release badge in the shields.io
-  URL near the top. Pre-releases get their own heading too, but **not** a badge
-  bump — the badge tracks full releases only.
-  `finish-release.ps1` lifts the notes from there into the GitHub release. Once a
-  version is out, move its notes to `RELEASE_HISTORY.md` and leave a short summary
-  and a link under `## Release Notes`, so the README stays short.
+- `RELEASE_HISTORY.md` — add the release-notes entry at the top (date-first
+  heading, e.g. `## 2026-08-01 - v2.4.2`). Pre-releases get their own heading too.
+  `finish-release.ps1` lifts the notes from there into the GitHub release.
+- `README.md` — for a full release only, bump the badge in the shields.io URL
+  near the top, and replace the short summary and link under `## Release Notes`.
+  The notes themselves stay out of the README, so it stays short.
 - `USER_MANUAL.md` — bring every section the release touches in line with what
   the app now does, and re-capture any screenshot the change makes wrong.
 
 Do not start the git steps until both documents are done. `finish-release.ps1`
 helps with the mechanical half — it rewrites the version strings in the manual
 and the README badge — but it refuses to release at all unless you have written
-the README release-notes entry yourself, and it can only *warn* that the manual
+the `RELEASE_HISTORY.md` entry yourself, and it can only *warn* that the manual
 looks stale, never judge whether a section is right.
 
 ```powershell
@@ -381,7 +380,7 @@ git push origin main
 git push origin vX.Y.Z
 
 # 4. Create the GitHub Release — this triggers the build workflow
-gh release create vX.Y.Z --title "vX.Y.Z" --notes "See README.md for full release notes."
+gh release create vX.Y.Z --title "vX.Y.Z" --notes "See RELEASE_HISTORY.md for full release notes."
 ```
 
 **Step 4 is required.** The build workflow triggers on `release: [created]`, not on tag push alone.
@@ -398,7 +397,7 @@ place, it has none of those checks, and it generates release notes from git log.
 **Install the hooks in every clone.** `.githooks/pre-push` refuses to push
 `main` anything that is neither a release merge (a commit whose subject is
 `Release vX.Y.Z`, which is what `finish-release.ps1` makes) nor a
-documentation-only change (`README.md`, `USER_MANUAL.md`, `docs/`,
+documentation-only change (`README.md`, `RELEASE_HISTORY.md`, `USER_MANUAL.md`, `docs/`,
 `pictures/`, which is how README corrections have always reached `main`
 between releases). That guard was missing on 2026-09-19, when a mistyped `cd`
 ran IWC's docs merge in this repo and pushed 31 unreleased commits to `main` --
