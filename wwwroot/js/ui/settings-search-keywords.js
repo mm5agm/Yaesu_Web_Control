@@ -5,7 +5,7 @@
 window.RWC_SETTINGS_KEYWORDS = {
     'tx-toggle-key': 'ptt transmit keyboard shortcut hotkey space bar',
     'show-frequency-arrow-buttons': 'screen reader blind tuning vfo',
-    'voice-control-enabled': 'speech talk commands microphone',
+    'voice-control-enabled': 'speech talk commands microphone ptt push to talk mic button',
     'voice-active-locale': 'locale translation',
     'voice-input-device': 'mic input',
     'voice-output-device': 'output tts speech',

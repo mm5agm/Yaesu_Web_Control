@@ -1337,7 +1337,7 @@ test('Settings search finds a setting by a word that is not on the page', async 
         note(`"debug" -> ${names.join(', ')}`);
 
         const ptt = (await typeSearch(page, 'PTT'), await resultNames(page));
-        expect(ptt.includes('tx-toggle-key'), `"PTT" found ${ptt.join(', ')}`);
+        expect(ptt.includes('tx-toggle-key') && ptt.includes('voice-control-enabled'), `"PTT" found ${ptt.join(', ')}`);
 
         await typeSearch(page, 'zzzqqq');
         expect((await resultNames(page)).length === 0, 'nonsense found something');
