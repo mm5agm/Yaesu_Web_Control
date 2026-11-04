@@ -54,7 +54,7 @@
 import { appVersion } from '../radio-panel/app-version.js';
 import { dropKey } from '../radio-panel/drop-key.js';
 import { injectRadioPanelStyle } from '../radio-panel/radio-panel-style.js';
-import { applyTheme, DEFAULT_THEME } from '../radio-panel/radio-panel-themes.js';
+import { applyTheme, DEFAULT_THEME, themeIds, resolveTheme } from '../radio-panel/radio-panel-themes.js';
 import { SpectrumPane } from '../radio-panel/spectrum-pane.js';
 import { formatFrequency } from '../radio-panel/panel-math.js';
 import { freqDigits, wheelDigits } from '../radio-panel/freq-digits.js';
@@ -257,7 +257,9 @@ const CSS = `
 .rc-scope .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
 .rc-scope .rc-pm{min-width:28px;padding:1px 0}
 .rc-step,.rc-mode{font:500 14px ${SANS};min-height:28px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:1px 4px}
-.rc-mode{font:600 15px ${SANS};letter-spacing:.06em}
+.rc-mode{font:600 15px ${SANS};letter-spacing:.06em;cursor:pointer}
+.rc-mode.rc-not-rtty{border-color:var(--rp-accent);color:var(--rp-accent)}
+.rc-top .rc-lbl{margin-right:-4px}
 .rc-out{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:500 18px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
 .rc-out[hidden]{display:none}
 .rc-tbar{display:flex;gap:6px;justify-content:flex-end;padding:0 0 6px}
@@ -341,7 +343,8 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {HTMLElement} [opts.decode]  the decoded text, in a box of its own under the
  *        tuner, in the VFO wheel's place, with its own POP OUT
  * @param {string} [opts.storagePrefix='rwc.rttyContest.']  this view's own choices
- * @param {string} [opts.themePrefix='rwc.radioPanel.']  the radio panel's: the theme is read from it
+ * @param {string} [opts.themePrefix='rwc.radioPanel.']  the radio panel's: its theme is this page's
+ *        until a theme is picked here, kept under opts.storagePrefix
  * @param {string} [opts.fontBase]
  * @param {number} [opts.minHz]
  * @param {number} [opts.maxHz]
@@ -416,7 +419,10 @@ export function mountContestView(root, opts) {
     const toneChip = h('span', 'rc-chip', '');
     toneChip.title = "Mark and shift, as the RTTY tuner has them. A click on the spectrum puts the mark there";
     const txChip = h('span', 'rc-chip', 'RX');
-    top.append(freqBtn, freqIn, modeChip, toneChip, txChip);
+    // MODE labels the list, which otherwise reads as a plain chip (Colin, 2026-11-02).
+    if (modeSel) modeSel.id = (opts.storagePrefix ?? 'rwc.rttyContest.').replace(/\W/g, '-') + 'mode';
+    const modeLbl = modeSel ? Object.assign(h('label', 'rc-lbl', 'MODE'), { htmlFor: modeSel.id }) : null;
+    top.append(freqBtn, freqIn, ...(modeLbl ? [modeLbl] : []), modeChip, toneChip, txChip);
 
     const meterRow = h('div', 'rc-meters');
     const meterEls = {};
@@ -469,6 +475,17 @@ export function mountContestView(root, opts) {
         if (k.id) b.id = k.id;
         b.hidden = !!k.hidden;
         top.append(b);
+    }
+
+    // THEME: this page's own, starting from the radio panel's until one is
+    // picked here (Colin, 2026-11-02). The page's windows follow it.
+    const themeSel = isMain ? h('select', 'rc-views rc-theme') : null;
+    if (themeSel) {
+        themeSel.title = 'Theme for this page and its windows. Until you pick one it follows the Radio panel';
+        themeSel.setAttribute('aria-label', 'Theme');
+        for (const id of themeIds()) themeSel.append(new Option(resolveTheme(id).label, id));
+        themeSel.addEventListener('change', () => { store.set(own + 'theme', themeSel.value); setTheme(); });
+        top.append(themeSel);
     }
 
     // MENU: the app's other pages, as on the radio panel, so Settings is one
@@ -996,6 +1013,8 @@ export function mountContestView(root, opts) {
         modeOther.textContent = s.mode || '-';
         modeOther.hidden = known;
         modeSel.value = known ? s.mode : '';
+        // Not one of the RTTY modes (CW, say): amber, so the list stands out.
+        modeSel.classList.toggle('rc-not-rtty', !known && !!s.mode);
     }
     function editFrequency() {
         freqIn.value = '';
@@ -1524,11 +1543,14 @@ export function mountContestView(root, opts) {
         loadMemories();
     }
 
+    const themeId = () => store.get(own + 'theme', null) ?? store.get(themePrefix + 'theme', DEFAULT_THEME);
     function setTheme() {
-        const t = applyTheme(root, store.get(themePrefix + 'theme', DEFAULT_THEME));
+        const id = themeId();
+        const t = applyTheme(root, id);
         for (const p of Object.values(panes)) p.setTheme(t);
+        if (themeSel) themeSel.value = id;
     }
-    window.addEventListener('storage', e => { if (e.key === themePrefix + 'theme') setTheme(); });
+    window.addEventListener('storage', e => { if (e.key === own + 'theme' || e.key === themePrefix + 'theme') setTheme(); });
     try {
         window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', setTheme);
     } catch { /* nothing to follow */ }
