@@ -1525,6 +1525,8 @@ Drag the right edge, the bottom edge or the bottom-right corner of the spectrum,
 
 Access Settings from the navigation bar or by clicking the settings icon. Changes take effect only after clicking **Save Settings**.
 
+**Finding a setting.** The search box at the top of the page finds a setting by its name, by words in its help text, or by a word you might try for it, such as *debug* or *PTT*. Matching settings are listed under the box and the sections with no match are hidden while you search. Choose a result to open its section and jump to it; press Esc to clear the search and put the page back as it was. Each setting also has its own link, such as `/Settings#detailed-logging` added to your YWC address, which you can bookmark or send to someone.
+
 At the top of the page, the **Network Access URLs** card lists the addresses you can use to reach YWC from this PC and from other devices on the LAN; the **Current Configuration** card on the right shows a one-line summary of what YWC is using right now (radio model, serial port, baud rate, network interface, web port, SDR device). The web port shown here is whichever port YWC actually managed to bind — usually 8080 but possibly 8081–8089 if 8080 was already in use on your PC.
 
 ![Top of the Settings page — Network Access URLs and Current Configuration cards](pictures/Settings_Network_Config.png)

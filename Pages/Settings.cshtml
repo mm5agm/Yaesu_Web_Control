@@ -47,6 +47,7 @@
 </style>
 
 <div class="mt-4">
+    <div id="settingsSearch"></div>
 
     @* Restart-required banner — shown when a setting like the radio model was
        changed and the running app needs a restart for it to fully take effect.
@@ -3861,6 +3862,8 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/ui/settings-search-keywords.js" asp-append-version="true"></script>
+    <script src="~/js/settings/settings-search.js" asp-append-version="true"></script>
     <script>
         // Serial port dropdown — same /api/ports source as Diagnostics
         (function () {

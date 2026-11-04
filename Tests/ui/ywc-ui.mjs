@@ -1316,6 +1316,79 @@ test('/rtty-contest: the VFO wheel is one step per 10 degrees turned slowly, mor
     }
 });
 
+// Settings search. Nothing here posts the form or changes a setting.
+const typeSearch = (page, q) => page.eval(`(i => { i.value = ${JSON.stringify(q)}; i.dispatchEvent(new Event('input')); })(document.getElementById('settingsSearchInput'))`);
+const resultNames = page => page.eval(`JSON.stringify(Array.from(document.querySelectorAll('#settingsSearchResults button')).map(b => b.dataset.target))`).then(JSON.parse);
+const sectionState = (page, name) => page.eval(`(s => s.open + ' ' + getComputedStyle(s).display)(document.querySelector('details[data-setting="${name}"]'))`);
+
+test('Settings search finds a setting by a word that is not on the page', async note => {
+    const page = await open('/Settings');
+    try {
+        expect(await page.eval(`JSON.stringify(window.SettingsSearch.unknownKeywords())`) === '[]', `keywords for settings that have gone: ${await page.eval(`JSON.stringify(window.SettingsSearch.unknownKeywords())`)}`);
+        expect(await page.eval(`!document.getElementById('settingsSearchInput').name && !document.getElementById('settingsSearchInput').form`), 'the search box must not be part of the settings form');
+
+        const before = await page.eval(`JSON.stringify(Array.from(document.querySelectorAll('details.settings-section')).map(s => s.open))`);
+        await typeSearch(page, 'debug');
+        const names = await resultNames(page);
+        expect(names[0] === 'detailed-logging', `"debug" found ${names.join(', ')}`);
+        expect((await sectionState(page, 'web-http')).startsWith('true'), 'the section with the result did not open');
+        expect((await sectionState(page, 'radio-cat')).endsWith('none'), 'a section with no result is still showing');
+        expect(await page.eval(`document.querySelector('[data-setting="detailed-logging"]').classList.contains('settings-search-match')`), 'the match is not marked');
+        note(`"debug" -> ${names.join(', ')}`);
+
+        const ptt = (await typeSearch(page, 'PTT'), await resultNames(page));
+        expect(ptt.includes('tx-toggle-key') && ptt.includes('voice-control-enabled'), `"PTT" found ${ptt.join(', ')}`);
+
+        await typeSearch(page, 'zzzqqq');
+        expect((await resultNames(page)).length === 0, 'nonsense found something');
+        expect(await page.eval(`document.getElementById('settingsSearchResults').textContent.includes('No settings match')`), 'no message for no results');
+
+        await typeSearch(page, '');
+        expect(await page.eval(`JSON.stringify(Array.from(document.querySelectorAll('details.settings-section')).map(s => s.open))`) === before, 'clearing did not restore the open sections');
+        expect(await page.eval(`document.querySelectorAll('.settings-search-filtered, .settings-search-match').length`) === 0, 'clearing left sections hidden or marked');
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test('Settings search result and deep link open the setting', async () => {
+    let page = await open('/Settings');
+    try {
+        await typeSearch(page, 'debug');
+        await page.eval(`document.querySelector('#settingsSearchResults button[data-target="detailed-logging"]').click()`);
+        expect(await page.eval(`document.getElementById('settingsSearchResults').hidden`), 'the list stayed open');
+        expect(await page.eval(`document.activeElement.id`) === 'Settings_DetailedLogging', `focus went to ${await page.eval(`document.activeElement.id`)}`);
+        expect(await page.eval(`location.hash`) === '#detailed-logging', 'the address did not become a link to the setting');
+    } finally {
+        await page.close();
+    }
+    page = await open('/Settings#detailed-logging');
+    try {
+        expect((await sectionState(page, 'web-http')).startsWith('true'), 'the deep link did not open the section');
+        expect(await page.eval(`document.querySelector('[data-setting="detailed-logging"]').classList.contains('settings-search-flash')`), 'the deep link did not highlight the setting');
+        expect(await page.eval(`document.activeElement.id`) === 'Settings_DetailedLogging', 'the deep link did not focus the setting');
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test('Saving during a settings search shows every section again', async () => {
+    const page = await open('/Settings');
+    try {
+        await typeSearch(page, 'PTT');
+        // Stopped after the search's own listener, so the form is never posted.
+        await page.eval(`(() => {
+            document.addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); }, true);
+            document.getElementById('settingsForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        })()`);
+        expect(await page.eval(`document.querySelectorAll('.settings-search-filtered').length`) === 0, 'sections stayed hidden, so validation could not reach them');
+    } finally {
+        await page.close();
+    }
+});
+
 // ----------------------------------------------------------------
 
 try {
