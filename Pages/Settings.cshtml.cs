@@ -255,6 +255,8 @@ namespace Yaesu_Web_Control.Pages
                 current.SerialPort        = Settings.SerialPort;
                 current.BaudRate          = Settings.BaudRate;
                 current.PowerOffAtExit    = Settings.PowerOffAtExit;
+                // The same range MeterPollingService holds it to.
+                current.MeterPollIntervalMs = Math.Clamp(Settings.MeterPollIntervalMs, 50, 1000);
                 current.WebAddress        = Settings.WebAddress;
                 current.SdrDeviceKeyA     = Settings.SdrDeviceKeyA ?? string.Empty;
                 current.SdrDeviceKeyB     = Settings.SdrDeviceKeyB ?? string.Empty;
