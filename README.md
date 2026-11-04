@@ -28,7 +28,7 @@ I wrote YWC because I can't see the FTdx101MP's controls without using a magnify
 
 **See the band**
 
-- **[SDR spectrum and waterfall](USER_MANUAL.md#63-sdr-spectrum-display)** from an SDR on the radio's IF output, one per receiver on an FTdx101. Spans run from 1 kHz to 2 MHz, the IF passband is drawn on the trace, and a click tunes to the signal. Please read the [SDR safety warning](#sdr-safety) first.
+- **[SDR spectrum and waterfall](USER_MANUAL.md#63-sdr-spectrum-display)** from an SDR on the radio's IF output, one per receiver on an FTdx101. Spans run from 1 kHz to 2 MHz, the IF passband is drawn on the trace, and a click tunes to the signal. Please read the [SDR safety warning](#sdr-safety) first. **The FT-710 needs no SDR:** it can [send its own scope over the USB lead](USER_MANUAL.md#ft-710-the-radios-own-scope-no-sdr-needed-experimental). *Experimental, and Windows only.*
 - **[Radio Display](USER_MANUAL.md#19-radio-display)**: the radio's own screen in the browser, captured from its DVI-D socket with an HDMI-to-USB stick. Click a signal to tune to it, and click the readouts and soft-buttons, with the radio's [scope controls](USER_MANUAL.md#194-cat-scope-controls) beside it. By Fabio. Please read the [DVI-D safety warning](#dvi-d-safety) first, and set the radio's EXT MONITOR PIXEL menu to 800x600.
 - **[DX spots](USER_MANUAL.md#517-dx-spots-list)** on the spectrum, and a [watch list](USER_MANUAL.md#514-dx-watch-panel) that alerts you when a callsign or prefix appears.
 
@@ -58,7 +58,7 @@ I wrote YWC because I can't see the FTdx101MP's controls without using a magnify
 | FTdx101MP | 200 W | Dual | All features supported |
 | FTdx101D | 100 W | Dual | All features supported |
 | FTdx10 | 100 W | Single | Two VFOs; no rear-panel IF output for spectrum |
-| FT-710 | 100 W | Single | Two VFOs; no rear-panel IF output for spectrum |
+| FT-710 | 100 W | Single | Two VFOs; no rear-panel IF output, but can show its own scope over USB with no SDR (experimental) |
 | FTDX3000 | 100 W | Single | Two VFOs; no memory tag (MT) command |
 | FT-991A | 100 W (50 W on 2 m / 70 cm) | Single | HF + 6 m + 2 m + 70 cm; C4FM; new in v2.5.3 — built from the 991A's CAT manual and still being tested on a real radio |
 | FTDX5000MP | 200 W | Dual | New — available to test; power meter calibration still being refined |
