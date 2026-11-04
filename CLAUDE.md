@@ -352,6 +352,9 @@ Then update the documentation:
   `## 2026-08-01 - v2.4.2`), and bump the per-release badge in the shields.io
   URL near the top. Pre-releases get their own heading too, but **not** a badge
   bump — the badge tracks full releases only.
+  `finish-release.ps1` lifts the notes from there into the GitHub release. Once a
+  version is out, move its notes to `RELEASE_HISTORY.md` and leave a short summary
+  and a link under `## Release Notes`, so the README stays short.
 - `USER_MANUAL.md` — bring every section the release touches in line with what
   the app now does, and re-capture any screenshot the change makes wrong.
 

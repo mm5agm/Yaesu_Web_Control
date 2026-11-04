@@ -182,6 +182,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | SDR spectrum / waterfall | Yes | No | No |
 | Voice Control (SAPI mic) | Yes | No | No |
 | Radio Display (USB capture → MJPEG) | Yes | Yes | Yes (map `/dev/video*` in Docker) |
+| Remote Audio (RX to browser, mic to radio) | Yes | Yes | Yes from source; not Docker |
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
 | CW Send ([§21](#21-cw-send)) | Yes | Yes | Yes |
@@ -257,6 +258,31 @@ The application was written for operators who want a large, clean, touchscreen-f
 If Device Manager never shows the radio's COM ports, or **Test Connection** fails later, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads), **reboot**, and try again ([§2.4](#24-usb-serial-driver-windows--macos--linux)).
 
 This is the supported product build: tray icon, SDR spectrum, and Voice Control.
+
+#### Windows security warnings
+
+The installer is not code-signed (a signing certificate is a recurring cost I haven't taken on for a free program), so Windows and antivirus tools treat it as an unknown, newly downloaded executable and may warn about it or block it. This is expected — the installer is built by GitHub Actions directly from the source in this repository, and GitHub shows a SHA-256 digest beside each file on the release page — run `Get-FileHash Yaesu_Web_Control_Setup.exe` in PowerShell and the two should match. Follow whichever of these matches what you see:
+
+**Microsoft Defender quarantines the download, or the installed program on first launch, and says "This program is dangerous and executes commands from an attacker"**
+This is Defender's cloud/machine-learning classifier (the detection name ends in `!ml` — with v2.5.1 it was `Trojan:Win32/Wacatac.C!ml` on the installed `Yaesu_Web_Control.dll`, and it arrived with a definition update the day after release). It is a false positive that hits many unsigned .NET applications, it can appear on a build that scanned clean the day before, and the installer itself usually scans clean because the file it objects to is inside. To recover: open **Windows Security → Virus & threat protection → Protection history**, click the entry, choose **Actions → Allow on device**, then either download the installer again or simply start YWC again if it was the installed program that was taken. Choose *Allow*, not just *Restore* — Restore puts the file back but Defender may take it again at the next scan. Don't switch Defender off — allowing this one file is enough. If this happens to you, please post the detection name shown in Protection history in a Discussion; I report each one to Microsoft as a false positive, and that is what makes it stop happening for the next person.
+
+**Norton (or other antivirus) flags the file as malware**
+This is the same false positive, caused by the executable being unsigned and newly downloaded. In Norton, go to **Security → History**, find the quarantined file, and choose **Restore & Exclude** (or the equivalent Allow option in your antivirus).
+
+**"Windows protected your PC" (SmartScreen) or an Unknown Publisher prompt when you run the installer**
+Click **More info → Run anyway**.
+
+**Right-click → Properties → Unblock**
+Windows marks files downloaded from the internet as untrusted. Before running the installer, right-click the file, choose **Properties**, and if you see an **Unblock** checkbox at the bottom of the General tab, tick it and click OK.
+
+**"This app can't run on your PC" — Smart App Control**
+If Smart App Control is enabled it will block unsigned apps entirely. Go to **Settings → Privacy & Security → Windows Security → App & Browser Control → Smart App Control** and switch it to **Off**, then restart your PC and try again.
+
+The screenshot below shows the Smart App Control setting:
+
+![Smart App Control Screenshot](pictures/SmartAppControl.png)
+
+These are one-time steps — once the app is installed you won't see them again.
 
 ### 2.2 macOS (DMG)
 
