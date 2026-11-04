@@ -112,6 +112,15 @@ namespace Yaesu_Web_Control.Pages
             return Page();
         }
 
+        /// <summary>
+        /// Settings page binds a single Sample Rate dropdown, showing VFO A's rate
+        /// when the page opens. Changing it is a "reset both VFOs to this rate"
+        /// control. Left alone it says nothing, so saving some other setting keeps
+        /// the rates the span buttons on the main page set for each VFO.
+        /// </summary>
+        public static (double A, double B) SampleRatesAfterSave(double posted, double currentA, double currentB) =>
+            posted > 0 && posted != currentA ? (posted, posted) : (currentA, currentB);
+
         public async Task<IActionResult> OnPostAsync()
         {
             // SdrDeviceKeyA / SdrDeviceKeyB are intentionally allowed to be empty
@@ -267,14 +276,8 @@ namespace Yaesu_Web_Control.Pages
                 current.SdrIfFrequencyHz  = 0;             // legacy field — kept zero once the per-VFO fields exist
                 current.SdrFrequencyTrimHzA = Math.Clamp(Settings.SdrFrequencyTrimHzA, -10_000, 10_000);
                 current.SdrFrequencyTrimHzB = Math.Clamp(Settings.SdrFrequencyTrimHzB, -10_000, 10_000);
-                // Settings page binds a single Sample Rate dropdown — treat that
-                // as a "reset both VFOs to this rate" control. Per-VFO divergence
-                // happens at runtime via the span buttons on the main page.
-                if (Settings.SdrSampleRateHz > 0)
-                {
-                    current.SdrSampleRateHzA = Settings.SdrSampleRateHz;
-                    current.SdrSampleRateHzB = Settings.SdrSampleRateHz;
-                }
+                (current.SdrSampleRateHzA, current.SdrSampleRateHzB) = SampleRatesAfterSave(
+                    Settings.SdrSampleRateHz, current.SdrSampleRateHzA, current.SdrSampleRateHzB);
                 current.SdrSampleRateHz   = 0;             // legacy field — kept zero in v2.3.0+ files
                 current.SdrFftSize        = Settings.SdrFftSize;
                 current.BandPlan          = Settings.BandPlan;

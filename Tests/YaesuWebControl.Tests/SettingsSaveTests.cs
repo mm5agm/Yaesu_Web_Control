@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Xunit;
+using Yaesu_Web_Control.Pages;
 
 namespace YaesuWebControl.Tests
 {
@@ -46,6 +47,28 @@ namespace YaesuWebControl.Tests
                 .OrderBy(f => f, StringComparer.Ordinal);
 
             Assert.Empty(missing);
+        }
+
+        [Theory]
+        [InlineData(5000, 5000, 10000, 5000, 10000)]   // box untouched: the two rates stay different
+        [InlineData(20000, 5000, 10000, 20000, 20000)] // box changed: both follow it
+        [InlineData(10000, 5000, 10000, 10000, 10000)] // changed to B's rate: A follows
+        [InlineData(0, 5000, 10000, 5000, 10000)]      // nothing posted
+        public void SpanBoxOnlyResetsBothVfosWhenItIsChanged(
+            double posted, double a, double b, double wantA, double wantB)
+        {
+            Assert.Equal((wantA, wantB), SettingsModel.SampleRatesAfterSave(posted, a, b));
+        }
+
+        [Fact]
+        public void SdrplayScansCannotOverlap()
+        {
+            // Reproduced outside the app with the same calls: 509 scans clean one
+            // at a time, an access violation within seconds from three threads.
+            string cs = File.ReadAllText(LocateRepoPath("Services/Sdr/SdrplayDevice.cs"));
+            Assert.Matches(
+                @"public static IReadOnlyList<SdrDeviceInfo> EnumerateDevices\([^)]*\)\s*\{(?:\s*//[^\n]*)*\s*lock \(_scanLock\)\s*\{\s*return EnumerateDevicesLocked\(",
+                cs);
         }
 
         private static string LocateRepoPath(string relative)
