@@ -170,7 +170,7 @@
 
 Yaesu Web Control — **YWC** for short — is a web-based control panel for Yaesu HF transceivers.
 
-The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the full product: system-tray host, SDR spectrum, and Voice Control. **macOS** gets an unsigned CAT-only DMG from the same Releases page (menu-bar host; no SDR / Voice Control). **Linux** runs the same CAT-only host from source or via Docker (x64 PCs and arm64 Raspberry Pi). On those platforms the browser UI still talks to the radio over CAT. You can always open the browser UI from another device on your LAN (tablet, phone, another laptop) once the host is running.
+The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the full product: system-tray host, SDR spectrum, and Voice Control. **macOS** gets an unsigned DMG from the same Releases page (menu-bar host). **Linux** runs the same host from source or via Docker (x64 PCs and arm64 Raspberry Pi). Those platforms have everything except the SDR spectrum and Voice Control, including CAT control and Remote Audio. You can always open the browser UI from another device on your LAN (tablet, phone, another laptop) once the host is running.
 
 ### Platforms at a glance
 
@@ -182,7 +182,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | SDR spectrum / waterfall | Yes | No | No |
 | Voice Control (SAPI mic) | Yes | No | No |
 | Radio Display (USB capture → MJPEG) | Yes | Yes | Yes (map `/dev/video*` in Docker) |
-| Remote Audio (RX to browser, mic to radio) | Yes | Yes | Yes from source; not Docker |
+| Remote Audio (RX to browser, mic to radio) | Yes | Yes | Yes (Docker maps `/dev/snd`) |
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
 | CW Send ([§21](#21-cw-send)) | Yes | Yes | Yes |
@@ -288,7 +288,7 @@ These are one-time steps — once the app is installed you won't see them again.
 
 The macOS and Linux/Docker builds, and the release pipeline that produces them, are all Fabio Valente's (CR7CDC) work — I only tested the Docker image on a Raspberry Pi 3B.
 
-macOS ships as an **unsigned CAT-only** app (menu-bar status item; no SDR spectrum or Windows Voice Control). There is no Apple Developer ID / notarization — this is an open-source project and that licence costs money every year. Gatekeeper will warn the first time you open a download from the internet, the same way Windows warns about the unsigned installer.
+macOS ships as an **unsigned** app (menu-bar status item; no SDR spectrum or Windows Voice Control). There is no Apple Developer ID / notarization — this is an open-source project and that licence costs money every year. Gatekeeper will warn the first time you open a download from the internet, the same way Windows warns about the unsigned installer.
 
 1. Download the DMG that matches your Mac from the [GitHub Releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases):
    - Apple Silicon (M1 / M2 / M3 / …): `Yaesu_Web_Control_CAT_*_macos-arm64.dmg`
@@ -305,7 +305,7 @@ Set **Serial Port** to a `/dev/cu.*` device (see §3). SDR and Voice Control sec
 
 #### Alternative: build from source (macOS / Linux)
 
-If you prefer not to use the DMG, or you are on Linux without Docker, build the **CAT-only** target with the [.NET 10 SDK](https://dotnet.microsoft.com/download):
+If you prefer not to use the DMG, or you are on Linux without Docker, build the **`net10.0`** target with the [.NET 10 SDK](https://dotnet.microsoft.com/download):
 
 ```bash
 git clone https://github.com/mm5agm/Yaesu_Web_Control.git
@@ -323,7 +323,7 @@ Then open `http://localhost:8080` (or the port shown in the console / menu-bar t
 
 Like the macOS build, the Dockerfile, the multi-arch image and its build pipeline are Fabio Valente's (CR7CDC) work. The Raspberry Pi 3B is what I tested it on.
 
-For an always-on CAT controller on an x64 PC or arm64 Pi, use the published multi-arch image (`linux/amd64` and `linux/arm64`) from the GitHub Container Registry, or build locally from the repo `Dockerfile` / `docker-compose.yml`.
+For an always-on host on an x64 PC or arm64 Pi, use the published multi-arch image (`linux/amd64` and `linux/arm64`) from the GitHub Container Registry, or build locally from the repo `Dockerfile` / `docker-compose.yml`.
 
 **Image:** `ghcr.io/mm5agm/yaesu_web_control` — each release is tagged (e.g. `v2.4.2`, `v2.4.3-pre6`); `latest` tracks the newest **full** release only (not pre-releases).
 
@@ -440,13 +440,13 @@ A small **YWC tray icon** appears in the Windows system tray (down by the clock,
 
 ![YWC tray icon with right-click menu open, showing Open / About / Open user data folder / Exit](pictures/SystemTrayIcon.png)
 
-### macOS (CAT-only host)
+### macOS
 
 Launch **Yaesu Web Control** from Applications (DMG install — [§2.2](#22-macos-dmg)), or run `dotnet run --framework net10.0` from a source checkout. Either way Kestrel starts and a **menu-bar status item** offers the same Open / About / Open user data folder / Exit actions as the Windows tray. User data lives under `~/.config/MM5AGM/Yaesu Web Control/`. With **Open browser automatically on startup** enabled (default), the browser opens on a desktop Mac; if you turned it off (or it didn’t open), use the menu-bar **Open** item or browse to the URL yourself.
 
 ### Linux (from source)
 
-Same CAT-only host as macOS, but **no tray**. Watch the console for the listening URL, open a browser yourself, and stop with **Ctrl+C**. For a shack Pi that should stay up with no tabs open, disable **Automatically exit when no browser is connected** in Settings.
+Same host as macOS, but **no tray**. Watch the console for the listening URL, open a browser yourself, and stop with **Ctrl+C**. For a shack Pi that should stay up with no tabs open, disable **Automatically exit when no browser is connected** in Settings.
 
 ### Linux Docker
 
@@ -3251,7 +3251,7 @@ As a safety backstop, YWC (v2.4.2 and later) will force the radio back to receiv
 
 | Topic | What to expect |
 |---|---|
-| Getting the app | Windows: unsigned installer from Releases. macOS: unsigned CAT-only DMG from Releases (Apple Silicon or Intel) — Gatekeeper needs **Open** / **Open Anyway** the first time ([§2.2](#22-macos-dmg)). Linux: build `net10.0` from source, or Docker (`ghcr.io/mm5agm/yaesu_web_control`, amd64 + arm64). |
+| Getting the app | Windows: unsigned installer from Releases. macOS: unsigned DMG from Releases (Apple Silicon or Intel) — Gatekeeper needs **Open** / **Open Anyway** the first time ([§2.2](#22-macos-dmg)). Linux: build `net10.0` from source, or Docker (`ghcr.io/mm5agm/yaesu_web_control`, amd64 + arm64). |
 | Host chrome | Windows tray · macOS menu-bar item · Linux/Docker console only |
 | Serial port | `COMn` on Windows; `/dev/cu.*` on macOS; `/dev/ttyUSB*` / `/dev/ttyACM*` on Linux (pass through with `YWC_SERIAL_DEVICE` in Docker). Always use the **Enhanced** CAT port when two CP210x ports appear. |
 | USB serial driver | **Windows / macOS:** install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** only if ports are missing or CAT never answers ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** skip — in-kernel CP210x is enough. |
@@ -3560,7 +3560,7 @@ Originally requested by Yuri W4YSW. Shipped in v2.3.9.
 
 ## 17. Voice Control
 
-> **Windows host only.** Voice Control uses Windows SAPI 5 (`System.Speech`) and is not available on the macOS/Linux CAT-only host or in Docker. Voice *announcements* (§5.16) still work on every platform — they use the browser's text-to-speech.
+> **Windows host only.** Voice Control uses Windows SAPI 5 (`System.Speech`) and is not available on the macOS and Linux hosts or in Docker. Voice *announcements* (§5.16) still work on every platform — they use the browser's text-to-speech.
 
 > **Not the same as Voice Announcements (§5.16).** Voice *control* (this section) is **you speaking to the app** — a press-and-hold mic button that lets you issue spoken commands. Voice *announcements* (§5.16) is **the app speaking to you** — automatic spoken cues for band, mode, TX state, DX alerts, etc., useful as an accessibility feature. They are independent features with separate on/off switches. If you're looking for the toggle to silence YWC's automatic speech, you want §5.16.
 
@@ -3711,7 +3711,7 @@ Remote Audio is Fabio Valente's (CR7CDC) work (#92, #112); I tested it on my FTd
 
 Remote Audio streams **radio RX → browser speakers** and **browser microphone → radio TX** over a dedicated WebSocket on the YWC host. PTT remains the normal Index **TX** button (or optional TX toggle key). It is intended for **LAN or VPN** use (for example WireGuard) as a simpler alternative to running Mumble or SonoBus alongside YWC.
 
-> **Not supported in Docker for v1.** USB audio device access from containers is host-specific and unreliable; run the native host on Windows, macOS, or Linux instead.
+> **In Docker:** `docker-compose.yml` passes the host's sound devices through by mapping `/dev/snd`. If the radio's USB codec isn't listed, set `YWC_AUDIO_GID` to the host's audio group (`getent group audio`; usually 29 on Debian and Raspberry Pi OS). Then choose the codec in **Settings > Remote Audio**.
 
 ### 18.1 Radio setup
 
