@@ -1670,7 +1670,9 @@
             // button (VoiceControlService.TryPhraseAsync isn't involved here --
             // this is the normal grammar-driven /api/voice/start /stop path,
             // just with dryRun=true by default so nothing reaches the radio).
-            (function () {
+            // Waits for the page: the modal is further down than this script, so
+            // looking for it straight away finds nothing and the button stays dead.
+            document.addEventListener('DOMContentLoaded', function () {
                 const modalEl   = document.getElementById('voiceTestPackModal');
                 const holdBtn   = document.getElementById('voiceTestHoldBtn');
                 const dryRunCb  = document.getElementById('voiceTestDryRun');
@@ -1728,7 +1730,8 @@
                     holdBtn.classList.add('btn-danger');
                     try {
                         const dryRun = dryRunCb.checked;
-                        await fetch('/api/voice/start?dryRun=' + (dryRun ? 'true' : 'false'), { method: 'POST' });
+                        const started = await fetch('/api/voice/start?dryRun=' + (dryRun ? 'true' : 'false'), { method: 'POST' });
+                        if (!started.ok) throw new Error('the speech recogniser did not start');
                         traceLine('Listening…' + (dryRun ? ' <span class="text-muted">[dry run]</span>' : ''));
                     } catch (e) {
                         traceLine('<span class="text-danger">Start failed: ' + escapeHtml(String(e)) + '</span>');
@@ -1767,7 +1770,7 @@
                     testActive = false;
                     if (pressed) stopTest();
                 });
-            })();
+            });
         </script>
     </details>
     }

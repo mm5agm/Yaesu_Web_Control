@@ -164,13 +164,13 @@ namespace Yaesu_Web_Control.Services.Voice
         {
             lock (_engineLock)
             {
+                _dryRun = dryRun;
                 if (_engine == null)
                 {
                     UpdateStatus(VoiceState.Error, error: $"Speech recogniser not available (check Windows {_activeCulture} speech pack)");
                     return false;
                 }
 
-                _dryRun = dryRun;
                 _targetVfo = vfo;
                 try
                 {
@@ -215,7 +215,10 @@ namespace Yaesu_Web_Control.Services.Voice
                 {
                     _logger.LogWarning(ex, "[Voice] RecognizeAsyncStop threw (non-fatal)");
                 }
-                _dryRun = false;
+                // Dry run deliberately stays set until the next start says otherwise.
+                // RecognizeAsyncStop lets the recogniser finish what it is hearing, so
+                // a phrase can still arrive after this. Letting go of the button early
+                // must not turn that phrase into a real command.
                 UpdateStatus(VoiceState.Idle);
             }
             return Task.CompletedTask;
@@ -642,6 +645,7 @@ namespace Yaesu_Web_Control.Services.Voice
         {
             string heard = e.Result.Text;
             float confidence = e.Result.Confidence;
+            bool dryRun = _dryRun;
 
             if (confidence < MinConfidence)
             {
@@ -708,7 +712,7 @@ namespace Yaesu_Web_Control.Services.Voice
             UpdateStatus(VoiceState.Executing, heard: heard, intent: intent, confidence: confidence);
             try
             {
-                var result = await _intentDispatcher.DispatchAsync(intent, args, dryRun: _dryRun, vfo: _targetVfo);
+                var result = await _intentDispatcher.DispatchAsync(intent, args, dryRun: dryRun, vfo: _targetVfo);
                 UpdateStatus(result.Success ? VoiceState.Idle : VoiceState.Error,
                              heard: heard, intent: intent, confidence: confidence,
                              error: result.Success ? null : "Command did not complete");
@@ -729,7 +733,7 @@ namespace Yaesu_Web_Control.Services.Voice
                     // Command confirmations append ", successful" / ", unsuccessful".
                     var speech = result.IsReadBack
                         ? result.ConfirmationPhrase
-                        : _dryRun
+                        : dryRun
                             ? $"{result.ConfirmationPhrase}, dry run, not sent"
                             : $"{result.ConfirmationPhrase}, {(result.Success ? "successful" : "unsuccessful")}";
                     _tts.Speak(speech);
