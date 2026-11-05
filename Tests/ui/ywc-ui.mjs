@@ -1414,6 +1414,27 @@ test('Test this pack: holding the button starts a dry run, letting go stops it',
     }
 });
 
+test('Every view says when there is a new release', async () => {
+    // Answers as GitHub would, so this needs no network and no real release.
+    const release = `{ tag_name: 'v99.0.0', html_url: 'https://example.invalid/', body: '', prerelease: false }`;
+    const before = `{
+        const real = window.fetch;
+        window.fetch = (url, opts) => String(url).includes('api.github.com')
+            ? Promise.resolve(new Response(JSON.stringify(String(url).includes('per_page') ? [${release}] : ${release}), { status: 200 }))
+            : real(url, opts);
+    }`;
+    for (const path of ['/', '/flexui', '/radio', '/rtty-contest']) {
+        const page = await open(path, { before });
+        try {
+            await page.waitFor(`!!document.getElementById('updateBanner')`, { what: `the update banner on ${path}`, timeoutMs: 10000 });
+            const text = await page.eval(`document.getElementById('updateBanner').textContent`);
+            expect(text.includes('v99.0.0'), `banner on ${path} says: ${text}`);
+        } finally {
+            await page.close();
+        }
+    }
+});
+
 // ----------------------------------------------------------------
 
 try {
