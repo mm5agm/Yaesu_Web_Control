@@ -3586,9 +3586,9 @@ Every command below targets whichever VFO's mic button you're holding down — a
 | Set AGC | "set a g c fast" (also mid, slow, auto, off) | Held VFO's AGC speed changes |
 | Set AF gain | "set a f gain fifty" (0–100 in the steps listed in the phrase editor, or "mute"/"maximum") | Held VFO's volume changes |
 | IF filter width | "filter wider" / "filter narrower" | Held VFO's IF (roofing) filter bandwidth nudges one step |
-| Transmit | "key transmitter" / "start transmitting"; "stop transmitting" / "go to receive" | Radio keys up / drops back to receive |
+| Transmit | "key transmitter" / "start transmitting"; "stop transmitting" / "go to receive" | Radio keys up / drops back to receive. Keying up needs a clear match (see below) |
 | Split | "split on" / "enable split"; "split off" / "simplex" | Split operation toggles |
-| Antenna tuner | "tuner on" / "tuner off"; "tune antenna" | "tuner on"/"off" engages/bypasses the ATU; "tune antenna" starts the auto-tune cycle. There's deliberately no bare "tune" — that would collide with the "tune up" / "tune down" step commands above |
+| Antenna tuner | "tuner on" / "tuner off"; "tune antenna" | "tuner on"/"off" engages/bypasses the ATU; "tune antenna" starts the auto-tune cycle, and needs a clear match (see below). There's deliberately no bare "tune" — that would collide with the "tune up" / "tune down" step commands above |
 | Status read-back | "what frequency", "what mode", "what band" | YWC speaks the held VFO's current value out loud — no CAT command is sent to the radio |
 | Help | "help", "what can I say" | YWC speaks a short list of the available command categories |
 | Macros | "noise reduction on/off", "noise blanker on/off", "copy a to b" / "copy b to a", "fine step up/down", "roofing three/six/twelve kilohertz" | Runs the matching one-shot CAT command. See the Macros group in the phrase editor for the full list and their exact CAT strings |
@@ -3645,6 +3645,8 @@ If you change your mind mid-phrase, just release the button without speaking. No
 **Right-click a mic button** (on desktop) to pop up the full list of commands you can say, grouped by category. The list is generated live from your current phrase set, so it always matches what your installation actually responds to — including any phrases you've customised — and it's a quick on-screen reference without leaving the main page. Close it with the red **✕** or the **Esc** key.
 
 **Low-confidence matches are rejected.** If you say something the engine isn't sure about — a phrase outside the grammar, background noise during PTT, an ambient TV in the room — the recognition is dropped rather than fitted to the closest rule. This stops random audio from accidentally firing a "set mode" or "go to band" command that would change the radio's state without you intending it. The "Last heard" hint under the mic button shows what the engine almost picked up; the Diagnostics block on the Settings page logs it as "Low-confidence match".
+
+**Commands that transmit need a much clearer match.** "Key transmitter" and the other transmit phrases, "tune antenna", and any custom macro that keys the radio only act on a score of 0.85 or better, where other commands need 0.5. Below that the radio stays on receive, and if spoken confirmations are on you hear *"Not transmitting, not heard clearly"*. The recogniser always picks its closest phrase, so this is what stops a misheard command from putting you on the air. A distant or low-quality microphone may rarely reach 0.85: if so, those commands will need repeating, or use the button on screen. Commands that stop transmitting aren't affected: "stop transmitting" still needs only the normal score.
 
 The Settings page → Voice Control section has a **Diagnostics** block that shows the current state of the engine, the last phrase heard, the last intent matched, and any error message. Open it in another browser tab if you want a live view of what voice control is doing.
 

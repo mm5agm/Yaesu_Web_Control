@@ -681,6 +681,29 @@ namespace Yaesu_Web_Control.Services.Voice
             //     with args["direction"] = ±1
             (intent, args) = NormaliseIntent(intent, args, heard);
 
+            // A misheard command must not put the radio on the air. Applies in a
+            // dry run too, so that a dry run shows what would really happen.
+            args.TryGetValue("macroCat", out var macroCat);
+            if (confidence < VoiceTransmitGate.MinConfidence &&
+                VoiceTransmitGate.StartsTransmit(intent, macroCat as string))
+            {
+                _logger.LogInformation(
+                    "[Voice] Not transmitting: '{Heard}' scored {Conf:F2}, needs {Min:F2}",
+                    heard, confidence, VoiceTransmitGate.MinConfidence);
+                UpdateStatus(VoiceState.Unrecognised, heard: heard, confidence: confidence);
+                try
+                {
+                    var refusal = await _settings.GetSettingsAsync();
+                    if (refusal.VoiceSpokenConfirmationEnabled)
+                        _tts.Speak("Not transmitting, not heard clearly");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[Voice] Couldn't speak the transmit refusal");
+                }
+                return;
+            }
+
             UpdateStatus(VoiceState.Heard, heard: heard, intent: intent, confidence: confidence);
             UpdateStatus(VoiceState.Executing, heard: heard, intent: intent, confidence: confidence);
             try
