@@ -1435,6 +1435,41 @@ test('Every view says when there is a new release', async () => {
     }
 });
 
+test('Test this pack: the Trace says what happened to each phrase', async () => {
+    const page = await open('/Settings');
+    try {
+        await page.eval(`bootstrap.Modal.getOrCreateInstance(document.getElementById('voiceTestPackModal')).show()`);
+        await page.waitFor(`document.getElementById('voiceTestPackModal').classList.contains('show')`, { what: 'the test window to open' });
+        await sleep(500);
+
+        const { x, y } = await page.pointOf('#voiceTestHoldBtn');
+        await page.mouse('mouseMoved', x, y);
+        await page.mouse('mousePressed', x, y);
+        await page.waitFor(`document.getElementById('voiceTestTrace').textContent.includes('Listening')`, { what: 'the test to start' });
+
+        // What the service sends, played straight into the Trace's own handler.
+        const trace = await page.eval(`(() => {
+            const el = document.getElementById('voiceTestTrace');
+            const lineFor = status => { window.voiceTestShowStatus(status); return el.lastElementChild.textContent; };
+            return {
+                heard: lineFor({ state: 'Heard', lastHeard: 'band up', lastIntent: 'BandUp', confidence: 0.91, dryRun: true }),
+                ask: lineFor({ state: 'ConfirmNeeded', lastHeard: 'transmit on', lastIntent: 'TxOn', confidence: 0.92, dryRun: true }),
+                refused: lineFor({ state: 'Unrecognised', lastHeard: 'transmit on', confidence: 0.57, dryRun: true, errorMessage: 'Not transmitting: needs 0.85' }),
+                rejected: lineFor({ state: 'Unrecognised', dryRun: true }),
+            };
+        })()`);
+        await page.mouse('mouseReleased', x, y);
+
+        expect(trace.heard.includes('Heard \u201Cband up\u201D \u2192 BandUp (confidence 0.91)'), `heard line: ${trace.heard}`);
+        expect(!/heard heard/i.test(trace.heard), `doubled word: ${trace.heard}`);
+        expect(trace.ask.includes('Say confirm \u201Ctransmit on\u201D \u2192 TxOn'), `waiting line: ${trace.ask}`);
+        expect(trace.refused.includes('Not transmitting: needs 0.85') && !trace.refused.includes('\u2192'), `refused line: ${trace.refused}`);
+        expect(!trace.rejected.includes('\u2192') && !trace.rejected.includes('confidence') && !trace.rejected.includes('\u201C'), `rejected line: ${trace.rejected}`);
+    } finally {
+        await page.close();
+    }
+});
+
 // ----------------------------------------------------------------
 
 try {

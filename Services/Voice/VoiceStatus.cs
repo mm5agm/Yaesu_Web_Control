@@ -27,14 +27,17 @@ namespace Yaesu_Web_Control.Services.Voice
         Executing,
         /// <summary>Something failed (no mic, no SAPI engine, grammar load failure).</summary>
         Error,
+        /// <summary>A command that would go on the air is waiting for the operator to say "confirm".</summary>
+        ConfirmNeeded,
     }
 
     /// <summary>
     /// SignalR payload broadcast on every voice state change. <c>LastHeard</c>
     /// is the raw recognised phrase (for sanity-checking what SAPI thought it
     /// heard); <c>LastIntent</c> is the parsed semantic intent name (e.g.
-    /// "SetFrequency"); <c>ErrorMessage</c> is set only when <c>State</c> is
-    /// <see cref="VoiceState.Error"/>. <c>Confidence</c> is the SAPI match
+    /// "SetFrequency"); <c>ErrorMessage</c> is set when <c>State</c> is
+    /// <see cref="VoiceState.Error"/>, and when it is
+    /// <see cref="VoiceState.Unrecognised"/> says why a phrase was refused. <c>Confidence</c> is the SAPI match
     /// confidence (0-1) of the last recognition, surfaced for the §6.6
     /// diagnostics panel -- previously enforced (MinConfidence = 0.6f) but
     /// never shown to the user. <c>DryRun</c> is true while a §6.5 "Test this

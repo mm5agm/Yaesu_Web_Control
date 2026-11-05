@@ -1089,7 +1089,7 @@
                 SwapVFO:'Swap VFO', NudgeUp:'Step up', NudgeDown:'Step down',
                 BandUp:'Band up', BandDown:'Band down',
                 StatusFrequency:'What frequency?', StatusMode:'What mode?', StatusBand:'What band?',
-                TxOn:'Key transmitter', TxOff:'Stop transmitting',
+                TxOn:'Start transmitting', ConfirmTransmit:'Confirm a transmit', TxOff:'Stop transmitting',
                 SplitOn:'Split on', SplitOff:'Split off',
                 NudgeIfWidthUp:'Filter wider', NudgeIfWidthDown:'Filter narrower',
                 Help:'Help',
@@ -1098,7 +1098,7 @@
             const SIMPLE_CATEGORY_OF = {
                 SwapVFO:'tuning', NudgeUp:'tuning', NudgeDown:'tuning', BandUp:'tuning', BandDown:'tuning',
                 NudgeIfWidthUp:'radio', NudgeIfWidthDown:'radio',
-                TxOn:'transmit', TxOff:'transmit', SplitOn:'transmit', SplitOff:'transmit',
+                TxOn:'transmit', ConfirmTransmit:'transmit', TxOff:'transmit', SplitOn:'transmit', SplitOff:'transmit',
                 StatusFrequency:'status', StatusMode:'status', StatusBand:'status', Help:'status',
             };
 
@@ -1697,16 +1697,18 @@
                 const badgeClass = {
                     Idle: 'text-bg-secondary', Listening: 'text-bg-danger', Heard: 'text-bg-success',
                     Executing: 'text-bg-success', Unrecognised: 'text-bg-warning', Error: 'text-bg-danger',
+                    ConfirmNeeded: 'text-bg-warning',
                 };
+                const stateLabel = { ConfirmNeeded: 'Say confirm' };
 
                 function onTestStatusUpdate(status) {
                     if (!testActive) return;
-                    stateBadge.textContent = status.state || '—';
+                    stateBadge.textContent = stateLabel[status.state] || status.state || '—';
                     stateBadge.className = 'badge ' + (badgeClass[status.state] || 'text-bg-secondary');
-                    if (status.state === 'Heard' || status.state === 'Unrecognised' || status.state === 'Error') {
+                    if (status.state === 'Heard' || status.state === 'Unrecognised' || status.state === 'Error' || status.state === 'ConfirmNeeded') {
                         const parts = [];
-                        parts.push('<strong>' + escapeHtml(status.state) + '</strong>');
-                        if (status.lastHeard) parts.push('heard &ldquo;' + escapeHtml(status.lastHeard) + '&rdquo;');
+                        parts.push('<strong>' + escapeHtml(stateLabel[status.state] || status.state) + '</strong>');
+                        if (status.lastHeard) parts.push('&ldquo;' + escapeHtml(status.lastHeard) + '&rdquo;');
                         if (status.lastIntent) parts.push('→ ' + escapeHtml(status.lastIntent));
                         if (status.confidence !== null && status.confidence !== undefined)
                             parts.push('(confidence ' + status.confidence.toFixed(2) + ')');
@@ -1715,6 +1717,9 @@
                         traceLine(parts.join(' '));
                     }
                 }
+
+                // For Tests/ui: a real phrase needs a microphone.
+                window.voiceTestShowStatus = onTestStatusUpdate;
 
                 function attachSignalR() {
                     const conn = window.signalRConnection || window.connection;

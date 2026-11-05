@@ -641,6 +641,8 @@ namespace Yaesu_Web_Control.Services.Voice
         // is the primary lift; 0.5 catches the ones that remain borderline.
         private const float MinConfidence = 0.5f;
 
+        private readonly VoiceTransmitConfirm _transmitConfirm = new();
+
         private async void OnSpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
         {
             string heard = e.Result.Text;
@@ -652,6 +654,7 @@ namespace Yaesu_Web_Control.Services.Voice
                 _logger.LogInformation(
                     "[Voice] Low-confidence match ({Conf:F2}) for '{Heard}' -- ignoring",
                     confidence, heard);
+                _transmitConfirm.Forget();
                 UpdateStatus(VoiceState.Unrecognised, heard: heard, confidence: confidence);
                 return;
             }
@@ -661,6 +664,7 @@ namespace Yaesu_Web_Control.Services.Voice
             if (intent == null)
             {
                 _logger.LogInformation("[Voice] Heard '{Heard}' (no intent tag)", heard);
+                _transmitConfirm.Forget();
                 UpdateStatus(VoiceState.Heard, heard: heard, confidence: confidence);
                 return;
             }
@@ -685,34 +689,52 @@ namespace Yaesu_Web_Control.Services.Voice
             //     with args["direction"] = ±1
             (intent, args) = NormaliseIntent(intent, args, heard);
 
-            // A misheard command must not put the radio on the air. Applies in a
-            // dry run too, so that a dry run shows what would really happen.
-            args.TryGetValue("macroCat", out var macroCat);
-            if (confidence < VoiceTransmitGate.MinConfidence &&
-                VoiceTransmitGate.StartsTransmit(intent, macroCat as string))
+            // A misheard command must not put the radio on the air, so anything that
+            // can key it waits for "confirm". Applies in a dry run too, so that a dry
+            // run shows what would really happen.
+            var decision = _transmitConfirm.Decide(
+                new VoiceRecognisedCommand(intent, args, _targetVfo, dryRun),
+                confidence, DateTime.UtcNow);
+
+            switch (decision.Step)
             {
-                _logger.LogInformation(
-                    "[Voice] Not transmitting: '{Heard}' scored {Conf:F2}, needs {Min:F2}",
-                    heard, confidence, VoiceTransmitGate.MinConfidence);
-                UpdateStatus(VoiceState.Unrecognised, heard: heard, confidence: confidence);
-                try
-                {
-                    var refusal = await _settings.GetSettingsAsync();
-                    if (refusal.VoiceSpokenConfirmationEnabled)
-                        _tts.Speak("Not transmitting, not heard clearly");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "[Voice] Couldn't speak the transmit refusal");
-                }
-                return;
+                case VoiceTransmitStep.NotClear:
+                    _logger.LogInformation(
+                        "[Voice] Not transmitting: '{Heard}' scored {Conf:F2}, needs {Min:F2}",
+                        heard, confidence, VoiceTransmitGate.MinConfidence);
+                    UpdateStatus(VoiceState.Unrecognised, heard: heard, confidence: confidence,
+                                 error: $"Not transmitting: needs {VoiceTransmitGate.MinConfidence:F2}");
+                    await SpeakIfEnabledAsync("Not transmitting, not heard clearly");
+                    return;
+
+                case VoiceTransmitStep.NothingToConfirm:
+                    _logger.LogInformation("[Voice] Heard '{Heard}' with nothing waiting to confirm", heard);
+                    UpdateStatus(VoiceState.Unrecognised, heard: heard, confidence: confidence,
+                                 error: "Nothing waiting to confirm");
+                    await SpeakIfEnabledAsync("Not sent");
+                    return;
+
+                case VoiceTransmitStep.AskToConfirm:
+                    _logger.LogInformation(
+                        "[Voice] '{Heard}' (conf={Conf:F2}) -> intent={Intent} is waiting to be confirmed",
+                        heard, confidence, intent);
+                    UpdateStatus(VoiceState.ConfirmNeeded, heard: heard, intent: intent, confidence: confidence);
+                    // Spoken whatever the setting says, or nobody would know it is
+                    // waiting. It must never contain "confirm": with the mic open and
+                    // the speakers on, the app could hear itself and answer its own
+                    // question. "Transmit" is out for the same reason.
+                    _tts.Speak("Are you sure?");
+                    return;
             }
+
+            var command = decision.Command;
+            intent = command.Intent;
 
             UpdateStatus(VoiceState.Heard, heard: heard, intent: intent, confidence: confidence);
             UpdateStatus(VoiceState.Executing, heard: heard, intent: intent, confidence: confidence);
             try
             {
-                var result = await _intentDispatcher.DispatchAsync(intent, args, dryRun: dryRun, vfo: _targetVfo);
+                var result = await _intentDispatcher.DispatchAsync(intent, command.Args, dryRun: command.DryRun, vfo: command.Vfo);
                 UpdateStatus(result.Success ? VoiceState.Idle : VoiceState.Error,
                              heard: heard, intent: intent, confidence: confidence,
                              error: result.Success ? null : "Command did not complete");
@@ -904,6 +926,20 @@ namespace Yaesu_Web_Control.Services.Voice
             return null;
         }
 
+        private async Task SpeakIfEnabledAsync(string phrase)
+        {
+            try
+            {
+                var settings = await _settings.GetSettingsAsync();
+                if (settings.VoiceSpokenConfirmationEnabled)
+                    _tts.Speak(phrase);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[Voice] Couldn't speak '{Phrase}'", phrase);
+            }
+        }
+
         private void UpdateStatus(
             VoiceState state,
             string? heard = null,
@@ -914,13 +950,16 @@ namespace Yaesu_Web_Control.Services.Voice
             // Preserve previous LastHeard/LastIntent/Confidence unless the
             // caller passes something new, so transient states
             // (Heard -> Executing -> Idle) keep showing the most recent phrase.
+            // Not for Unrecognised: that is a new result, and the old phrase, command
+            // and score beside it read as if it had been matched and acted on.
             var prev = _status;
+            bool keepPrevious = state != VoiceState.Unrecognised;
             var update = new VoiceStatusUpdate(
                 state,
-                heard ?? prev.LastHeard,
-                intent ?? prev.LastIntent,
+                heard ?? (keepPrevious ? prev.LastHeard : null),
+                intent ?? (keepPrevious ? prev.LastIntent : null),
                 error,
-                confidence ?? prev.Confidence,
+                confidence ?? (keepPrevious ? prev.Confidence : null),
                 _dryRun,
                 _targetVfo
             );
