@@ -1339,6 +1339,10 @@ test('Settings search finds a setting by a word that is not on the page', async 
         const ptt = (await typeSearch(page, 'PTT'), await resultNames(page));
         expect(ptt.includes('tx-toggle-key') && ptt.includes('voice-control-enabled'), `"PTT" found ${ptt.join(', ')}`);
 
+        // Dry run is inside the Test this pack window, which the search can't index.
+        const dry = (await typeSearch(page, 'dry run'), await resultNames(page));
+        expect(dry[0] === 'voice-test-pack', `"dry run" found ${dry.join(', ')}`);
+
         await typeSearch(page, 'zzzqqq');
         expect((await resultNames(page)).length === 0, 'nonsense found something');
         expect(await page.eval(`document.getElementById('settingsSearchResults').textContent.includes('No settings match')`), 'no message for no results');
