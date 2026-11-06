@@ -9,6 +9,7 @@ window.RWC_SETTINGS_KEYWORDS = {
     'voice-active-locale': 'locale translation',
     'voice-input-device': 'mic input',
     'voice-output-device': 'output tts speech',
+    'voice-test-pack': 'dry run try commands',
     'radio-model': 'rig transceiver',
     'installed-roofing-filters': 'filter',
     'serial-port': 'com usb cat rig connection',
