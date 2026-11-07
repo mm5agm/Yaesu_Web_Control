@@ -1,1 +1,1 @@
-The FTdx101MP ACC spectrum plan now lives in the private repo [mm5agm/FTdx101_ACC_Spectrum](https://github.com/mm5agm/FTdx101_ACC_Spectrum/blob/main/docs/plan.md).
+The ACC spectrum plan (FTdx101MP first, FTDX101D and FTDX10 expected to work too) now lives in the private repo [mm5agm/Yaesu_ACC_Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum/blob/main/docs/plan.md).
