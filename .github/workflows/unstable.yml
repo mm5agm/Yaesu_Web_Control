@@ -19,6 +19,16 @@ name: Unstable develop snapshot
 on:
   push:
     branches: [develop]
+    # Doc-only merges don't change the program, so they don't make a snapshot.
+    # A push that touches anything else still builds. USER_MANUAL.md is the
+    # exception: it ships in the app for the /UserManual page. Order matters:
+    # the last pattern that matches a file wins.
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!core/docs/**'
+      - '!**/*.md'
+      - 'USER_MANUAL.md'
   workflow_dispatch:
 
 concurrency:
