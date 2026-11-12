@@ -288,9 +288,9 @@
   </Target>
 
   <PropertyGroup>
-    <Version>2.5.4</Version>
-    <FileVersion>2.5.4.0</FileVersion>
-    <AssemblyVersion>2.5.4.0</AssemblyVersion>
+    <Version>2.5.5</Version>
+    <FileVersion>2.5.5.0</FileVersion>
+    <AssemblyVersion>2.5.5.0</AssemblyVersion>
     <!-- The git tag CI is building (v2.5.2-pre2), passed as -p:YwcBuildTag=...
          by release.yml, build-dmg.sh and the Dockerfile. Empty on a local
          build. AppVersion.Display reads the metadata below so a pre-release

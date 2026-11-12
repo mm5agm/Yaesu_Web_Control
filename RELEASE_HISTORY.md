@@ -12,6 +12,34 @@ a different and much older format.
 
 ---
 
+## 2026-11-12 - v2.5.5-pre1 (pre-release)
+
+*The FTdx101's own scope from its ACC socket, Refine, and a settings search. Everything in v2.5.4 is included. Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**The FTdx101's own scope, no SDR needed** *(experimental, Windows only)* [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- On an FTdx101MP or FTdx101D, a small ESP32-S3 board on the rear ACC socket brings the radio's Main and Sub scope into the SDR panels, 25 frames a second. In **Settings → SDR Spectrum Display**, press **Scan** and choose **ACC scope, Main** for VFO A and **ACC scope, Sub** for VFO B. The board's firmware and wiring are in the [Yaesu ACC Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum) project.
+- **Refine** settles the noise floor so weak signals stand out: a slider beside Bright on a panel showing the ACC scope, and a **REFINE** list beside SPAN on the Radio panel, its pop-out spectrum and RTTY Contest. On 20m FT8 signals stood about two and a half times as high above the floor at the top step. An SDR's spectrum is averaged already, so Refine only appears for the ACC scope.
+- Tested on one FTdx101MP so far. Please say on GitHub how it goes on yours.
+
+**Settings**
+
+- **A search box** at the top finds any setting, and a link can go straight to one.
+- **Meter Poll Interval** is saved.
+- Overlapping SDRplay scans no longer crash YWC, and saving keeps each VFO's span.
+
+**Voice control**
+
+- Commands that start a transmission need a much clearer match, and are held until you say "confirm" within 6 seconds. Stop commands are not held. "Key transmitter" has been removed.
+- The Test this pack window works, a dry run stays dry, and Trace is fixed.
+
+**Other changes**
+
+- The Radio and RTTY Contest views say when there is a new release.
+- The Mac app build has the right icons.
+- The manual says macOS and Linux are not CAT-only, and that Remote Audio works in Docker.
+- The release notes' links are checked before each release.
+
 ## 2026-11-03 - v2.5.4
 
 *RTTY Contest, a screen for RTTY contesting, and the CW Paddle, for sending CW from your own paddle when you operate remotely. Everything in the v2.5.4 pre-releases is included; their notes are in [RELEASE_HISTORY.md](RELEASE_HISTORY.md). Install it over v2.5.3 or any pre-release; your settings are kept.*
