@@ -3875,9 +3875,9 @@
 
             // Refine — how much the FTdx101's ACC scope is averaged before it
             // is drawn, on a panel showing the ACC scope. The logic is shared
-            // by every view in /js/sdr/acc-refine.js; this page only has the
+            // by every view in /js/radio-panel/spectrum-refine.js; this page only has the
             // slider markup. Done on the server, saved per panel.
-            import('/js/sdr/acc-refine.js').then(({ bindRefineSlider }) => {
+            import('/js/radio-panel/spectrum-refine.js').then(({ bindRefineSlider }) => {
                 ['A', 'B'].forEach(vfo => bindRefineSlider({
                     vfo,
                     group:  document.querySelector(`.spectrum-refine-group[data-vfo="${vfo}"]`),

@@ -5,11 +5,13 @@ namespace YaesuWebControl.Tests;
 /// <summary>
 /// Every view that draws the SDR spectrum has the Refine control for the
 /// FTdx101's ACC scope (Colin, 2026-11-12: "If I do another view I will want
-/// it in there as well"). They all get it from wwwroot/js/sdr/acc-refine.js,
-/// so this looks for that module in every page and view script that draws a
-/// spectrum. A new view fails here until it has Refine too.
+/// it in there as well"). They all get it from
+/// core/js/radio-panel/spectrum-refine.js, served at
+/// /js/radio-panel/spectrum-refine.js and shared with IWC, so this looks for
+/// that module in every page and view script that draws a spectrum. A new
+/// view fails here until it has Refine too. IWC has the same test.
 /// </summary>
-public class AccRefineEveryViewTests
+public class RefineEveryViewTests
 {
     // What a file that draws the spectrum has in it: the hub's frames, the
     // shared feed, Classic's panel, or the radio panel kit.
@@ -22,8 +24,9 @@ public class AccRefineEveryViewTests
     {
         "wwwroot/js/sdr/sdr-spectrum-pipeline.js",
         "wwwroot/js/ui/spectrum-feed-yaesu.js",
-        "wwwroot/js/sdr/acc-refine.js",
     };
+
+    private const string Module = "/js/radio-panel/spectrum-refine.js";
 
     public static TheoryData<string> Views()
     {
@@ -66,8 +69,8 @@ public class AccRefineEveryViewTests
     public void A_view_that_draws_the_spectrum_has_refine(string view)
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot(), view));
-        Assert.True(text.Contains("/js/sdr/acc-refine.js"),
-            $"{view} draws the spectrum but has no Refine control. Add it from /js/sdr/acc-refine.js " +
+        Assert.True(text.Contains(Module),
+            $"{view} draws the spectrum but has no Refine control. Add it from {Module} " +
             "(bindRefineSlider for a slider, addRefineTo for a list beside SPAN).");
     }
 

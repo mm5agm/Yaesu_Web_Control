@@ -1488,7 +1488,7 @@ export function mountRadioPanel(root, opts = {}) {
         // Band edges in Hz, and band-plan marks as { hz, label }, drawn on every pane.
         setBandMarks({ edges, ticks } = {}) { st.marks = { edges: edges ?? [], ticks: ticks ?? [] }; drawOverlays(); },
         // A pane's tool strip (SPAN, HOLD, SCOPE), for the adapter to add
-        // its own keys to, e.g. YWC's REFINE for the FTdx101's ACC scope.
+        // its own keys to, e.g. REFINE from spectrum-refine.js.
         spectrumTools(vfo = 'A') { return panes[vfo]?.tools ?? null; },
         spectrumView() { return st.specView; },
         setSpectrumView: id => setSpecView(id),

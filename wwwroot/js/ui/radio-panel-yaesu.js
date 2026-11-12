@@ -33,7 +33,7 @@ import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-e
 import { axisOffsetHz, viewOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 import { RadioScopeControl } from '/js/ui/radio-scope.js';
-import { addRefineTo } from '/js/sdr/acc-refine.js';
+import { addRefineTo } from '/js/radio-panel/spectrum-refine.js';
 import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js';
 import { PopoutHost } from '/js/popout/popout.js';
 import { txTimeoutBeep, txTimeoutWarning } from '/js/radio-panel/tx-timeout.js';
@@ -206,7 +206,7 @@ export function startYaesuRadioPanel(root, cfg) {
         defaultSize: { width: 1100, height: 700 },
         onChange: open => { specAway = open; panel.setSpectrumAway(open); },
     }).start();
-    // REFINE beside SPAN on a pane showing the FTdx101's ACC scope (acc-refine.js).
+    // REFINE beside SPAN on a pane showing the FTdx101's ACC scope (spectrum-refine.js).
     for (const id of ['A', 'B']) addRefineTo(panel.spectrumTools(id), id, 'rp-select rp-spec-span', '.rp-spec-hold');
     radioScreen = startRadioScreen(panel.screenSlot('tft'), { model, dual, scopeCat: !!cfg.scopeCat });
     if (panel.screenView() === 'tft') radioScreen.show();
