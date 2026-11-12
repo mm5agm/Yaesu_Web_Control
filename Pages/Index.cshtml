@@ -3874,39 +3874,17 @@
             });
 
             // Refine — how much the FTdx101's ACC scope is averaged before it
-            // is drawn. Unlike Smooth this is done on the server (ScopeRefiner
-            // in SdrManager), because each ACC frame is a raw snapshot where
-            // an SDR's frames come already averaged by its worker. Saved in
-            // settings per panel. The slider only shows on a panel whose
-            // device is the ACC scope; /api/sdr/refine says which.
-            ['A', 'B'].forEach(vfo => {
-                const group  = document.querySelector(`.spectrum-refine-group[data-vfo="${vfo}"]`);
-                const slider = document.querySelector(`.spectrum-refine-slider[data-vfo="${vfo}"]`);
-                const label  = document.querySelector(`.spectrum-refine-label[data-vfo="${vfo}"]`);
-                if (!group || !slider || !label) return;
-
-                const formatRefine = (n) => n <= 0 ? 'Raw' : String(n);
-
-                fetch(`/api/sdr/refine?sdrId=${vfo}`)
-                    .then(r => r.ok ? r.json() : null)
-                    .then(info => {
-                        if (!info || !info.acc) return;
-                        slider.max = String(info.max);
-                        slider.value = String(info.level);
-                        label.textContent = formatRefine(info.level);
-                        group.style.display = 'contents';
-                    })
-                    .catch(() => { /* no slider: the panel keeps the saved step */ });
-
-                slider.addEventListener('input', () => {
-                    label.textContent = formatRefine(parseInt(slider.value, 10));
-                });
-                // On release, not on every step of a drag: each POST saves settings.
-                slider.addEventListener('change', () => {
-                    fetch(`/api/sdr/refine?sdrId=${vfo}&level=${parseInt(slider.value, 10)}`, { method: 'POST' })
-                        .catch(err => console.warn('Refine not saved:', err));
-                });
-            });
+            // is drawn, on a panel showing the ACC scope. The logic is shared
+            // by every view in /js/sdr/acc-refine.js; this page only has the
+            // slider markup. Done on the server, saved per panel.
+            import('/js/sdr/acc-refine.js').then(({ bindRefineSlider }) => {
+                ['A', 'B'].forEach(vfo => bindRefineSlider({
+                    vfo,
+                    group:  document.querySelector(`.spectrum-refine-group[data-vfo="${vfo}"]`),
+                    slider: document.querySelector(`.spectrum-refine-slider[data-vfo="${vfo}"]`),
+                    label:  document.querySelector(`.spectrum-refine-label[data-vfo="${vfo}"]`),
+                }));
+            }).catch(err => console.warn('Refine:', err));
 
             // Tuning step — how far one mouse-wheel notch on the spectrum moves
             // the dial (Bruce VK2RT, discussion #168: the old 1 kHz was hard-coded,

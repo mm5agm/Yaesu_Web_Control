@@ -615,7 +615,7 @@ export function mountRadioPanel(root, opts = {}) {
         const pinRead = h('div', 'rp-pin-read');
         spec.append(pinRead);
         sdrView.append(box);
-        panes[d.id] = { box, spec, pb, pbMid, cursor, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '',
+        panes[d.id] = { box, spec, pb, pbMid, cursor, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, tools, name: d.name ?? '', text: '',
             pinHz: null, pinLines, pinRead, reread: xReread };
         drawPin(panes[d.id], 0, 0);
     }
@@ -1487,6 +1487,9 @@ export function mountRadioPanel(root, opts = {}) {
         setSpots(list) { st.spots = list ?? []; drawOverlays(); },
         // Band edges in Hz, and band-plan marks as { hz, label }, drawn on every pane.
         setBandMarks({ edges, ticks } = {}) { st.marks = { edges: edges ?? [], ticks: ticks ?? [] }; drawOverlays(); },
+        // A pane's tool strip (SPAN, HOLD, SCOPE), for the adapter to add
+        // its own keys to, e.g. YWC's REFINE for the FTdx101's ACC scope.
+        spectrumTools(vfo = 'A') { return panes[vfo]?.tools ?? null; },
         spectrumView() { return st.specView; },
         setSpectrumView: id => setSpecView(id),
         setTheme,
