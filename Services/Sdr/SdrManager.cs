@@ -597,6 +597,9 @@ public sealed class SdrManager : BackgroundService
             ulong  sequence  = 0;
             int    heartbeat = 0;
             string shown     = "connecting";
+            // The panel draws the refined trace: each raw row is a separate
+            // snapshot with a rough floor (see ScopeRefiner).
+            var    refiner   = new ScopeRefiner();
             string? shownDetail = null;
 
             void Show(string status, string? detail)
@@ -627,7 +630,8 @@ public sealed class SdrManager : BackgroundService
                     continue;
                 }
 
-                var spectrum = AccScope.ToSpectrum(sub ? frame.Sub : frame.Main, ++sequence);
+                var scope    = sub ? frame.Sub : frame.Main;
+                var spectrum = AccScope.ToSpectrum(scope, ++sequence, refiner.Add(scope));
                 if (spectrum is null)
                 {
                     Show("scopeplacement", AccScope.UnplacedProblem);

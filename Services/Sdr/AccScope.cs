@@ -65,6 +65,9 @@ public static class AccScope
 
     public static float LevelToDb(byte level) => DbAtZero + level * DbPerStep;
 
+    /// <summary>A refined level, which falls between the radio's steps, in dB.</summary>
+    public static float LevelToDb(float level) => DbAtZero + level * DbPerStep;
+
     /// <summary>
     /// One receiver's row as a frame for the spectrum panel: the 791 points
     /// inside the span, low to high frequency, in dB; centred where the radio
@@ -72,15 +75,30 @@ public static class AccScope
     /// and Fix); exactly the radio's span wide. Null when the frame doesn't
     /// make sense (ReceiverScope.IsValid), so a row is never drawn at a
     /// guessed frequency.
+    ///
+    /// The levels are the refined trace when one is given (ScopeRefiner's 850
+    /// points for this row), else the raw row. The panels draw the refined
+    /// one: each raw row is a separate snapshot with a rough floor, where the
+    /// SDRs' frames come already averaged by the worker (SpectrumProcessor).
     /// </summary>
-    public static SpectrumFrameMsg? ToSpectrum(ReceiverScope scope, ulong sequence)
+    public static SpectrumFrameMsg? ToSpectrum(ReceiverScope scope, ulong sequence, float[]? refined = null)
     {
         if (!scope.IsValid) return null;
+        if (refined is not null && refined.Length != AccFrame.Points)
+            throw new ArgumentException($"A refined trace has {AccFrame.Points} points, not {refined.Length}.", nameof(refined));
 
-        var levels = scope.Levels;
         var bins = new float[ReceiverScope.SpanPoints];
-        for (int i = 0; i < bins.Length; i++)
-            bins[i] = LevelToDb(levels[FirstSpanPoint + i]);
+        if (refined is not null)
+        {
+            for (int i = 0; i < bins.Length; i++)
+                bins[i] = LevelToDb(refined[FirstSpanPoint + i]);
+        }
+        else
+        {
+            var levels = scope.Levels;
+            for (int i = 0; i < bins.Length; i++)
+                bins[i] = LevelToDb(levels[FirstSpanPoint + i]);
+        }
 
         return new SpectrumFrameMsg(sequence, scope.CentreHz, scope.SpanHz, bins);
     }

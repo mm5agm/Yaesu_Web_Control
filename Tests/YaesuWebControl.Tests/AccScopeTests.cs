@@ -22,15 +22,16 @@ public class AccScopeTests
         b[at] = (byte)(v >> 24); b[at + 1] = (byte)(v >> 16); b[at + 2] = (byte)(v >> 8); b[at + 3] = (byte)v;
     }
 
-    /// <summary>A frame with a level ramp on Main and a flat row on Sub.</summary>
+    /// <summary>A frame with a level ramp (or one level) on Main and a flat row on Sub.</summary>
     private static AccFrame Frame(
         long mainVfo = 14_074_000, int mainSpanIndex = 4, ScopePlacement mainPlacement = ScopePlacement.Center, long mainLeft = 0,
-        long subVfo  = 7_074_000,  int subSpanIndex  = 5, ScopePlacement subPlacement  = ScopePlacement.Center)
+        long subVfo  = 7_074_000,  int subSpanIndex  = 5, ScopePlacement subPlacement  = ScopePlacement.Center,
+        byte? mainLevel = null)
     {
         var raw = new byte[4096];
         for (int i = 0; i < AccFrame.Points; i++)
         {
-            raw[i] = (byte)(255 - i % 256);              // Main: level i % 256, sent inverted
+            raw[i] = (byte)(255 - (mainLevel ?? i % 256)); // Main: level i % 256 (or flat), sent inverted
             raw[AccFrame.Points + i] = 255 - 60;          // Sub: level 60 everywhere
         }
         PutUInt32(raw, MainVfoAt, mainVfo);
@@ -90,6 +91,45 @@ public class AccScopeTests
         Assert.Equal(AccScope.LevelToDb(820 % 256), f.Bins[^1]);
         // Point 425, the VFO in Center, is the middle bin.
         Assert.Equal(AccScope.LevelToDb(425 % 256), f.Bins[ReceiverScope.SpanPoints / 2]);
+    }
+
+    [Fact]
+    public void A_refined_trace_is_drawn_in_place_of_the_raw_row()
+    {
+        var scope = Frame().Main;
+        var refined = new float[AccFrame.Points];
+        for (int i = 0; i < refined.Length; i++) refined[i] = 100.5f;
+
+        var f = AccScope.ToSpectrum(scope, 1, refined)!;
+
+        Assert.Equal(ReceiverScope.SpanPoints, f.Bins.Length);
+        Assert.All(f.Bins, b => Assert.Equal(AccScope.LevelToDb(100.5f), b));
+        Assert.Equal(14_074_000, f.CentreHz);
+    }
+
+    [Fact]
+    public void The_refiner_gives_the_panel_a_steadier_floor()
+    {
+        // Main's level at every point flips between 80 and 120 each frame, as a
+        // rough floor does. Raw, a bin jumps 20 dB a frame; refined, far less.
+        var refiner = new ScopeRefiner();
+        float[]? lastRaw = null, lastRefined = null;
+        float rawJump = 0, refinedJump = 0;
+        for (int n = 0; n < 40; n++)
+        {
+            var scope = Frame(mainLevel: n % 2 == 0 ? (byte)80 : (byte)120).Main;
+            var raw = AccScope.ToSpectrum(scope, (ulong)n)!.Bins;
+            var refined = AccScope.ToSpectrum(scope, (ulong)n, refiner.Add(scope))!.Bins;
+            if (lastRaw is not null)
+            {
+                rawJump = Math.Abs(raw[400] - lastRaw[400]);
+                refinedJump = Math.Abs(refined[400] - lastRefined![400]);
+            }
+            lastRaw = raw;
+            lastRefined = refined;
+        }
+        Assert.Equal(20f, rawJump);
+        Assert.True(refinedJump < rawJump / 2, $"refined moved {refinedJump} dB a frame");
     }
 
     [Fact]
