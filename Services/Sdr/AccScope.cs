@@ -103,6 +103,24 @@ public static class AccScope
         return new SpectrumFrameMsg(sequence, scope.CentreHz, scope.SpanHz, bins);
     }
 
+    /// <summary>
+    /// The Refine slider's steps as ScopeRefiner weights: step 0 is the raw
+    /// rows, each step after is smoother and slower to follow. At 25 frames a
+    /// second a weight w takes about 1/(25·w) s to follow a change and smooths
+    /// the floor about as much as averaging 2/w − 1 frames. Step 3 is the
+    /// library's default, measured level with an RSP on 20m (ScopeRefiner).
+    /// </summary>
+    public static readonly double[] RefineWeights = { 1.0, 0.6, 0.45, ScopeRefiner.DefaultWeight, 0.2, 0.12 };
+
+    public const int DefaultRefineLevel = 3;
+    public static int MaxRefineLevel => RefineWeights.Length - 1;
+
+    public static bool IsRefineLevel(int level) => level >= 0 && level <= MaxRefineLevel;
+
+    /// <summary>The weight for a slider step; a step out of range (an old or hand-edited file) gets the default.</summary>
+    public static double RefineWeight(int level) =>
+        RefineWeights[IsRefineLevel(level) ? level : DefaultRefineLevel];
+
     /// <summary>Shown when frames arrive but don't say where the row sits.</summary>
     public const string UnplacedProblem =
         "Frames are coming from the ACC board, but they don't say a VFO and span that make sense, " +

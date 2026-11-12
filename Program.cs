@@ -937,6 +937,48 @@ try
         return Results.Ok();
     });
 
+    // The Refine slider on a panel showing the FTdx101's ACC scope: how much
+    // the raw rows are averaged before they're drawn (AccScope.RefineWeights).
+    // GET says whether the panel shows the ACC scope, so the page only shows
+    // the slider there; POST saves the step and applies it on the next frame.
+    app.MapGet("/api/sdr/refine", async (
+        [Microsoft.AspNetCore.Mvc.FromQuery] string? sdrId,
+        Yaesu_Web_Control.Services.ISettingsService settings) =>
+    {
+        var target = (sdrId ?? "A").ToUpperInvariant();
+        if (target != "A" && target != "B") return Results.BadRequest("sdrId must be A or B.");
+        var s = await settings.GetSettingsAsync();
+        var key = target == "A" ? s.SdrDeviceKeyA : s.SdrDeviceKeyB;
+        int level = target == "A" ? s.AccRefineLevelA : s.AccRefineLevelB;
+        if (!Yaesu_Web_Control.Services.Sdr.AccScope.IsRefineLevel(level))
+            level = Yaesu_Web_Control.Services.Sdr.AccScope.DefaultRefineLevel;
+        return Results.Ok(new
+        {
+            acc = Yaesu_Web_Control.Services.Sdr.AccScope.IsAccKey(key),
+            level,
+            max = Yaesu_Web_Control.Services.Sdr.AccScope.MaxRefineLevel,
+        });
+    });
+
+    app.MapPost("/api/sdr/refine", async (
+        [Microsoft.AspNetCore.Mvc.FromQuery] int level,
+        [Microsoft.AspNetCore.Mvc.FromQuery] string? sdrId,
+        Yaesu_Web_Control.Services.ISettingsService settings,
+        Yaesu_Web_Control.Services.Sdr.SdrManager sdr) =>
+    {
+        var target = (sdrId ?? "A").ToUpperInvariant();
+        if (target != "A" && target != "B") return Results.BadRequest("sdrId must be A or B.");
+        if (!Yaesu_Web_Control.Services.Sdr.AccScope.IsRefineLevel(level))
+            return Results.BadRequest($"level must be 0 to {Yaesu_Web_Control.Services.Sdr.AccScope.MaxRefineLevel}.");
+
+        var s = await settings.GetSettingsAsync();
+        if (target == "A") s.AccRefineLevelA = level;
+        else               s.AccRefineLevelB = level;
+        await settings.SaveSettingsAsync(s);
+        sdr.SetAccRefineLevel(target, level);
+        return Results.Ok();
+    });
+
     // FIXED on RTTY Contest: how far (RF Hz) the held picture sits from the
     // usual centre, so the SDR crop is cut around what the pane shows and not
     // around the dial. Without it a held view runs off the crop and the edge

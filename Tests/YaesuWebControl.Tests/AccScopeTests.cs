@@ -133,6 +133,46 @@ public class AccScopeTests
     }
 
     [Fact]
+    public void Refine_step_0_is_raw_and_each_step_after_is_smoother()
+    {
+        Assert.Equal(1.0, AccScope.RefineWeight(0));
+        for (int n = 1; n <= AccScope.MaxRefineLevel; n++)
+            Assert.True(AccScope.RefineWeight(n) < AccScope.RefineWeight(n - 1), $"step {n}");
+        // Every step is a weight ScopeRefiner takes.
+        foreach (var w in AccScope.RefineWeights) _ = new ScopeRefiner(w);
+    }
+
+    [Fact]
+    public void The_default_refine_step_is_the_librarys_measured_default()
+    {
+        Assert.Equal(ScopeRefiner.DefaultWeight, AccScope.RefineWeight(AccScope.DefaultRefineLevel));
+        // A fresh settings file starts both panels on it.
+        var s = new Yaesu_Web_Control.Models.ApplicationSettings();
+        Assert.Equal(AccScope.DefaultRefineLevel, s.AccRefineLevelA);
+        Assert.Equal(AccScope.DefaultRefineLevel, s.AccRefineLevelB);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(6)]
+    [InlineData(99)]
+    public void A_refine_step_out_of_range_gets_the_default(int level)
+    {
+        Assert.False(AccScope.IsRefineLevel(level));
+        Assert.Equal(ScopeRefiner.DefaultWeight, AccScope.RefineWeight(level));
+    }
+
+    [Fact]
+    public void Refine_raw_draws_the_radios_rows_as_they_come()
+    {
+        var refiner = new ScopeRefiner(AccScope.RefineWeight(0));
+        AccScope.ToSpectrum(Frame(mainLevel: 80).Main, 1, refiner.Add(Frame(mainLevel: 80).Main));
+        var scope = Frame(mainLevel: 120).Main;
+        var f = AccScope.ToSpectrum(scope, 2, refiner.Add(scope))!;
+        Assert.All(f.Bins, b => Assert.Equal(AccScope.LevelToDb(120), b));
+    }
+
+    [Fact]
     public void Sub_row_comes_from_sub()
     {
         var f = AccScope.ToSpectrum(Frame().Sub, 1)!;

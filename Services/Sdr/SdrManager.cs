@@ -105,6 +105,11 @@ public sealed class SdrManager : BackgroundService
 
     private readonly object _activeLock = new();
 
+    // Each panel's Refine slider step for the ACC scope, set live by
+    // /api/sdr/refine. A session seeds it from settings when it starts and
+    // checks it each frame, so a move of the slider shows on the next frame.
+    private readonly int[] _accRefineLevel = { AccScope.DefaultRefineLevel, AccScope.DefaultRefineLevel };
+
     // "Free the SDR when the last browser closes" (ReleaseSdrWhenBrowsersClose).
     // A page change drops the hub connection for well under a second, so the
     // workers are only stopped once nobody has been connected for this long;
@@ -598,8 +603,12 @@ public sealed class SdrManager : BackgroundService
             int    heartbeat = 0;
             string shown     = "connecting";
             // The panel draws the refined trace: each raw row is a separate
-            // snapshot with a rough floor (see ScopeRefiner).
-            var    refiner   = new ScopeRefiner();
+            // snapshot with a rough floor (see ScopeRefiner). How much is the
+            // panel's Refine slider; a new step starts a new average.
+            int    slot      = vfo == "B" ? 1 : 0;
+            Volatile.Write(ref _accRefineLevel[slot], vfo == "B" ? config.AccRefineLevelB : config.AccRefineLevelA);
+            int    refineLevel = Volatile.Read(ref _accRefineLevel[slot]);
+            var    refiner   = new ScopeRefiner(AccScope.RefineWeight(refineLevel));
             string? shownDetail = null;
 
             void Show(string status, string? detail)
@@ -628,6 +637,13 @@ public sealed class SdrManager : BackgroundService
                     var (status, detail) = AccScope.WhenNoFrames(_acc.State);
                     Show(status, detail);
                     continue;
+                }
+
+                int level = Volatile.Read(ref _accRefineLevel[slot]);
+                if (level != refineLevel)
+                {
+                    refineLevel = level;
+                    refiner = new ScopeRefiner(AccScope.RefineWeight(level));
                 }
 
                 var scope    = sub ? frame.Sub : frame.Main;
@@ -667,6 +683,17 @@ public sealed class SdrManager : BackgroundService
     /// Main and 1 for Sub. Nothing is restarted; the next frame says the new
     /// span. Returns false when the radio isn't connected or is busy.
     /// </summary>
+    /// <summary>
+    /// Sets how much a panel smooths the ACC scope, as a Refine slider step
+    /// (AccScope.RefineWeights). Takes effect on the panel's next frame if it
+    /// is showing the ACC scope, else when it next does.
+    /// </summary>
+    public void SetAccRefineLevel(string vfo, int level)
+    {
+        if (!AccScope.IsRefineLevel(level)) throw new ArgumentOutOfRangeException(nameof(level));
+        Volatile.Write(ref _accRefineLevel[vfo == "B" ? 1 : 0], level);
+    }
+
     public async Task<bool> TrySetAccSpanAsync(string deviceKey, char spanDigit, CancellationToken ct = default)
     {
         if (!_cat.IsConnected) return false;
