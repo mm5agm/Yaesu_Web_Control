@@ -590,6 +590,36 @@ Device code (still in `Services/Sdr/` but linked into both projects):
 - `SoapySdrDevice` — SoapySDR wrapper for RTL-SDR, Airspy, etc.
 - `FftProcessor` — Hann-windowed FFT → dBFS bins.
 
+### ACC scope — the FTdx101's own scope as an SDR panel source
+
+The FTdx101MP/D send Main and Sub scope rows out of the rear ACC socket. The
+ACC board (ESP32-S3, [Yaesu_ACC_Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum))
+passes them over USB, and the **YaesuAccScope** NuGet package decodes them.
+That package is not on nuget.org yet: it is checked in as
+`local-packages/YaesuAccScope.<ver>.nupkg` and mapped by `nuget.config`, and the
+Dockerfile copies both before restore. To take a new library build, pack it in
+the ACC repo, drop the .nupkg in `local-packages/`, remove the old one and bump
+the `PackageReference`.
+
+- **Keys** `acc-scope:main` / `acc-scope:sub` appear in the SDR dropdowns only
+  for FTdx101MP/D (`AccScope.ModelHasAcc`). They **never go to the SDR worker**:
+  one board feeds both panels, so `AccScopeService` owns the port in the main
+  process and `SdrManager.RunAccSessionAsync` turns frames into `SpectrumUpdate`s.
+  The service only opens Espressif ports (USB VID 303A), never the CAT ports,
+  and lets go of the board when no panel uses it.
+- **Placement** comes from each frame (VFO, span, Center/Cursor/Fix), so nothing
+  is polled over CAT. Span buttons send the CAT scope span command for that
+  receiver (`TrySetAccSpanAsync`).
+- **Refine:** each panel runs the library's `ScopeRefiner` (same method as core
+  `SpectrumRefiner`) on the rows before they are drawn. Steps are
+  `AccScope.RefineWeights` = 1, .6, .45, .3, .2, .12, per panel in
+  `AccRefineLevelA/B`, served at `/api/sdr/refine` (`acc: true` only on a panel
+  showing the ACC scope). The page control is core
+  `js/radio-panel/spectrum-refine.js`, and `RefineEveryViewTests` fails any view
+  that draws the spectrum without it. Shared design note:
+  [core/docs/design/spectrum-refine.md](core/docs/design/spectrum-refine.md).
+- Checked on receive only. Not yet checked while transmitting, or in Docker.
+
 ### CAT Scope Control — a separate thing from the SDR panel
 
 `Controllers/ScopeController.cs` (`api/scope`) drives the radio's **own**
