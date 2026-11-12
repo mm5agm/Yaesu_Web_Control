@@ -357,6 +357,12 @@ Then update the documentation:
 - `USER_MANUAL.md` — bring every section the release touches in line with what
   the app now does, and re-capture any screenshot the change makes wrong.
 
+`.\scripts\check-manual-links.ps1` checks all three for links that go nowhere
+(an anchor with no heading, a missing file or picture, a bad anchor in another
+.md) and for manual sections missing from the contents. `finish-release.ps1`
+refuses to release while it fails, and the CI `test` job runs it on every PR.
+Run it after any doc edit. IWC has the same script; keep the two the same.
+
 Do not start the git steps until both documents are done. `finish-release.ps1`
 helps with the mechanical half — it rewrites the version strings in the manual
 and the README badge — but it refuses to release at all unless you have written

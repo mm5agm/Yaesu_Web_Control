@@ -1,39 +1,43 @@
 # check-manual-links.ps1
-# Checks USER_MANUAL.md for two defects that are invisible when you read the
-# file and only show up once GitHub renders it.
+# Checks the operator docs for links that render fine on GitHub and then do
+# nothing when clicked, and for manual sections the contents never reach.
 #
 # Usage:
-#   .\scripts\check-manual-links.ps1
-#   .\scripts\check-manual-links.ps1 -Path README.md
-#   .\scripts\check-manual-links.ps1 -Quiet     # exit code only, for scripts
+#   .\scripts\check-manual-links.ps1                    # USER_MANUAL.md, README.md, RELEASE_HISTORY.md
+#   .\scripts\check-manual-links.ps1 -Path README.md    # one file
+#   .\scripts\check-manual-links.ps1 -Quiet             # exit code only, for scripts
 #
 # Exit code is 0 when clean, 1 when anything is wrong, so finish-release.ps1
-# can block on it.
+# and CI can block on it.
 #
-# ---------------------------------------------------------------------------
-# Why this exists
+# What it checks, in each file:
 #
-# Both defects it looks for shipped in the manual on 2026-08-16, one of them
-# twice in the same day:
+#   1. Every in-page link (#anchor) matches a heading, or an <a id/name> tag.
+#   2. Every link to another file in the repo (USER_MANUAL.md#54-..., a
+#      picture, docs/...) points at a file that exists, and its #anchor, if
+#      any, matches a heading in that file.
+#   3. In USER_MANUAL.md only: every numbered section (## 5. / ### 5.4) is in
+#      the table of contents at the top.
 #
-#   1. A link whose anchor does not match its heading. Nothing warns you --
-#      the link renders normally and simply does nothing when clicked. The
-#      slug rules are easy to get wrong by hand, particularly the em-dash,
-#      which is dropped rather than replaced and so leaves the two hyphens
-#      from the spaces that surrounded it.
+# Links to websites are not fetched. Links inside code blocks and `inline
+# code` are not links on GitHub, so they are skipped, and so are headings
+# inside code blocks.
 #
-#   2. A section that never reaches the table of contents. Section 5.20 and
-#      section 11.1 were both written, both correct, and both unreachable for
-#      anyone navigating from the top of a 3,000-line document.
+# Why: two defects shipped in the manual on 2026-08-16, one of them twice in
+# a day. A link whose anchor didn't match its heading (an em-dash is dropped,
+# not replaced, which is easy to get wrong by hand), and sections 5.20 and
+# 11.1, written and correct, that the contents never reached.
 #
-# The staleness heuristic already in finish-release.ps1 can only ever warn
-# that the manual *looks* neglected, because no script can judge whether prose
-# is right. These two checks are different: they are objective, so this script
-# is allowed to be certain about them.
-# ---------------------------------------------------------------------------
+# Rewritten 2026-11-12 to match Icom Web Control's checker, which is the same
+# file: the first version checked only in-page anchors in USER_MANUAL.md.
+# Added: README.md and RELEASE_HISTORY.md by default, links into other files
+# and to pictures, GitHub's -1 / -2 suffix on repeated headings, underscores
+# and accented letters kept in anchors as GitHub keeps them, and code skipped.
+# Keep the two copies the same.
 
 param(
-    [string]$Path = 'USER_MANUAL.md',
+    # One file to check. Without it, the three operator docs are checked.
+    [string]$Path,
 
     # Print nothing; report through the exit code alone.
     [switch]$Quiet
@@ -43,85 +47,163 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-if (-not [System.IO.Path]::IsPathRooted($Path)) {
-    $Path = Join-Path $RepoRoot $Path
-}
-if (-not (Test-Path $Path)) { throw "No such file: $Path" }
 
-function Write-Unless-Quiet {
+function Say {
     param([string]$Message, [string]$Colour = 'Gray')
     if (-not $Quiet) { Write-Host $Message -ForegroundColor $Colour }
 }
 
 # Read as UTF-8 explicitly. Get-Content would use the console codepage and turn
-# the manual's em-dashes and section signs into mojibake, which would then be
-# stripped differently and produce phantom mismatches.
-$text  = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
-$lines = $text -split "`r?`n"
+# em-dashes and section signs into mojibake, which then slug differently.
+function Read-Doc([string]$File) {
+    [System.IO.File]::ReadAllText($File, [System.Text.Encoding]::UTF8)
+}
 
-# --- slugify headings the way GitHub does ----------------------------------
-# Lowercase, drop everything that is not a letter, digit, space or hyphen,
-# then turn spaces into hyphens. Two details matter and are easy to miss:
-# entities are decoded first (so "&amp;" contributes "&", which then drops
-# out, rather than the letters "amp"), and backticks are removed before the
-# general strip so `code` in a heading does not shift the result.
-$slugs = @()
-foreach ($line in $lines) {
-    if ($line -match '^#{1,6} ') {
-        $t = ($line -replace '^#{1,6} ', '').ToLower()
-        $t = $t -replace '&amp;', '&' -replace '&lt;', '<' -replace '&gt;', '>'
-        $t = $t -replace '`', ''
-        $t = $t -replace '[^a-z0-9 \-]', ''
-        $slugs += ($t -replace ' ', '-')
+# The lines of a document with fenced code blocks blanked out, so neither a
+# "# comment" in a PowerShell sample nor a [x](y) in a code sample counts.
+function Get-ProseLines([string]$Text) {
+    $out = New-Object System.Collections.Generic.List[string]
+    $fence = $null
+    foreach ($line in ($Text -split "`r?`n")) {
+        if ($fence) {
+            if ($line -match ('^\s{0,3}' + [regex]::Escape($fence))) { $fence = $null }
+            $out.Add('')
+            continue
+        }
+        if ($line -match '^\s{0,3}(```+|~~~+)') { $fence = $Matches[1]; $out.Add(''); continue }
+        $out.Add($line)
     }
+    return ,$out.ToArray()
 }
 
-# --- 1. every in-page link resolves to a real heading ----------------------
-$linkMatches = [regex]::Matches($text, '\]\(#([^)]+)\)')
-$broken = @()
-foreach ($m in $linkMatches) {
-    $target = $m.Groups[1].Value
-    if ($slugs -notcontains $target) { $broken += $target }
+# A heading's anchor, the way GitHub makes it: lowercase; markup and
+# punctuation dropped, but letters (accented ones too), digits, spaces,
+# hyphens and underscores kept; spaces to hyphens. An em-dash is dropped, not
+# replaced, so "A — B" becomes "a--b". Entities are decoded first, so "&amp;"
+# drops out rather than leaving "amp".
+function ConvertTo-Slug([string]$Heading) {
+    $t = $Heading.Trim()
+    $t = $t -replace '\s+#+\s*$', ''                      # closing ###
+    $t = $t -replace '!?\[([^\]]*)\]\([^)]*\)', '$1'       # [text](link) -> text
+    $t = $t -replace '<[^>]+>', ''                        # inline HTML tags
+    $t = $t -replace '&amp;', '&' -replace '&lt;', '<' -replace '&gt;', '>' -replace '&quot;', '"' -replace '&#39;', "'" -replace '&nbsp;', ' '
+    $t = $t.ToLowerInvariant()
+    $t = $t -replace '[^\p{L}\p{Mn}\p{Nd}\p{Pc} \-]', ''
+    return ($t -replace ' ', '-')
 }
 
-# --- 2. every numbered subsection appears in the contents ------------------
-# The table of contents runs from the top of the file to the first horizontal
-# rule. Do NOT substitute a fixed line count here: the first version of this
-# check read 95 lines of a 103-line contents and confidently reported seven
-# sections as missing that were listed all along.
-$ruleLine = $lines | Select-String -Pattern '^---$' | Select-Object -First 1
-$tocEnd   = if ($ruleLine) { $ruleLine.LineNumber } else { $lines.Count }
-$toc      = ($lines | Select-Object -First $tocEnd) -join "`n"
-
-$missing = @()
-foreach ($line in $lines) {
-    if ($line -match '^#{2,3} ([0-9]+\.[0-9]+)') {
-        $number = $Matches[1]
-        if ($toc -notmatch ('\- ' + [regex]::Escape($number) + ' \[')) { $missing += $line }
+# Every anchor a document offers: its headings, with GitHub's -1, -2 ... on a
+# repeated one, and any <a id="..."> or <a name="..."> tags.
+$anchorCache = @{}
+function Get-Anchors([string]$File) {
+    if ($anchorCache.ContainsKey($File)) { return $anchorCache[$File] }
+    $set  = New-Object 'System.Collections.Generic.HashSet[string]'
+    $seen = @{}
+    $lines = Get-ProseLines (Read-Doc $File)
+    foreach ($line in $lines) {
+        if ($line -match '^\s{0,3}#{1,6}\s+(.+)$') {
+            $slug = ConvertTo-Slug $Matches[1]
+            if ($seen.ContainsKey($slug)) {
+                $seen[$slug]++
+                [void]$set.Add("$slug-$($seen[$slug])")
+            } else {
+                $seen[$slug] = 0
+                [void]$set.Add($slug)
+            }
+        }
+        foreach ($m in [regex]::Matches($line, '<a\s[^>]*(?:id|name)\s*=\s*"([^"]+)"', 'IgnoreCase')) {
+            [void]$set.Add($m.Groups[1].Value)
+        }
     }
+    $anchorCache[$File] = $set
+    return $set
 }
 
-# --- report ----------------------------------------------------------------
-$name = Split-Path $Path -Leaf
-Write-Unless-Quiet "$name : $($slugs.Count) headings, $($linkMatches.Count) internal links"
+function Test-Doc([string]$File) {
+    # Not GetRelativePath: Windows PowerShell 5.1 runs on .NET Framework, which lacks it.
+    $name  = $File.Substring($RepoRoot.Length).TrimStart('\', '/').Replace('\', '/')
+    $dir   = Split-Path -Parent $File
+    $lines = Get-ProseLines (Read-Doc $File)
+    $own   = Get-Anchors $File
+    $problems = New-Object System.Collections.Generic.List[string]
+    $count = 0
 
-$failed = $false
+    for ($i = 0; $i -lt $lines.Length; $i++) {
+        # `inline code` is not a link on GitHub.
+        $line = $lines[$i] -replace '`[^`]*`', ''
+        # [text](target) and [text](target "title"), images included.
+        foreach ($m in [regex]::Matches($line, '\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)')) {
+            $target = $m.Groups[1].Value
+            if ($target -match '^[a-z][a-z0-9+.-]*:' ) { continue }   # http:, https:, mailto:
+            $count++
+            $where = "line $($i + 1)"
 
-if ($broken.Count -gt 0) {
-    $failed = $true
-    Write-Unless-Quiet "BROKEN LINKS ($($broken.Count)) -- these render fine and do nothing when clicked:" 'Red'
-    $broken | Sort-Object -Unique | ForEach-Object { Write-Unless-Quiet "   #$_" 'Red' }
+            $hash = $target.IndexOf('#')
+            $pathPart   = if ($hash -ge 0) { $target.Substring(0, $hash) } else { $target }
+            $anchorPart = if ($hash -ge 0) { $target.Substring($hash + 1) } else { '' }
+            $pathPart   = [uri]::UnescapeDataString($pathPart)
+
+            if ($pathPart -eq '') {
+                if (-not $own.Contains($anchorPart)) { $problems.Add("$where : #$anchorPart -- no such heading") }
+                continue
+            }
+
+            $full = if ($pathPart.StartsWith('/')) { Join-Path $RepoRoot $pathPart.TrimStart('/') } else { Join-Path $dir $pathPart }
+            $full = [System.IO.Path]::GetFullPath($full)
+            if (-not (Test-Path -LiteralPath $full)) {
+                $problems.Add("$where : $pathPart -- no such file")
+                continue
+            }
+            if ($anchorPart -ne '' -and $full -match '\.md$') {
+                if (-not (Get-Anchors $full).Contains($anchorPart)) {
+                    $problems.Add("$where : $pathPart#$anchorPart -- no such heading in $pathPart")
+                }
+            }
+        }
+    }
+
+    # The manual's numbered sections all in its contents. The contents run
+    # from the top to the first horizontal rule; a fixed line count once
+    # reported seven listed sections as missing in YWC's manual.
+    $missing = New-Object System.Collections.Generic.List[string]
+    if ((Split-Path -Leaf $File) -eq 'USER_MANUAL.md') {
+        $rule  = [array]::IndexOf($lines, '---')
+        $toc   = ($lines[0..([Math]::Max($rule, 0))]) -join "`n"
+        # Listed means the contents link to the heading's own anchor, whatever
+        # the list looks like ("5. [Main](#5-...)" or "- 5.4 [Spectrum](#54-...)").
+        foreach ($line in $lines) {
+            if ($line -match '^#{2,3} ([0-9]+(?:\.[0-9]+)?\.? .+)$') {
+                $slug = ConvertTo-Slug $Matches[1]
+                if (-not $toc.Contains("](#$slug)")) { $missing.Add($line) }
+            }
+        }
+    }
+
+    Say "$name : $($own.Count) anchors, $count links to check"
+    if ($problems.Count -gt 0) {
+        Say "  BROKEN LINKS ($($problems.Count)) -- these render fine and do nothing when clicked:" 'Red'
+        $problems | ForEach-Object { Say "    $_" 'Red' }
+    } else {
+        Say "  all links resolve" 'Green'
+    }
+    if ($missing.Count -gt 0) {
+        Say "  NOT IN THE CONTENTS ($($missing.Count)) -- written, and unreachable from the top:" 'Yellow'
+        $missing | ForEach-Object { Say "    $_" 'Yellow' }
+    } elseif ((Split-Path -Leaf $File) -eq 'USER_MANUAL.md') {
+        Say "  every numbered section is in the contents" 'Green'
+    }
+    return ($problems.Count + $missing.Count) -eq 0
+}
+
+$files = if ($Path) {
+    if ([System.IO.Path]::IsPathRooted($Path)) { @($Path) } else { @(Join-Path $RepoRoot $Path) }
 } else {
-    Write-Unless-Quiet "  all internal links resolve" 'Green'
+    @('USER_MANUAL.md', 'README.md', 'RELEASE_HISTORY.md') | ForEach-Object { Join-Path $RepoRoot $_ }
 }
 
-if ($missing.Count -gt 0) {
-    $failed = $true
-    Write-Unless-Quiet "NOT IN THE CONTENTS ($($missing.Count)) -- written, correct, and unreachable from the top:" 'Yellow'
-    $missing | ForEach-Object { Write-Unless-Quiet "   $_" 'Yellow' }
-} else {
-    Write-Unless-Quiet "  every numbered subsection is listed" 'Green'
+$ok = $true
+foreach ($f in $files) {
+    if (-not (Test-Path -LiteralPath $f)) { throw "No such file: $f" }
+    if (-not (Test-Doc $f)) { $ok = $false }
 }
-
-if ($failed) { exit 1 }
-exit 0
+if ($ok) { exit 0 } else { exit 1 }
