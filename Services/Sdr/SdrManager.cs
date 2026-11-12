@@ -21,6 +21,11 @@
 // same worker and envelope, with rfOrdered: true on each SpectrumUpdate: its
 // bins are in RF order centred on the dial, not in the inverted order of the
 // 9 MHz IF tap, and centreHz is the dial frequency rather than an IF.
+//
+// The FTdx101's own scope from its ACC socket ("acc-scope:main" and
+// "acc-scope:sub") does NOT go through a worker: one ACC board feeds both
+// panels, so AccScopeService reads it in this process and RunAccSessionAsync
+// sends each panel its receiver's row, rfOrdered and placed from the frame.
 
 using System.ComponentModel;
 using System.Net.Sockets;
@@ -28,6 +33,7 @@ using Microsoft.AspNetCore.SignalR;
 using Yaesu_Web_Control.Hubs;
 using Yaesu_Web_Control.Models;
 using Yaesu_Web_Control.Services;
+using YaesuAccScope;
 
 namespace Yaesu_Web_Control.Services.Sdr;
 
@@ -39,6 +45,11 @@ public sealed class SdrManager : BackgroundService
     private readonly ICatClient                   _cat;
     private readonly ILogger<SdrManager>          _logger;
     private readonly BrowserPresence              _presence;
+    private readonly AccScopeService              _acc;
+
+    // An ACC scope panel with no frame for this long says why (no board, or
+    // a board with nothing coming from the radio). The board sends 25 a second.
+    private const int AccNoFrameMs = 2_000;
 
     private const int RetryDelayMs           = 5_000;
     private const int UnconfiguredPollMs     = 10_000;
@@ -120,8 +131,10 @@ public sealed class SdrManager : BackgroundService
         RadioStateService            state,
         ICatClient                   cat,
         ILogger<SdrManager>          logger,
-        BrowserPresence              presence)
+        BrowserPresence              presence,
+        AccScopeService              acc)
     {
+        _acc      = acc;
         _settings = settings;
         _hub      = hub;
         _state    = state;
@@ -335,6 +348,14 @@ public sealed class SdrManager : BackgroundService
         ApplicationSettings config,
         CancellationToken   stoppingToken)
     {
+        // The ACC board is read in this process, never by a worker: the
+        // worker would take any key it doesn't know for a SoapySDR device.
+        if (AccScope.IsAccKey(deviceKey))
+        {
+            await RunAccSessionAsync(vfo, deviceKey, config, stoppingToken).ConfigureAwait(false);
+            return;
+        }
+
         WorkerProcess? worker = null;
         TcpClient?     client = null;
 
@@ -545,6 +566,120 @@ public sealed class SdrManager : BackgroundService
                 worker.Dispose();
             }
         }
+    }
+
+    // ── The FTdx101's own scope from the ACC board ───────────────────────────
+
+    private async Task RunAccSessionAsync(
+        string              vfo,
+        string              deviceKey,
+        ApplicationSettings config,
+        CancellationToken   ct)
+    {
+        bool sub = AccScope.IsSub(deviceKey);
+        try
+        {
+            await BroadcastStatus(vfo, "connecting", ct).ConfigureAwait(false);
+
+            if (!AccScope.ModelHasAcc(config.RadioModel))
+            {
+                await BroadcastStatus(vfo, "disconnected", ct).ConfigureAwait(false);
+                await BroadcastDetail(vfo,
+                    "The ACC scope is for the FTdx101MP and FTdx101D. Choose one of them as the radio model " +
+                    "in Settings, or choose an SDR for this panel.", ct).ConfigureAwait(false);
+                await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+                return;
+            }
+
+            lock (_activeLock) _activeDeviceKeys[vfo] = deviceKey;
+            using var subscription = _acc.Subscribe();
+
+            ulong  sequence  = 0;
+            int    heartbeat = 0;
+            string shown     = "connecting";
+            string? shownDetail = null;
+
+            void Show(string status, string? detail)
+            {
+                if (status == shown && detail == shownDetail) return;
+                shown = status;
+                shownDetail = detail;
+                if (detail is not null)
+                    _logger.LogInformation("SDR {Vfo}: ACC scope {Status} — {Detail}", vfo, status, detail);
+                Dispatch(BroadcastStatus(vfo, status, ct), vfo);
+                if (detail is not null) Dispatch(BroadcastDetail(vfo, detail, ct), vfo);
+            }
+
+            while (!ct.IsCancellationRequested)
+            {
+                AccFrame? frame = null;
+                using (var wait = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    wait.CancelAfter(AccNoFrameMs);
+                    try { frame = await subscription.Frames.ReadAsync(wait.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
+                }
+
+                if (frame is null)
+                {
+                    var (status, detail) = AccScope.WhenNoFrames(_acc.State);
+                    Show(status, detail);
+                    continue;
+                }
+
+                var spectrum = AccScope.ToSpectrum(sub ? frame.Sub : frame.Main, ++sequence);
+                if (spectrum is null)
+                {
+                    Show("scopeplacement", AccScope.UnplacedProblem);
+                    continue;
+                }
+
+                Show("streaming", null);
+                Dispatch(BroadcastFrame(vfo, spectrum, ct, rfOrdered: true), vfo);
+
+                if (++heartbeat >= StatusHeartbeatFrames)
+                {
+                    heartbeat = 0;
+                    Dispatch(BroadcastStatus(vfo, "streaming", ct), vfo);
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SDR {Vfo}: ACC scope session error — {Message}", vfo, ex.Message);
+            await BroadcastStatus(vfo, "disconnected", ct).ConfigureAwait(false);
+            await BroadcastDetail(vfo, ex.Message, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_activeLock) _activeDeviceKeys.Remove(vfo);
+        }
+    }
+
+    /// <summary>
+    /// Set the radio's own scope span for an ACC scope panel, over CAT, as
+    /// the Scope panel does: SS P1 5 span. P1 is the panel's receiver, 0 for
+    /// Main and 1 for Sub. Nothing is restarted; the next frame says the new
+    /// span. Returns false when the radio isn't connected or is busy.
+    /// </summary>
+    public async Task<bool> TrySetAccSpanAsync(string deviceKey, char spanDigit, CancellationToken ct = default)
+    {
+        if (!_cat.IsConnected) return false;
+        if (!await ScopeCatGate.Instance.WaitAsync(2_000, ct).ConfigureAwait(false)) return false;
+        try
+        {
+            var band = ScopeCommands.BandDigit(AccScope.IsSub(deviceKey));
+            await _cat.SendWithoutReplyAsync(ScopeCommands.Set(band, ScopeCommands.Span, spanDigit), "AccScope", ct).ConfigureAwait(false);
+            _logger.LogInformation("ACC scope: {Receiver} span set to code {Span}", AccScope.IsSub(deviceKey) ? "Sub" : "Main", spanDigit);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ACC scope: could not set the radio's span — {Message}", ex.Message);
+            return false;
+        }
+        finally { ScopeCatGate.Instance.Release(); }
     }
 
     /// <summary>

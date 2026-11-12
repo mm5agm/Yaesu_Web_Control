@@ -1803,6 +1803,27 @@ The FT-710 has no IF output, but it can send its own spectrum scope to the compu
 - **The panel follows VFO A.**
 - **The first connection can be slow.** Opening the radio's USB scope for the first time after power-on can take a while. If it hasn't opened after 20 seconds, YWC tries again.
 
+#### FTdx101: the radio's own scope from its ACC socket *(experimental)*
+
+The FTdx101MP and FTdx101D send their own Main and Sub scope out of the rear **ACC** socket. A small board I built, the **ACC board** (an ESP32-S3), passes that to the computer over USB. YWC can show it in the spectrum panels, so you don't need an SDR, a splitter or a T/R switch, and nothing is at risk when you transmit. The board, its wiring and its firmware are in [Yaesu_ACC_Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum).
+
+> I've checked this on my FTdx101MP on receive: Main's signals land at their true frequency, and the span buttons change the radio's scope span. I haven't checked it while transmitting yet.
+
+**Setting it up:**
+
+1. Build and wire the ACC board as described in [Yaesu_ACC_Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum), and plug its socket marked **USB** into the PC that runs YWC. **ACC Spectrum Viewer**, from the same place, checks the wiring.
+2. Close ACC Spectrum Viewer and ACC Firmware Flasher. Only one program can have the board at a time.
+3. In **Settings → SDR Spectrum Display**, with the radio model set to FTdx101MP or FTdx101D and saved, press **Scan** under **SDR Devices**. Choose **ACC scope, Main** for VFO A and **ACC scope, Sub** for VFO B. Save.
+
+YWC finds the board by itself. It only looks at the board's own kind of USB port (Espressif, USB ID 303A), so it never opens the radio's CAT ports.
+
+**What's different from an SDR:**
+
+- **The span is the radio's.** The span buttons set the radio's scope span over CAT, for that panel's receiver, as the Scope window does. If you change it on the radio, the panel follows at once. The radio has no 30 kHz, 40 kHz or 2 MHz span, so those buttons do nothing on this panel.
+- **CENTER, CURSOR and FIX all work.** Each frame from the radio says where its picture sits.
+- **One board feeds both panels.** YWC lets go of the board when no panel is using it.
+- **If the panel says nothing is coming from the radio,** the board is connected but the radio isn't sending. Check that the radio is switched on, that ACC pins 11 and 12 are linked so it streams, and that ground (ACC pin 2) is connected. ACC Spectrum Viewer's wiring check shows which wire is missing.
+
 ---
 
 ### 6.4 Roofing Filters

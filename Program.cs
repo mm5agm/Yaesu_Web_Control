@@ -590,6 +590,8 @@ builder.Services.AddHostedService<MeterPollingService>();
 #if WINDOWS
 // SDR spectrum display — reads IQ samples, computes FFT, broadcasts via SignalR
 // Registered as singleton so the span-change API endpoint can call RequestRestart().
+// AccScopeService owns the ACC board's port for both panels (FTdx101 ACC scope).
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.AccScopeService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.SdrManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Sdr.SdrManager>());
 #endif
@@ -909,6 +911,19 @@ try
         // reopening the radio's USB bridge is the slow, fragile part.
         if (Yaesu_Web_Control.Services.Sdr.Ft710ScopeFrame.IsScopeKey(target == "A" ? s.SdrDeviceKeyA : s.SdrDeviceKeyB))
             return Results.Conflict("This panel shows the radio's own scope. Change the span on the radio.");
+
+        // The ACC scope shows the radio's own span too, but on the FTdx101
+        // each receiver's scope span can be set over CAT, as the Scope panel
+        // does. Nothing is saved or restarted: the next frame says the span.
+        var key = target == "A" ? s.SdrDeviceKeyA : s.SdrDeviceKeyB;
+        if (Yaesu_Web_Control.Services.Sdr.AccScope.IsAccKey(key))
+        {
+            if (Yaesu_Web_Control.Services.Sdr.AccScope.SpanDigit(hz) is not char digit)
+                return Results.Conflict("The radio's scope spans are 1 kHz to 1 MHz; 30 kHz, 40 kHz and 2 MHz are for an SDR.");
+            return await sdr.TrySetAccSpanAsync(key!, digit)
+                ? Results.Ok()
+                : Results.Problem("Couldn't set the radio's scope span: the radio isn't connected or is busy.", statusCode: 503);
+        }
 
         if (target == "A") s.SdrSampleRateHzA = hz;
         else               s.SdrSampleRateHzB = hz;
