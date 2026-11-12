@@ -1107,6 +1107,19 @@
                 });
             });
 
+            // Refine — how much the FTdx101's ACC scope is averaged before it
+            // is drawn, on a panel showing the ACC scope. The logic is shared
+            // by every view in /js/radio-panel/spectrum-refine.js; this page only has the
+            // slider markup. Done on the server, saved per panel.
+            import('/js/radio-panel/spectrum-refine.js').then(({ bindRefineSlider }) => {
+                ['A', 'B'].forEach(vfo => bindRefineSlider({
+                    vfo,
+                    group:  document.querySelector(`.spectrum-refine-group[data-vfo="${vfo}"]`),
+                    slider: document.querySelector(`.spectrum-refine-slider[data-vfo="${vfo}"]`),
+                    label:  document.querySelector(`.spectrum-refine-label[data-vfo="${vfo}"]`),
+                }));
+            }).catch(err => console.warn('Refine:', err));
+
             // Passband overlay toggle. On by default and persisted per VFO by
             // the panel itself, so the checkbox is initialised FROM the panel
             // rather than from the markup's `checked` attribute — otherwise a

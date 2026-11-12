@@ -29,6 +29,10 @@ WORKDIR /src
 # as "NETSDK1004: Assets file '/src/core/obj/project.assets.json' not found".
 COPY Yaesu_Web_Control.csproj ./
 COPY core/RadioWebControl.Core.csproj core/
+# YaesuAccScope (the FTdx101 ACC scope library) isn't on nuget.org yet; it
+# restores from local-packages/ through nuget.config.
+COPY nuget.config ./
+COPY local-packages/ local-packages/
 RUN arch="$TARGETARCH"; \
     if [ "$arch" = "amd64" ]; then arch=x64; fi; \
     dotnet restore Yaesu_Web_Control.csproj -r "linux-$arch"

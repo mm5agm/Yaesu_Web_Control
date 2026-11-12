@@ -363,7 +363,7 @@ Re-run with -SkipVersionCheck to release without them.
     # nothing. -SkipVersionCheck bypasses this along with the rest.
     & (Join-Path $PSScriptRoot 'check-manual-links.ps1')
     if ($LASTEXITCODE -ne 0) {
-        throw "USER_MANUAL.md has broken links or sections missing from the contents (listed above). Fix them, or re-run with -SkipVersionCheck."
+        throw "The docs (USER_MANUAL.md, README.md, RELEASE_HISTORY.md) have broken links or manual sections missing from the contents (listed above). Fix them, or re-run with -SkipVersionCheck."
     }
 }
 

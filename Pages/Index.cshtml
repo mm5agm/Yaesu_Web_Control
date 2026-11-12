@@ -1130,6 +1130,11 @@
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
                         <input type="range" class="spectrum-smooth-slider" data-vfo="A" min="0" max="8" step="1" value="2" aria-label="VFO A spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="A" style="min-width:3.5em; text-align:right;">2</span>
+                        <span class="spectrum-refine-group" data-vfo="A" style="display:none;">
+                            <label class="text-nowrap mb-0 ms-2" title="Refine - how much the FTdx101's own scope is averaged before it is drawn. Each frame from the radio's ACC socket is a separate snapshot with a rough floor; averaging a few lets the floor settle into a thin line and weak signals stand out of it. Raw is the radio's frames as they come; higher is calmer but slower to follow a signal that comes and goes. Only shown when this panel shows the ACC scope.">Refine</label>
+                            <input type="range" class="spectrum-refine-slider" data-vfo="A" min="0" max="5" step="1" value="3" aria-label="VFO A ACC scope averaging. Zero is the radio's raw frames; higher is a calmer trace that is slower to follow." style="flex:1; min-width:60px; height:16px;">
+                            <span class="text-monospace spectrum-refine-label" data-vfo="A" style="min-width:3.5em; text-align:right;">3</span>
+                        </span>
                         <label class="text-nowrap mb-0 ms-2" for="spectrumStepSelectA" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO A. Also set by clicking a digit on the VFO A frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz.">Step</label>
                         <select class="form-select form-select-sm spectrum-step-select" data-vfo="A" id="spectrumStepSelectA"
                                 style="width:auto;" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO A. Also set by clicking a digit on the VFO A frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz."
@@ -1216,6 +1221,11 @@
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
                         <input type="range" class="spectrum-smooth-slider" data-vfo="B" min="0" max="8" step="1" value="2" aria-label="VFO B spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="B" style="min-width:3.5em; text-align:right;">2</span>
+                        <span class="spectrum-refine-group" data-vfo="B" style="display:none;">
+                            <label class="text-nowrap mb-0 ms-2" title="Refine - how much the FTdx101's own scope is averaged before it is drawn. Each frame from the radio's ACC socket is a separate snapshot with a rough floor; averaging a few lets the floor settle into a thin line and weak signals stand out of it. Raw is the radio's frames as they come; higher is calmer but slower to follow a signal that comes and goes. Only shown when this panel shows the ACC scope.">Refine</label>
+                            <input type="range" class="spectrum-refine-slider" data-vfo="B" min="0" max="5" step="1" value="3" aria-label="VFO B ACC scope averaging. Zero is the radio's raw frames; higher is a calmer trace that is slower to follow." style="flex:1; min-width:60px; height:16px;">
+                            <span class="text-monospace spectrum-refine-label" data-vfo="B" style="min-width:3.5em; text-align:right;">3</span>
+                        </span>
                         <label class="text-nowrap mb-0 ms-2" for="spectrumStepSelectB" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO B. Also set by clicking a digit on the VFO B frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz.">Step</label>
                         <select class="form-select form-select-sm spectrum-step-select" data-vfo="B" id="spectrumStepSelectB"
                                 style="width:auto;" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO B. Also set by clicking a digit on the VFO B frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz."
@@ -3862,6 +3872,19 @@
                     panel.setSpectrumSmooth(r);
                 });
             });
+
+            // Refine — how much the FTdx101's ACC scope is averaged before it
+            // is drawn, on a panel showing the ACC scope. The logic is shared
+            // by every view in /js/radio-panel/spectrum-refine.js; this page only has the
+            // slider markup. Done on the server, saved per panel.
+            import('/js/radio-panel/spectrum-refine.js').then(({ bindRefineSlider }) => {
+                ['A', 'B'].forEach(vfo => bindRefineSlider({
+                    vfo,
+                    group:  document.querySelector(`.spectrum-refine-group[data-vfo="${vfo}"]`),
+                    slider: document.querySelector(`.spectrum-refine-slider[data-vfo="${vfo}"]`),
+                    label:  document.querySelector(`.spectrum-refine-label[data-vfo="${vfo}"]`),
+                }));
+            }).catch(err => console.warn('Refine:', err));
 
             // Tuning step — how far one mouse-wheel notch on the spectrum moves
             // the dial (Bruce VK2RT, discussion #168: the old 1 kHz was hard-coded,

@@ -4152,6 +4152,9 @@
             if (!key) return '';
             // The radio's own scope, not an SDR (Ft710ScopeFrame.KeyPrefix).
             if (key.startsWith('yaesu-scope:')) return 'FT-710 internal scope [radio]';
+            // The FTdx101's own scope from its ACC socket (AccScope.KeyPrefix).
+            if (key === 'acc-scope:main') return 'ACC scope, Main (FTdx101 ACC socket) [radio]';
+            if (key === 'acc-scope:sub')  return 'ACC scope, Sub (FTdx101 ACC socket) [radio]';
             if (key.startsWith('sdrplay:')) {
                 const { hwVer, serial } = parseSdrplayKey(key);
                 const model = hwVer != null ? (SDRPLAY_HW_VER_NAMES[hwVer] || `hw${hwVer}`) : null;

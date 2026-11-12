@@ -163,6 +163,9 @@
     <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="System.IO.Ports" Version="10.0.1" />
+    <!-- The FTdx101's own scope from its ACC socket, through the ACC board (LGPL-3,
+         from local-packages/; see nuget.config). Used by AccScopeService. -->
+    <PackageReference Include="YaesuAccScope" Version="0.2.0-dev1" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
