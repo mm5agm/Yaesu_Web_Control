@@ -601,11 +601,11 @@ Device code (still in `Services/Sdr/` but linked into both projects):
 The FTdx101MP/D send Main and Sub scope rows out of the rear ACC socket. The
 ACC board (ESP32-S3, [Yaesu_ACC_Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum))
 passes them over USB, and the **YaesuAccScope** NuGet package decodes them.
-That package is not on nuget.org yet: it is checked in as
-`local-packages/YaesuAccScope.<ver>.nupkg` and mapped by `nuget.config`, and the
-Dockerfile copies both before restore. To take a new library build, pack it in
-the ACC repo, drop the .nupkg in `local-packages/`, remove the old one and bump
-the `PackageReference`.
+It comes from nuget.org (0.2.0 from 2026-11-12). To take a new library version,
+publish it from the ACC repo (a `library-vX.Y.Z` tag publishes it through
+Trusted Publishing; see that repo's `.github/workflows/library.yml`) and bump
+the `PackageReference`. Until 2026-11-12 the package was checked in under
+`local-packages/` with a `nuget.config`; both are gone.
 
 - **Keys** `acc-scope:main` / `acc-scope:sub` appear in the SDR dropdowns only
   for FTdx101MP/D (`AccScope.ModelHasAcc`). They **never go to the SDR worker**:
