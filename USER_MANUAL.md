@@ -1814,7 +1814,7 @@ The FTdx101MP and FTdx101D send their own Main and Sub scope out of the rear **A
 
 1. Build and wire the ACC board as described in [Yaesu_ACC_Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum), and plug its socket marked **USB** into the PC that runs YWC. **ACC Spectrum Viewer**, from the same place, checks the wiring.
 2. Close ACC Spectrum Viewer and ACC Firmware Flasher. Only one program can have the board at a time.
-3. In **Settings → SDR Spectrum Display**, with the radio model set to FTdx101MP or FTdx101D and saved, press **Scan** under **SDR Devices**. Choose **ACC scope, Main** for VFO A and **ACC scope, Sub** for VFO B. Save.
+3. In **Settings → SDR Spectrum Display**, with the radio model set to FTdx101MP or FTdx101D and saved, press **Scan** under **SDR Devices**. Then open the **VFO A SDR** list and choose **ACC scope, Main**, and in the **VFO B SDR** list choose **ACC scope, Sub**. Save. Each spectrum then says where it comes from: **Spectrum — VFO A · ACC scope** on Classic and Experimental, **MAIN · ACC SCOPE** on the Radio panel, its pop-out spectrum and RTTY Contest.
 
 YWC finds the board by itself. It only looks at the board's own kind of USB port (Espressif, USB ID 303A), so it never opens the radio's CAT ports.
 

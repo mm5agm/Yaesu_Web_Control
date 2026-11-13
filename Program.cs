@@ -940,7 +940,7 @@ try
     // The Refine slider on a panel showing the FTdx101's ACC scope: how much
     // the raw rows are averaged before they're drawn (AccScope.RefineWeights).
     // GET says whether the panel shows the ACC scope, so the page only shows
-    // the slider there; POST saves the step and applies it on the next frame.
+    // the slider there, and where the panel's spectrum comes from; POST saves the step and applies it on the next frame.
     app.MapGet("/api/sdr/refine", async (
         [Microsoft.AspNetCore.Mvc.FromQuery] string? sdrId,
         Yaesu_Web_Control.Services.ISettingsService settings) =>
@@ -955,6 +955,9 @@ try
         return Results.Ok(new
         {
             acc = Yaesu_Web_Control.Services.Sdr.AccScope.IsAccKey(key),
+            // Where the panel's spectrum comes from, which every view says
+            // on it (spectrum-refine.js addSourceTo / sourceName).
+            source = Yaesu_Web_Control.Services.Sdr.AccScope.PanelSource(key, target),
             level,
             max = Yaesu_Web_Control.Services.Sdr.AccScope.MaxRefineLevel,
         });

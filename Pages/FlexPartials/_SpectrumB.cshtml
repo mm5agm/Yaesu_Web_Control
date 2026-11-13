@@ -25,7 +25,7 @@
    tab owns panel height and show/hide (see _SpectrumA.cshtml). Deliberate. *@
                 <div id="spectrumContainerB" class="card border-dark h-100" style="flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
-                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
+                        <span class="small fw-bold spectrum-title" data-vfo="B"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
                         <div class="d-flex align-items-center gap-2">
                             <div class="btn-group btn-group-sm" role="group" aria-label="VFO B spectrum span">
                                 <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 1_000 ? "active" : "")" data-hz="1000" data-vfo="B" data-a11y-key="spectrum.spanB1k" aria-label="VFO B span 1 kHz" title="VFO B span 1 kHz — one CW signal, the dial in the middle; software zoom, switches instantly">1k</button>

@@ -37,6 +37,24 @@ public static class AccScope
     public static string LabelFor(string key) => IsSub(key) ? SubLabel : MainLabel;
 
     /// <summary>
+    /// Where a panel's spectrum comes from, for the views to say on it. With
+    /// both scopes on screen an ACC panel looks just like an SDR's, so each
+    /// one says which it is (Colin, 2026-11-13). "ACC scope" when the panel
+    /// shows its own receiver's scope (Main on A, Sub on B), "ACC scope, Sub"
+    /// or "ACC scope, Main" when it shows the other one; "FT-710 scope" for
+    /// the FT-710's internal one; "SDR" for any other device; null when the
+    /// panel has none.
+    /// </summary>
+    public static string? PanelSource(string? key, string target)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return null;
+        if (Ft710ScopeFrame.IsScopeKey(key)) return "FT-710 scope";
+        if (!IsAccKey(key)) return "SDR";
+        bool own = IsSub(key) == string.Equals(target, "B", StringComparison.OrdinalIgnoreCase);
+        return own ? "ACC scope" : IsSub(key) ? "ACC scope, Sub" : "ACC scope, Main";
+    }
+
+    /// <summary>
     /// Radios whose ACC socket sends the scope: the FTdx101MP and FTdx101D,
     /// the only ones the ACC board has been built for. The FTdx10 may put
     /// similar data on its ACC socket, but nobody has looked.

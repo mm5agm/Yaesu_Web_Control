@@ -58,6 +58,18 @@ public class AccScopeTests
         Assert.Equal(isSub, AccScope.IsSub(key));
     }
 
+    [Theory]
+    [InlineData("acc-scope:main", "A", "ACC scope")]
+    [InlineData("acc-scope:sub", "B", "ACC scope")]
+    [InlineData("acc-scope:sub", "A", "ACC scope, Sub")]
+    [InlineData("acc-scope:main", "B", "ACC scope, Main")]
+    [InlineData("sdrplay:hw6-2405242660", "A", "SDR")]
+    [InlineData("yaesu-scope:ft710", "A", "FT-710 scope")]
+    [InlineData("", "A", null)]
+    [InlineData(null, "B", null)]
+    public void Each_panel_says_where_its_spectrum_comes_from(string? key, string target, string? expected)
+        => Assert.Equal(expected, AccScope.PanelSource(key, target));
+
     [Fact]
     public void Acc_keys_are_not_the_ft710_scope_keys_the_worker_takes()
     {
