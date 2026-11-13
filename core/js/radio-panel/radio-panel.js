@@ -1490,6 +1490,14 @@ export function mountRadioPanel(root, opts = {}) {
         // A pane's tool strip (SPAN, HOLD, SCOPE), for the adapter to add
         // its own keys to, e.g. REFINE from spectrum-refine.js.
         spectrumTools(vfo = 'A') { return panes[vfo]?.tools ?? null; },
+        /** The pane's name at the start of its label, e.g. 'MAIN · ACC SCOPE'
+         *  once the server says the pane shows the radio's own scope. */
+        setSpectrumName(vfo, name) {
+            const pn = panes[vfo];
+            if (!pn) return;
+            pn.name = name ?? '';
+            paneLabel(vfo);
+        },
         spectrumView() { return st.specView; },
         setSpectrumView: id => setSpecView(id),
         setTheme,

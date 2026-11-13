@@ -27,7 +27,7 @@
    show and hide whole panels. Both are deliberate omissions, not drift. *@
                 <div id="spectrumContainerA" class="card border-dark h-100" style="flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
-                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
+                        <span class="small fw-bold spectrum-title" data-vfo="A"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
                         <div class="d-flex align-items-center gap-2">
                             <div class="btn-group btn-group-sm" role="group" aria-label="VFO A spectrum span">
                                 <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 1_000 ? "active" : "")" data-hz="1000" data-vfo="A" data-a11y-key="spectrum.spanA1k" aria-label="VFO A span 1 kHz" title="VFO A span 1 kHz — one CW signal, the dial in the middle; software zoom, switches instantly">1k</button>

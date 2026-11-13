@@ -30,7 +30,7 @@ import { dialStepper } from '/js/radio-panel/dial-stepper.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { loadRttySettings } from '/js/rtty/rtty-settings.js';
 import { post, startYaesuSpectrumFeed } from '/js/ui/spectrum-feed-yaesu.js';
-import { addRefineTo } from '/js/radio-panel/spectrum-refine.js';
+import { addRefineTo, renameForSource } from '/js/radio-panel/spectrum-refine.js';
 import { BAND_EDGES, getSegments, loadBandPlanFromServer } from '/js/ui/band-plan.js';
 import { ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 
@@ -134,6 +134,7 @@ export function startYaesuRttyContest(root, cfg) {
     // REFINE in the pane's bar on a receiver showing the FTdx101's ACC scope
     // (spectrum-refine.js). A window showing only the waterfall has no pane.
     for (const r of receivers) addRefineTo(view.pane(r.id)?.tools, r.id, 'rc-step');
+    for (const r of receivers) renameForSource(r.id, r.name, n => view.pane(r.id)?.setName(n));
 
     const feed = startYaesuSpectrumFeed({
         conn: cfg.conn,

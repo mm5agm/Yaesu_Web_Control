@@ -33,7 +33,7 @@ import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-e
 import { axisOffsetHz, viewOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 import { RadioScopeControl } from '/js/ui/radio-scope.js';
-import { addRefineTo } from '/js/radio-panel/spectrum-refine.js';
+import { addRefineTo, renameForSource } from '/js/radio-panel/spectrum-refine.js';
 import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js';
 import { PopoutHost } from '/js/popout/popout.js';
 import { txTimeoutBeep, txTimeoutWarning } from '/js/radio-panel/tx-timeout.js';
@@ -79,6 +79,9 @@ function post(url, body) {
 export function startYaesuRadioPanel(root, cfg) {
     const model = cfg.model;
     const dual = !!cfg.dual;
+    // What a pane's label adds after its name; '' once renameForSource has
+    // put the source in the name ("MAIN · ACC SCOPE").
+    const sourceText = { A: 'SDR A', B: 'SDR B' };
     const maxPowerW = num(cfg.maxPowerW) || 100;
     // VDD and TEMP are read every two seconds in receive too (RM8 / RM9), on
     // the models whose Classic page shows them. The VDD dial is the model's
@@ -208,6 +211,12 @@ export function startYaesuRadioPanel(root, cfg) {
     }).start();
     // REFINE beside SPAN on a pane showing the FTdx101's ACC scope (spectrum-refine.js).
     for (const id of ['A', 'B']) addRefineTo(panel.spectrumTools(id), id, 'rp-select rp-spec-span', '.rp-spec-hold');
+    // "MAIN · ACC SCOPE" in place of "MAIN · SDR A" on a pane showing the radio's own scope.
+    // The label's source text is then left empty, or it would add "SDR A" back.
+    for (const id of ['A', 'B']) {
+        const name = (dual ? (id === 'A' ? 'MAIN' : 'SUB') : 'VFO-' + id) + ' · SDR ' + id;
+        renameForSource(id, name, n => { sourceText[id] = ''; panel.setSpectrumName(id, n); panel.setSpectrumSource({ label: '' }, id); });
+    }
     radioScreen = startRadioScreen(panel.screenSlot('tft'), { model, dual, scopeCat: !!cfg.scopeCat });
     if (panel.screenView() === 'tft') radioScreen.show();
 
@@ -1005,14 +1014,14 @@ export function startYaesuRadioPanel(root, cfg) {
             sdrState[vfo] = st;
             refreshSdrLamp();
             const msg = { streaming: null, connecting: 'SDR connecting…', unconfigured: 'No SDR configured', nodll: 'SDR driver not found', disconnected: 'SDR disconnected' };
-            panel.setSpectrumSource({ label: 'SDR ' + vfo, status: st in msg ? msg[st] : st }, vfo);
+            panel.setSpectrumSource({ label: sourceText[vfo], status: st in msg ? msg[st] : st }, vfo);
         },
         SpectrumUpdate: v => {
             const vfo = v?.sdrId;
             if ((vfo !== 'A' && vfo !== 'B') || !v.bins?.length) return;
             const span = num(v.spanHz);
             if (sdrState[vfo] !== 'streaming') { sdrState[vfo] = 'streaming'; refreshSdrLamp(); }
-            panel.setSpectrumSource({ label: 'SDR ' + vfo, spanHz: span, status: null }, vfo);
+            panel.setSpectrumSource({ label: sourceText[vfo], spanHz: span, status: null }, vfo);
             let bins = v.rfOrdered ? v.bins : Array.prototype.slice.call(v.bins).reverse();
             if (r.freq[vfo] > 0) {
                 const view = viewFor(vfo, v);

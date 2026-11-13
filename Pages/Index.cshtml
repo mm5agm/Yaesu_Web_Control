@@ -1090,7 +1090,7 @@
                 <div id="spectrumContainerA" class="card border-dark" style="flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
                         <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                            <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
+                            <span class="small fw-bold spectrum-title" data-vfo="A"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
                             <!-- Fold button (Discussion #171): hides both VFO panels so the
                                  page can be just the spectrum. Beside the title, which always
                                  has room, even with the panels side by side; the control bar
@@ -1181,7 +1181,7 @@
                 <div id="spectrumContainerB" class="card border-dark" style="display:none; flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
                         <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                            <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
+                            <span class="small fw-bold spectrum-title" data-vfo="B"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
                             <!-- Fold button (Discussion #171): hides both VFO panels so the
                                  page can be just the spectrum. Beside the title, which always
                                  has room, even with the panels side by side; the control bar
@@ -3877,13 +3877,16 @@
             // is drawn, on a panel showing the ACC scope. The logic is shared
             // by every view in /js/radio-panel/spectrum-refine.js; this page only has the
             // slider markup. Done on the server, saved per panel.
-            import('/js/radio-panel/spectrum-refine.js').then(({ bindRefineSlider }) => {
+            // The header also says where the spectrum comes from ("Spectrum —
+            // VFO A · ACC scope"), as every view does.
+            import('/js/radio-panel/spectrum-refine.js').then(({ bindRefineSlider, addSourceTo }) => {
                 ['A', 'B'].forEach(vfo => bindRefineSlider({
                     vfo,
                     group:  document.querySelector(`.spectrum-refine-group[data-vfo="${vfo}"]`),
                     slider: document.querySelector(`.spectrum-refine-slider[data-vfo="${vfo}"]`),
                     label:  document.querySelector(`.spectrum-refine-label[data-vfo="${vfo}"]`),
                 }));
+                ['A', 'B'].forEach(vfo => addSourceTo(document.querySelector(`.spectrum-title[data-vfo="${vfo}"]`), vfo));
             }).catch(err => console.warn('Refine:', err));
 
             // Tuning step — how far one mouse-wheel notch on the spectrum moves

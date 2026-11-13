@@ -74,6 +74,19 @@ public class RefineEveryViewTests
             "(bindRefineSlider for a slider, addRefineTo for a list beside SPAN).");
     }
 
+    // Each view also says where its spectrum comes from ("ACC scope" or
+    // "SDR"), because an ACC panel looks just like an SDR's (Colin,
+    // 2026-11-13). Same module, same views.
+    [Theory]
+    [MemberData(nameof(Views))]
+    public void A_view_that_draws_the_spectrum_says_where_it_comes_from(string view)
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot(), view));
+        Assert.True(Regex.IsMatch(text, @"\b(addSourceTo|renameForSource)\("),
+            $"{view} draws the spectrum but doesn't say where it comes from. Add it from {Module} " +
+            "(addSourceTo for a card header, renameForSource for a pane label).");
+    }
+
     private static string RepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)

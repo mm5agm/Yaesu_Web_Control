@@ -18,7 +18,7 @@ a different and much older format.
 
 **The FTdx101's own scope, no SDR needed** *(experimental, Windows only)* [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
 
-- On an FTdx101MP or FTdx101D, a small ESP32-S3 board on the rear ACC socket brings the radio's Main and Sub scope into the SDR panels, 25 frames a second. In **Settings → SDR Spectrum Display**, press **Scan** and choose **ACC scope, Main** for VFO A and **ACC scope, Sub** for VFO B. The board's firmware and wiring are in the [Yaesu ACC Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum) project.
+- On an FTdx101MP or FTdx101D, a small ESP32-S3 board on the rear ACC socket brings the radio's Main and Sub scope into the SDR panels, 25 frames a second. In **Settings → SDR Spectrum Display**, press **Scan**, then open the **VFO A SDR** list and choose **ACC scope, Main**, and in the **VFO B SDR** list choose **ACC scope, Sub**. Save. The board's firmware and wiring are in the [Yaesu ACC Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum) project.
 - **Refine** settles the noise floor so weak signals stand out: a slider beside Bright on a panel showing the ACC scope, and a **REFINE** list beside SPAN on the Radio panel, its pop-out spectrum and RTTY Contest. On 20m FT8 signals stood about two and a half times as high above the floor at the top step. An SDR's spectrum is averaged already, so Refine only appears for the ACC scope.
 - Tested on one FTdx101MP so far. Please say on GitHub how it goes on yours.
 
