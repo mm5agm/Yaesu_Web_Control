@@ -12,6 +12,20 @@ a different and much older format.
 
 ---
 
+## 2026-11-13 - v2.5.5-pre2 (pre-release)
+
+*Each spectrum says where it comes from, and choosing the ACC scope is easier to find. Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**The FTdx101's own scope** [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- Each spectrum now says where it comes from, because the ACC scope and an SDR look alike: **Spectrum — VFO A · ACC scope** (or **· SDR**) on Classic and Experimental, and **MAIN · ACC SCOPE** on the Radio panel, its pop-out spectrum and RTTY Contest.
+- **Settings → SDR Spectrum Display** now says the ACC scope is in the **VFO A SDR** and **VFO B SDR** lists after you press **Scan**.
+
+**Other changes**
+
+- The new-release notice no longer shows a line pointing at notes that aren't there.
+- Changes from v2.5.5-pre1 still need testing too: see the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md#2026-11-12---v255-pre1-pre-release).
+
 ## 2026-11-12 - v2.5.5-pre1 (pre-release)
 
 *The FTdx101's own scope from its ACC socket, Refine, and a settings search. Everything in v2.5.4 is included. Install it over v2.5.4 or any pre-release; your settings are kept.*
