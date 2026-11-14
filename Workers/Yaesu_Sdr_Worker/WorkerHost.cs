@@ -16,6 +16,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Channels;
 using RadioWebControl.Core.Services.Spectrum;
 using Yaesu_Web_Control.Services.Sdr;
 
@@ -147,7 +148,6 @@ internal sealed class WorkerHost
             float[] iqBuffer = new float[_opts.HopSize * 2];
             var     window   = new SpectrumZoom.OverlapBuffer(_opts.FftSize);
             double  hzPerBin = device.ActualSampleRateHz / _opts.FftSize;
-            ulong sequence = 0;
 
             // Averages a few seconds of IQ once, then logs the filter shape and
             // the level of the centre bin — neither of which can be read off
@@ -174,11 +174,26 @@ internal sealed class WorkerHost
             // thinning it. The cost is ~20 us of FFT per frame — under 5% of one
             // core even at the widest span.
             const int maxSendsPerSecond = 25;
-            long sendIntervalTicks = Stopwatch.Frequency / maxSendsPerSecond;
-            long lastSendTicks = -sendIntervalTicks;
-            var  sendClock = Stopwatch.StartNew();
 
-            while (!stoppingToken.IsCancellationRequested)
+            // Which FFTs go out is decided by signal time, not the PC's clock:
+            // one per 1/25 s of samples. The SDRplay API hands IQ over in
+            // bunches (about three hops every 100 ms at 125 kHz), so a clock
+            // gate could pass only one or two of each bunch and the trace
+            // jumped about ten times a second. The chosen frames go to a
+            // sender that spaces them evenly. Its queue holds three; if it
+            // ever fills, the oldest goes, so the delay stays bounded.
+            long samplesPerSend   = Math.Max(1L, (long)(device.ActualSampleRateHz / maxSendsPerSecond));
+            long samplesSinceSend = samplesPerSend;
+            var  outbox = Channel.CreateBounded<SpectrumZoom.View>(new BoundedChannelOptions(3)
+            {
+                FullMode     = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = true,
+            });
+            using var sendStop = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            Task sender = SendSpacedAsync(writer, outbox.Reader, sendStop.Token);
+
+            while (!stoppingToken.IsCancellationRequested && !sender.IsCompleted)
             {
                 bool got = await device.TryReadIqFrameAsync(iqBuffer, frameTimeoutMs, stoppingToken)
                     .ConfigureAwait(false);
@@ -197,9 +212,9 @@ internal sealed class WorkerHost
                     foreach (string line in probe.Format(device.ActualSampleRateHz, _opts.IfFrequencyHz))
                         Log(line);
 
-                long nowTicks = sendClock.ElapsedTicks;
-                if (nowTicks - lastSendTicks < sendIntervalTicks) continue;
-                lastSendTicks = nowTicks;
+                samplesSinceSend += _opts.HopSize;
+                if (samplesSinceSend < samplesPerSend) continue;
+                samplesSinceSend = Math.Min(samplesSinceSend - samplesPerSend, samplesPerSend);
 
                 // Cut the wanted window out of the full spectrum, or thin the
                 // full spectrum to the wire cap when no window is set. Either
@@ -213,30 +228,21 @@ internal sealed class WorkerHost
                     : bins.Length <= MaxWireBins
                         ? new SpectrumZoom.View(bins, tuneHz, fullSpan)
                         : SpectrumZoom.Crop(bins, hzPerBin, tuneHz, tuneHz, fullSpan, MaxWireBins);
-                float[] wire = cut.Bins;
 
-                // Round to 1 dp before transmission (same precision as the
-                // current SignalR path, keeps frames small). After the send
-                // gate, so it is not paid for frames that are never sent.
+                // A copy, because the frame now waits in the queue while the
+                // next FFT is computed. Rounded to 1 dp (same precision as the
+                // SignalR path, keeps frames small).
+                float[] wire = new float[cut.Bins.Length];
                 for (int i = 0; i < wire.Length; i++)
-                    wire[i] = MathF.Round(wire[i], 1);
+                    wire[i] = MathF.Round(cut.Bins[i], 1);
 
-                try
-                {
-                    await writer.WriteSpectrumAsync(
-                        ++sequence,
-                        cut.CentreHz,
-                        cut.SpanHz,
-                        wire,
-                        stoppingToken).ConfigureAwait(false);
-                }
-                catch (IOException ex)
-                {
-                    // Client went away — clean shutdown.
-                    Log($"client disconnected: {ex.Message}");
-                    break;
-                }
+                outbox.Writer.TryWrite(cut with { Bins = wire });
             }
+
+            outbox.Writer.TryComplete();
+            try { await sender.ConfigureAwait(false); }
+            catch (IOException ex) { Log($"client disconnected: {ex.Message}"); }
+            catch (OperationCanceledException) { }
         }
         catch (OperationCanceledException)
         {
@@ -285,6 +291,31 @@ internal sealed class WorkerHost
     /// both in from the radio's scope settings before anything reaches a
     /// browser. Bins are in the radio's order, low to high frequency.
     /// </summary>
+    /// <summary>
+    /// Sends queued spectrum frames at most one per 38 ms, on a running
+    /// schedule, so frames computed in a bunch reach the browser spread out.
+    /// The schedule (not "38 ms after the last send") keeps the average right
+    /// even though Task.Delay on Windows can overshoot by up to ~15 ms.
+    /// </summary>
+    private static async Task SendSpacedAsync(FrameWriter writer, ChannelReader<SpectrumZoom.View> frames, CancellationToken ct)
+    {
+        long  spacing  = Stopwatch.Frequency * 38 / 1000;
+        long  slack    = Stopwatch.Frequency * 16 / 1000;
+        var   clock    = Stopwatch.StartNew();
+        long  next     = 0;
+        ulong sequence = 0;
+        await foreach (var cut in frames.ReadAllAsync(ct).ConfigureAwait(false))
+        {
+            long now = clock.ElapsedTicks;
+            if (next > now)
+                await Task.Delay(TimeSpan.FromSeconds((double)(next - now) / Stopwatch.Frequency), ct).ConfigureAwait(false);
+            // Never closer than spacing less the timer's overshoot, so a bunch
+            // can't go out together, and never drifting late on overshoot.
+            next = Math.Max(next + spacing, clock.ElapsedTicks + spacing - slack);
+            await writer.WriteSpectrumAsync(++sequence, cut.CentreHz, cut.SpanHz, cut.Bins, ct).ConfigureAwait(false);
+        }
+    }
+
     private async Task<int> RunRadioScopeAsync(FrameWriter writer, CancellationToken ct)
     {
         Ft4222Bridge? bridge = null;

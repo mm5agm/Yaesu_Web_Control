@@ -12,6 +12,20 @@ a different and much older format.
 
 ---
 
+## 2026-11-14 - v2.5.5-pre5 (pre-release)
+
+*SDR spectrum fixes. Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**SDR spectrum** [§6.3](USER_MANUAL.md#63-sdr-spectrum-display)
+
+- The 500 kHz SDR span really showed 1 MHz of band. Signals were drawn at half their true distance from the dial, so a signal 200 kHz away appeared 100 kHz away. It now shows 500 kHz. The other spans were checked against the radio's own scope and were already right.
+- SDR panels now update 25 times a second at every span. Before, they managed only about 10 a second up to 100 kHz, so the trace looked jerky. Signals don't look any clearer, but the trace moves smoothly.
+- At wide spans, part of the SDR's signal was being thrown away before it reached the screen. It isn't now.
+
+**Other changes**
+
+- Changes from v2.5.5-pre1 to pre4 still need testing too: see the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md#2026-11-14---v255-pre4-pre-release).
+
 ## 2026-11-14 - v2.5.5-pre4 (pre-release)
 
 *A fix for the SPAN list on the FTdx101's own scope. Install it over v2.5.4 or any pre-release; your settings are kept.*
