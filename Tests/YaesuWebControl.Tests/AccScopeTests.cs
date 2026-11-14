@@ -227,6 +227,7 @@ public class AccScopeTests
         Assert.Equal(digit, AccScope.SpanDigit(hz));
 
     [Theory]
+    [InlineData(15_000)]
     [InlineData(30_000)]
     [InlineData(40_000)]
     [InlineData(2_000_000)]

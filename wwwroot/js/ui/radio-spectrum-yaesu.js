@@ -15,7 +15,7 @@ import { post, startYaesuSpectrumFeed } from '/js/ui/spectrum-feed-yaesu.js';
 import { addRefineTo, renameForSource } from '/js/radio-panel/spectrum-refine.js';
 
 // SpectrumSpanPlan.ValidSpans.
-const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
+const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 15e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
 
 // The board's STEP (radio-panel-yaesu.js), saved in this browser.
 const STEP_KEY = 'ywc.radioPanel.stepHz';

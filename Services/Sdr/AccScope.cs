@@ -160,7 +160,7 @@ public static class AccScope
 
     /// <summary>
     /// The SS span digit for a span in Hz (0 = 1 kHz … 9 = 1 MHz), or null
-    /// when the radio's scope has no such span (the SDR-only 30 kHz, 40 kHz
+    /// when the radio's scope has no such span (the SDR-only 15 kHz, 30 kHz, 40 kHz
     /// and 2 MHz).
     /// </summary>
     public static char? SpanDigit(double spanHz)

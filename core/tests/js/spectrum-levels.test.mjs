@@ -105,9 +105,9 @@ test('fit has nothing to fit before a frame or after clear', () => {
 });
 
 test('tidyLevels: defaults, clamping, and null for "the default"', () => {
-    assert.deepEqual(tidyLevels(null), { auto: true, ref: null, range: null });
-    assert.deepEqual(tidyLevels({ auto: false, ref: -60, range: 500 }), { auto: false, ref: -40, range: 160 });
-    assert.deepEqual(tidyLevels({ ref: '', range: 'wide' }), { auto: true, ref: null, range: null });
+    assert.deepEqual(tidyLevels(null), { auto: true, ref: null, range: null, bright: 0 });
+    assert.deepEqual(tidyLevels({ auto: false, ref: -60, range: 500 }), { auto: false, ref: -40, range: 160, bright: 0 });
+    assert.deepEqual(tidyLevels({ ref: '', range: 'wide' }), { auto: true, ref: null, range: null, bright: 0 });
     assert.equal(tidyLevels({ ref: 0 }).ref, 0);
 });
 

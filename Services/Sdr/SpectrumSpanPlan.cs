@@ -49,16 +49,17 @@ namespace Yaesu_Web_Control.Services.Sdr
 
         /// <summary>
         /// Every span the UI offers, in Hz — the FTdx101's own scope spans,
-        /// 2 MHz, and 30 and 40 kHz to fill the jump from 20 to 50 (Bruce
-        /// VK2RT, Discussion #257, 2026-10-29; both are software zoom, so
-        /// they cost nothing). Must agree with the Settings page select and
-        /// the span lists in the JS views. Classic's span buttons
-        /// (Index.cshtml) leave 30 and 40 out for room; a span set to one of
-        /// them elsewhere simply lights no button there.
+        /// 2 MHz, 30 and 40 kHz to fill the jump from 20 to 50 (Bruce
+        /// VK2RT, Discussion #257, 2026-10-29), and 15 kHz between 10 and
+        /// 20 (Bruce again, Discussion #250, 2026-11-14). All three are
+        /// software zoom, so they cost nothing. Must agree with the Settings
+        /// page select and the span lists in the JS views. Classic's span
+        /// buttons (Index.cshtml) leave 15, 30 and 40 out for room; a span
+        /// set to one of them elsewhere simply lights no button there.
         /// </summary>
         public static readonly double[] ValidSpans =
         [
-            1_000, 2_000, 5_000, 10_000, 20_000, 30_000, 40_000, 50_000, 100_000,
+            1_000, 2_000, 5_000, 10_000, 15_000, 20_000, 30_000, 40_000, 50_000, 100_000,
             200_000, 500_000, 1_000_000, 2_000_000,
         ];
 

@@ -612,6 +612,41 @@ test('/rtty-contest: a typed frequency tunes, and DX SPOTS hides the spot tags',
     } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.spots')`).catch(() => {}); await page.close(); }
 });
 
+// Bruce VK2RT, #250 2026-11-14: a SPOTS window, a 15 kHz span, and a
+// brightness control for the waterfall.
+test('/rtty-contest: SPOTS opens the spots window, SPAN has 15 kHz, and WF BRIGHT is kept', async () => {
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        const saved = await page.eval(`localStorage.getItem('ywc.rttyContest.levels.A')`);
+        await page.eval(`(() => { window.__opened = []; window.open = (u, n) => { window.__opened.push([u, n]); return null; }; window.alert = () => {}; })()`);
+        await page.eval(`document.querySelector('.rc-top .rc-spots-win').click()`);
+        const opened = await page.eval('window.__opened');
+        expect(opened.length === 1 && opened[0][0] === '/DxSpots', `SPOTS opened ${JSON.stringify(opened)}`);
+
+        const spans = await page.eval(`[...document.querySelectorAll('.rc-holder:not([hidden]) select option')].map(o => o.textContent)`);
+        expect(spans.includes('SPAN 15 kHz'), `the SPAN list is ${JSON.stringify(spans)}`);
+
+        await page.eval(`localStorage.setItem('ywc.rttyContest.levels.A', JSON.stringify({ auto: true, ref: null, range: null, bright: 0 }))`);
+        await page.close();
+        const p2 = await open('/rtty-contest', { settleMs: 1500 });
+        try {
+            const s = () => p2.eval(`document.querySelector('.rc-bright .rc-num').textContent`);
+            expect(await s() === 'OFF', `WF BRIGHT starts at ${await s()}`);
+            await p2.eval(`document.querySelector('.rc-bright-up').click(); document.querySelector('.rc-bright-up').click()`);
+            const kept = JSON.parse(await p2.eval(`localStorage.getItem('ywc.rttyContest.levels.A')`));
+            expect(await s() === '+12' && kept.bright === 12, `after two + it shows ${await s()} and keeps ${JSON.stringify(kept)}`);
+            await p2.eval(`document.querySelector('.rc-bright-dn').click()`);
+            expect(await s() === '+6', `after one - it shows ${await s()}`);
+            expect(p2.exceptions.length === 0, `uncaught exceptions:\n${p2.exceptions.join('\n')}`);
+        } finally {
+            await p2.eval(saved == null ? `localStorage.removeItem('ywc.rttyContest.levels.A')`
+                : `localStorage.setItem('ywc.rttyContest.levels.A', ${JSON.stringify(saved)})`).catch(() => {});
+            await p2.close();
+        }
+    } catch (e) { await page.close().catch(() => {}); throw e; }
+});
+
 test('/rtty-contest: a band key goes to the RTTY spot in RTTY-L, 60 m to the band memory, and the wheel over a digit tunes', async () => {
     const page = await open('/rtty-contest', { settleMs: 1500 });
     try {

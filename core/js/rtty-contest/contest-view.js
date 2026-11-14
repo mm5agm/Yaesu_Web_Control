@@ -127,6 +127,10 @@ export function partsLeft(out) {
 }
 const REF_STEP_DB = 2;
 const RANGE_STEP_DB = 5;
+// Waterfall brightness: dB of lift for weak signals in the waterfall only, as
+// the Radio panel's SCOPE Bright slider (Bruce VK2RT, #250 2026-11-14).
+const BRIGHT_STEP_DB = 6;
+const BRIGHT_MAX_DB = 60;
 
 // The two boxes' sizes, from their grabs. Null is a box nobody has sized:
 // the spectrum fills what is left, the tuner is the partial's own width and
@@ -181,10 +185,13 @@ export function tidyLayout(l) {
     };
 }
 
-/** A receiver's kept levels, tidied: { auto, ref (null for the default), range (null for the default) }. */
+/**
+ * A receiver's kept levels, tidied: { auto, ref (null for the default), range
+ * (null for the default), bright (dB of lift for the waterfall, 0 for none) }.
+ */
 export function tidyLevels(l) {
     const n = (x, lo, hi) => { const v = Number(x); return x != null && x !== '' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : null; };
-    return { auto: l?.auto !== false, ref: n(l?.ref, -40, 40), range: n(l?.range, 5, 160) };
+    return { auto: l?.auto !== false, ref: n(l?.ref, -40, 40), range: n(l?.range, 5, 160), bright: n(l?.bright, 0, BRIGHT_MAX_DB) ?? 0 };
 }
 
 const SANS = "'Barlow Condensed', 'Arial Narrow', sans-serif";
@@ -336,6 +343,9 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
  * @param {{group?:string, items:{label:string, href:string, title?:string}[]}[]} [opts.menu]  the main
  *        page: a MENU key at the end of the strip, the app's other pages, each in a new tab
+ * @param {{name?:string, url:string, size?:{width:number,height:number}}} [opts.spotsWindow]  the
+ *        main page: a SPOTS key beside DX SPOTS that opens the app's DX spots list in a window
+ *        of its own (a PopoutHost; name is the one that page's PopoutChild answers to)
  * @param {{label:string, title?:string, id?:string, hidden?:boolean, onClick:(key:HTMLButtonElement) => void}[]} [opts.keys]  the
  *        main page: keys of the app's own before MENU, e.g. one that sends the operator's setup.
  *        The app can hide or show one later by its id
@@ -453,6 +463,25 @@ export function mountContestView(root, opts) {
     const spotsBtn = btn('rp-spop-key', 'DX SPOTS', () => setShowSpots(!showSpots));
     spotsBtn.title = 'Show or hide the DX spot tags on the spectrum';
     top.append(spotsBtn);
+    // SPOTS: the app's DX spots list in a window of its own, all bands or
+    // just this one, so a station can still be checked for a spot while the
+    // tags are off (Bruce VK2RT, #250 2026-11-14). opts.spotsWindow is
+    // { name, url, size }; name must be the one that page answers to. Lit
+    // while the window is open; a click on it then brings it to the front.
+    if (isMain && opts.spotsWindow?.url) {
+        const sw = opts.spotsWindow;
+        const spotsWinKey = btn('rp-spop-key rc-spots-win', 'SPOTS', () => {
+            if (!spotsHost.open()) alert('The browser blocked the spots window. Allow pop-ups for this address and click SPOTS again.');
+        });
+        spotsWinKey.title = 'Open the DX spots list in a window of its own: all bands or just this one. Click a spot there to tune to it';
+        const spotsHost = new PopoutHost({
+            name: sw.name ?? 'dx-spots',
+            url: sw.url,
+            defaultSize: sw.size ?? { width: 760, height: 480 },
+            onChange: o => { spotsWinKey.classList.toggle('on', o); spotsWinKey.setAttribute('aria-pressed', o ? 'true' : 'false'); },
+        }).start();
+        top.append(spotsWinKey);
+    }
 
     if (part) {
         const dock = btn('rp-spop-key on rc-dock', 'DOCK', () => opts.onDock?.());
@@ -513,6 +542,13 @@ export function mountContestView(root, opts) {
         rangeVal,
         key('+', 'More range: strong signals fit', () => nudgeRange(RANGE_STEP_DB), 'rc-pm rc-range-up'));
     rangeGrp.title = 'dB from the bottom of the trace to the top';
+    const brightVal = h('span', 'rc-num', '');
+    const brightGrp = h('span', 'rc-grp rc-bright');
+    brightGrp.append(h('span', 'rc-lbl', 'WF BRIGHT'),
+        key('−', 'Darker waterfall', () => nudgeBright(-BRIGHT_STEP_DB), 'rc-pm rc-bright-dn'),
+        brightVal,
+        key('+', 'Brighter waterfall: weak signals show up more', () => nudgeBright(BRIGHT_STEP_DB), 'rc-pm rc-bright-up'));
+    brightGrp.title = 'Lifts weak signals in the waterfall only, in dB. The spectrum trace is not changed';
     const fitKey = key('FIT', 'Fit the range to the strongest signal of the last few seconds (or double-click the bar between the spectrum and the waterfall)', () => fitNow(), 'rc-fit');
     const swapKey = key('WF ON TOP', 'Put the waterfall above the spectrum', () => setOrder(!wfFirst), 'rc-swap');
     // Bruce VK2RT: a station is remembered by where it sits, so the screen
@@ -535,6 +571,7 @@ export function mountContestView(root, opts) {
     traceSel.value = String(tracePx);
     traceSel.addEventListener('change', () => setTrace(Number(traceSel.value), true));
     if (part !== 'waterfall') scope.append(refGrp, autoKey, rangeGrp, fitKey);
+    if (part !== 'spectrum') scope.append(brightGrp);
     if (isMain || part === 'both') scope.append(swapKey);
     scope.append(fixedKey);
     scope.append(stepSel);
@@ -980,6 +1017,7 @@ export function mountContestView(root, opts) {
         const l = levels[r.id];
         pane.setLevels({ auto: l.auto, ref: l.ref });
         if (l.range != null) pane.setSettings({ range: l.range });
+        pane.setSettings({ bright: l.bright });
         panes[r.id] = pane;
         holders[r.id] = holder;
     }
@@ -1047,6 +1085,7 @@ export function mountContestView(root, opts) {
         const b = shownBottom(receiver);
         refVal.textContent = b == null ? '-' : (b > 0 ? '+' : '') + b;
         rangeVal.textContent = String(panes[receiver].settings.range);
+        brightVal.textContent = l.bright ? '+' + l.bright : 'OFF';
         autoKey.classList.toggle('on', l.auto);
         autoKey.setAttribute('aria-pressed', l.auto ? 'true' : 'false');
         swapKey.classList.toggle('on', wfFirst);
@@ -1058,6 +1097,7 @@ export function mountContestView(root, opts) {
         const l = levels[receiver] = tidyLevels({ ...levels[receiver], ...patch });
         panes[receiver].setLevels({ auto: l.auto, ref: l.ref });
         if (l.range != null) panes[receiver].setSettings({ range: l.range });
+        panes[receiver].setSettings({ bright: l.bright });
         saveLevels(receiver);
         drawScope();
     }
@@ -1066,6 +1106,7 @@ export function mountContestView(root, opts) {
         if (b != null) setLevel({ ref: b + db });
     }
     function nudgeRange(db) { setLevel({ range: panes[receiver].settings.range + db }); }
+    function nudgeBright(db) { setLevel({ bright: levels[receiver].bright + db }); }
     function keepRange(id) {
         levels[id] = tidyLevels({ ...levels[id], range: panes[id].settings.range });
         saveLevels(id);
@@ -1247,6 +1288,7 @@ export function mountContestView(root, opts) {
             levels[id] = tidyLevels(l);
             panes[id].setLevels({ auto: levels[id].auto, ref: levels[id].ref });
             if (levels[id].range != null) panes[id].setSettings({ range: levels[id].range });
+            panes[id].setSettings({ bright: levels[id].bright });
             if (id === receiver) drawScope();
         }
     });
