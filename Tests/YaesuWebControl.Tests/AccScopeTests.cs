@@ -123,7 +123,7 @@ public class AccScopeTests
     public void The_refiner_gives_the_panel_a_steadier_floor()
     {
         // Main's level at every point flips between 80 and 120 each frame, as a
-        // rough floor does. Raw, a bin jumps 20 dB a frame; refined, far less.
+        // rough floor does. Raw, a bin jumps 40 steps a frame; refined, far less.
         var refiner = new ScopeRefiner();
         float[]? lastRaw = null, lastRefined = null;
         float rawJump = 0, refinedJump = 0;
@@ -140,7 +140,7 @@ public class AccScopeTests
             lastRaw = raw;
             lastRefined = refined;
         }
-        Assert.Equal(20f, rawJump);
+        Assert.Equal(40 * AccScope.DbPerStep, rawJump, 3);
         Assert.True(refinedJump < rawJump / 2, $"refined moved {refinedJump} dB a frame");
     }
 

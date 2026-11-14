@@ -71,12 +71,13 @@ public static class AccScope
     public const int FirstSpanPoint = ReceiverScope.CentrePoint - ReceiverScope.SpanPoints / 2;   // 30
 
     /// <summary>
-    /// dB per step of the level byte. NOT MEASURED, as for the FT-710's scope
-    /// (Ft710ScopeFrame.DbPerStep): the panel scales vertically for itself,
-    /// so a wrong value stretches or squashes the trace and never moves a
-    /// signal sideways.
+    /// dB per step of the level byte: about 0.42, measured 2026-11-14 on an
+    /// FTdx101MP by switching the radio's attenuator (0.46 from its scope
+    /// LEVEL, within the error). See docs/comparison.md in the
+    /// Yaesu_ACC_Spectrum repository. The panel scales vertically for itself,
+    /// so this only sets how many dB the trace's steps are labelled as.
     /// </summary>
-    public const float DbPerStep = 0.5f;
+    public const float DbPerStep = 0.42f;
 
     /// <summary>The level a byte of 0 (nothing at all) maps to.</summary>
     public const float DbAtZero = -150f;
