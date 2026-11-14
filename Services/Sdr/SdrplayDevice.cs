@@ -91,6 +91,7 @@ namespace Yaesu_Web_Control.Services.Sdr
         private const int    IqEnableOffset         = 73;
         private const int    DecimationEnableOffset = 74;
         private const int    DecimationFactorOffset = 75;
+        private const int    WideBandSignalOffset   = 76;
         // ctrlParams.agc (sdrplay_api_AgcT) follows decimation, aligned to 4:
         //   agc.enable (enum sdrplay_api_AgcControlT, int) @ 80
         //   agc.setPoint_dBfs (int)                        @ 84
@@ -581,6 +582,14 @@ namespace Yaesu_Web_Control.Services.Sdr
                               (byte)(plan.DecimationFactor > 1 ? 1 : 0));
             Marshal.WriteByte(rxChannel, DecimationFactorOffset,
                               (byte)plan.DecimationFactor);
+            // decimation.wideBandSignal = 1: filter with half-band filters before
+            // each decimation stage. The API default (0) uses a simple averager,
+            // which lets strong signals outside the span fold back into it. On
+            // 160 m at the 1 MHz span, a 1089 kHz broadcast station 759 kHz below
+            // the centre showed 46-50 dB above the floor at +241 kHz on both RSPs;
+            // with half-band filters it is gone (under 2 dB). Narrower spans read
+            // the same either way.
+            Marshal.WriteByte(rxChannel, WideBandSignalOffset, 1);
 
             // Centre frequency
             WriteDouble(rxChannel, RfHzOffset, (double)centreFrequencyHz);
@@ -664,6 +673,7 @@ namespace Yaesu_Web_Control.Services.Sdr
                 $"rfHz={ReadDouble(_rxChannelPtr, RfHzOffset):0}  " +
                 $"decEnable={Marshal.ReadByte(_rxChannelPtr, DecimationEnableOffset)}  " +
                 $"decFactor={Marshal.ReadByte(_rxChannelPtr, DecimationFactorOffset)}  " +
+                $"wideBand={Marshal.ReadByte(_rxChannelPtr, WideBandSignalOffset)}  " +
                 $"DCenable={Marshal.ReadByte(_rxChannelPtr, DcEnableOffset)}  " +
                 $"IQenable={Marshal.ReadByte(_rxChannelPtr, IqEnableOffset)}  " +
                 $"agc={Marshal.ReadInt32(_rxChannelPtr, AgcEnableOffset)}  " +

@@ -21,6 +21,7 @@ a different and much older format.
 - The 500 kHz SDR span really showed 1 MHz of band. Signals were drawn at half their true distance from the dial, so a signal 200 kHz away appeared 100 kHz away. It now shows 500 kHz. The other spans were checked against the radio's own scope and were already right.
 - SDR panels now update 25 times a second at every span. Before, they managed only about 10 a second up to 100 kHz, so the trace looked jerky. Signals don't look any clearer, but the trace moves smoothly.
 - At wide spans, part of the SDR's signal was being thrown away before it reached the screen. It isn't now.
+- At the 1 MHz span, a strong station outside the span could show up inside it as a false signal. On 160 m a medium-wave broadcaster appeared 241 kHz above the dial, 46 dB above the noise. The SDR now filters it out properly, so only real signals are drawn.
 
 **Other changes**
 
