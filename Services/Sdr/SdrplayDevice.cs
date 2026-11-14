@@ -620,13 +620,16 @@ namespace Yaesu_Web_Control.Services.Sdr
             Marshal.WriteInt32(rxChannel, GrDbOffset,     40);
             Marshal.WriteInt32(rxChannel, LnaStateOffset,  0);
 
-            // AGC is deliberately left at the API's default (on, 50 Hz, set point
-            // -60 dBFS). Measured 2026-11-14 on the FTdx101's IF outputs, 20 m at
-            // a 20 kHz span and 31 m at 500 kHz: with it on, the gain sat about
-            // 16-19 dB lower than the fixed gain above, but signal clarity and
-            // floor drift were the same as with it off, within run-to-run
-            // variation. It costs nothing visible and keeps headroom for a strong
-            // signal, so it stays on. Absolute levels float a little as a result.
+            // AGC off, so the gain stays at the fixed values above. The API's
+            // default is on (50 Hz, set point -60 dBFS), and on a busy band it
+            // turns the gain down for the strong stations and loses weak ones.
+            // Measured 2026-11-14 on the FTdx101's IF outputs, interleaved A/B,
+            // same build, two rounds each: on the 31 m broadcast band at a 20 kHz
+            // span the RSP1B found 19% and 18% of the weak signals with AGC on,
+            // against 46% and 55% with it off (at 5% false alarms). On 20 m at
+            // 20 kHz, the control, it made no difference (87/82% on, 83/89% off).
+            // The fixed gain handled the broadcast band without overload.
+            Marshal.WriteInt32(rxChannel, AgcEnableOffset, 0);
         }
 
         /// <inheritdoc/>
