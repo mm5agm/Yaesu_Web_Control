@@ -12,6 +12,19 @@ a different and much older format.
 
 ---
 
+## 2026-11-14 - v2.5.5-pre4 (pre-release)
+
+*A fix for the SPAN list on the FTdx101's own scope. Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**SPAN on the ACC scope** [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- On a panel showing the ACC scope, the SPAN list now offers only the radio's own spans, 1 kHz to 1 MHz. Before, it also offered 15, 30 and 40 kHz and 2 MHz, which the radio's scope doesn't have: picking 15 kHz kept the scope at 10 kHz while the list read 15 kHz. This is on RTTY Contest, the Radio panel and its pop-out spectrum. An SDR still has every span.
+- If a span can't be set, every SPAN list now goes back to the span you're actually seeing.
+
+**Other changes**
+
+- Changes from v2.5.5-pre1 to pre3 still need testing too: see the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md#2026-11-12---v255-pre1-pre-release).
+
 ## 2026-11-14 - v2.5.5-pre3 (pre-release)
 
 *Three things for RTTY Contest that Bruce VK2RT asked for during the WAE. Install it over v2.5.4 or any pre-release; your settings are kept.*
