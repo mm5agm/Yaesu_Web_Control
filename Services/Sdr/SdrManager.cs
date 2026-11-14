@@ -110,6 +110,17 @@ public sealed class SdrManager : BackgroundService
     // checks it each frame, so a move of the slider shows on the next frame.
     private readonly int[] _accRefineLevel = { AccScope.DefaultRefineLevel, AccScope.DefaultRefineLevel };
 
+    // Whether each panel's ACC scope is being cut off by the radio's scope
+    // LEVEL (AccLevelWatch), for /api/sdr/refine to tell the views.
+    private readonly int[] _accLevelProblem = { (int)AccLevelProblem.None, (int)AccLevelProblem.None };
+
+    /// <summary>
+    /// The scope LEVEL warning for a panel showing the ACC scope, or null when
+    /// there's nothing to say (or the panel isn't showing it).
+    /// </summary>
+    public (string Short, string Detail)? AccLevelWarning(string vfo) =>
+        AccScope.LevelWarning((AccLevelProblem)Volatile.Read(ref _accLevelProblem[vfo == "B" ? 1 : 0]));
+
     // "Free the SDR when the last browser closes" (ReleaseSdrWhenBrowsersClose).
     // A page change drops the hub connection for well under a second, so the
     // workers are only stopped once nobody has been connected for this long;
@@ -609,6 +620,7 @@ public sealed class SdrManager : BackgroundService
             Volatile.Write(ref _accRefineLevel[slot], vfo == "B" ? config.AccRefineLevelB : config.AccRefineLevelA);
             int    refineLevel = Volatile.Read(ref _accRefineLevel[slot]);
             var    refiner   = new ScopeRefiner(AccScope.RefineWeight(refineLevel));
+            var    levelWatch = new AccLevelWatch();
             string? shownDetail = null;
 
             void Show(string status, string? detail)
@@ -647,6 +659,13 @@ public sealed class SdrManager : BackgroundService
                 }
 
                 var scope    = sub ? frame.Sub : frame.Main;
+                if (scope.IsValid && levelWatch.Add(scope.Levels))
+                {
+                    Volatile.Write(ref _accLevelProblem[slot], (int)levelWatch.Problem);
+                    var warning = AccScope.LevelWarning(levelWatch.Problem);
+                    if (warning is { } w) _logger.LogInformation("SDR {Vfo}: ACC scope — {Detail}", vfo, w.Detail);
+                    else _logger.LogInformation("SDR {Vfo}: ACC scope level is fine again", vfo);
+                }
                 var spectrum = AccScope.ToSpectrum(scope, ++sequence, refiner.Add(scope));
                 if (spectrum is null)
                 {
@@ -673,6 +692,7 @@ public sealed class SdrManager : BackgroundService
         }
         finally
         {
+            Volatile.Write(ref _accLevelProblem[vfo == "B" ? 1 : 0], (int)AccLevelProblem.None);
             lock (_activeLock) _activeDeviceKeys.Remove(vfo);
         }
     }

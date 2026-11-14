@@ -23,6 +23,10 @@ a different and much older format.
 - At wide spans, part of the SDR's signal was being thrown away before it reached the screen. It isn't now.
 - At the 1 MHz span, a strong station outside the span could show up inside it as a false signal. On 160 m a medium-wave broadcaster appeared 241 kHz above the dial, 46 dB above the noise. The SDR now filters it out properly, so only real signals are drawn.
 
+**ACC scope (FTdx101)** [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- A panel showing the ACC scope now says **LEVEL too low** when the radio's scope Level is so low that the noise floor sits on the bottom of the radio's scale, where weak signals are lost. Raise Level until it goes. The radio keeps Level for each band, so check it on every band you use; +05 was too low on 160 m and 10 m here, and +23.5 was fine everywhere.
+
 **Other changes**
 
 - Changes from v2.5.5-pre1 to pre4 still need testing too: see the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md#2026-11-14---v255-pre4-pre-release).
