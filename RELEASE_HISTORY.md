@@ -22,6 +22,7 @@ a different and much older format.
 - SDR panels now update 25 times a second at every span. Before, they managed only about 10 a second up to 100 kHz, so the trace looked jerky. Signals don't look any clearer, but the trace moves smoothly.
 - At wide spans, part of the SDR's signal was being thrown away before it reached the screen. It isn't now.
 - At the 1 MHz span, a strong station outside the span could show up inside it as a false signal. On 160 m a medium-wave broadcaster appeared 241 kHz above the dial, 46 dB above the noise. The SDR now filters it out properly, so only real signals are drawn.
+- On a busy band the SDR missed weak signals. Its automatic gain turned the gain down for the strong stations, and weak ones sank into the noise. On the 31 m broadcast band it found fewer than half as many weak signals as it does now. The automatic gain is now off and the gain is fixed. Quiet bands look the same as before.
 
 **ACC scope (FTdx101)** [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
 
