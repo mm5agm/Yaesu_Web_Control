@@ -91,6 +91,11 @@ namespace Yaesu_Web_Control.Services.Sdr
         private const int    IqEnableOffset         = 73;
         private const int    DecimationEnableOffset = 74;
         private const int    DecimationFactorOffset = 75;
+        // ctrlParams.agc (sdrplay_api_AgcT) follows decimation, aligned to 4:
+        //   agc.enable (enum sdrplay_api_AgcControlT, int) @ 80
+        //   agc.setPoint_dBfs (int)                        @ 84
+        private const int    AgcEnableOffset        = 80;
+        private const int    AgcSetPointOffset      = 84;
 
         // sdrplay_api_Bw_MHzT enum values (numeric value = bandwidth in kHz).
         private const int    BW_0_200            = 200;
@@ -160,8 +165,11 @@ namespace Yaesu_Web_Control.Services.Sdr
         public string Key   { get; }
         public string Label { get; private set; }
 
-        private readonly Channel<float[]> _channel =
-            Channel.CreateBounded<float[]>(new BoundedChannelOptions(4)
+        // Replaced in Configure with one sized to the sample rate.
+        private Channel<float[]> _channel = NewChannel(4);
+
+        private static Channel<float[]> NewChannel(int capacity) =>
+            Channel.CreateBounded<float[]>(new BoundedChannelOptions(capacity)
             {
                 FullMode = BoundedChannelFullMode.DropOldest
             });
@@ -388,7 +396,7 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// unchanged at ~10/s. Nothing beyond 32 has been tried.
         /// </para>
         /// </remarks>
-        private readonly record struct TunePlan(
+        internal readonly record struct TunePlan(
             double HardwareRateHz,
             int    DecimationFactor,
             int    BwType,
@@ -397,7 +405,8 @@ namespace Yaesu_Web_Control.Services.Sdr
             /// <summary>
             /// The API's own low-IF down-conversion decimates by four before
             /// <c>decimationFactor</c> is applied, so fs = 2 MHz reaches user
-            /// decimation as 500 kHz and fs = 8 MHz as 2 MHz.
+            /// decimation as 500 kHz and fs = 8 MHz as 2 MHz. Not with the
+            /// 600 kHz filter: see <see cref="LifDecimation"/>.
             /// </summary>
             /// <remarks>
             /// Omitting this is what made every span four times narrower than it
@@ -409,7 +418,20 @@ namespace Yaesu_Web_Control.Services.Sdr
             /// IF types (450 kHz at fs = 2 MHz, 2.048 MHz at fs = 8 MHz), so the
             /// factor is a property of LIF mode rather than of any one row.
             /// </remarks>
-            public const int LifDecimation = 4;
+            public const int UsualLifDecimation = 4;
+
+            /// <summary>
+            /// The low-IF decimation this row gets. Four, except with the 600 kHz
+            /// filter at fs = 2 MHz, where it is two: the API keeps an output wide
+            /// enough for the filter. Measured 2026-11-14 on an RSP1 and an RSP1B
+            /// on the FTdx101's IF outputs. With decimationFactor 1 that row
+            /// delivered 1.0 MS/s (2000 reads of 1024 samples every 2.04 s) where
+            /// 500 kHz was assumed, and its 500 kHz span showed 1 MHz of signals:
+            /// matched against the radio's own ACC scope, the true width was
+            /// 2.000 times the labelled one. With decimationFactor 2 it delivers
+            /// 504 kS/s and matches the ACC scope at 1.000.
+            /// </summary>
+            public int LifDecimation => BwType == BW_0_600 && IfType == IF_0_450 ? 2 : UsualLifDecimation;
 
             /// <summary>The span actually produced, after both decimations.</summary>
             public double AchievedRateHz =>
@@ -429,16 +451,16 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// bandwidth — around 32 MB/s per device — and is the reason the span list
         /// stops at 2 MHz rather than going wider.
         /// </remarks>
-        private static TunePlan PlanFor(double requestedRateHz) => requestedRateHz switch
+        internal static TunePlan PlanFor(double requestedRateHz) => requestedRateHz switch
         {
             //                      fsHz      ÷   bwType     ifType     → span
-            //                     (÷4 by LIF before this column applies)
+            //                     (÷4 by LIF before this column applies; ÷2 with BW_0_600)
             <=    15_625 => new(2_000_000, 32, BW_0_200, IF_0_450), //  15.625 kHz
             <=    31_250 => new(2_000_000, 16, BW_0_200, IF_0_450), //  31.25  kHz
             <=    62_500 => new(2_000_000, 8, BW_0_200, IF_0_450), //   62.5 kHz
             <=   125_000 => new(2_000_000, 4, BW_0_200, IF_0_450), //  125   kHz
             <=   250_000 => new(2_000_000, 2, BW_0_300, IF_0_450), //  250   kHz
-            <=   500_000 => new(2_000_000, 1, BW_0_600, IF_0_450), //  500   kHz
+            <=   500_000 => new(2_000_000, 2, BW_0_600, IF_0_450), //  500   kHz (LIF ÷2 with this filter)
             <= 1_000_000 => new(8_000_000, 2, BW_5_000, IF_2_048), //    1   MHz
 
             _            => new(8_000_000, 1, BW_5_000, IF_2_048), //    2   MHz
@@ -455,6 +477,12 @@ namespace Yaesu_Web_Control.Services.Sdr
             _fftSize     = fftSize;
             _accumBuffer = new float[fftSize * 2];
             _accumOffset = 0;
+
+            // The API hands samples over in bunches, as much as about 100 ms at
+            // a time, so the queue must hold a quarter of a second of hops or a
+            // bunch overflows it and most of it is dropped. A capacity of 4 lost
+            // about a third of the samples at 500 kHz.
+            _channel = NewChannel(Math.Max(4, (int)Math.Ceiling(sampleRateHz * 0.25 / fftSize)));
 
             // Open the API
             ThrowIfError(sdrplay_api_Open(), "sdrplay_api_Open");
@@ -582,6 +610,14 @@ namespace Yaesu_Web_Control.Services.Sdr
             // RSP1 valid ranges: gRdB 20–59, LNAstate 0–3.
             Marshal.WriteInt32(rxChannel, GrDbOffset,     40);
             Marshal.WriteInt32(rxChannel, LnaStateOffset,  0);
+
+            // AGC is deliberately left at the API's default (on, 50 Hz, set point
+            // -60 dBFS). Measured 2026-11-14 on the FTdx101's IF outputs, 20 m at
+            // a 20 kHz span and 31 m at 500 kHz: with it on, the gain sat about
+            // 16-19 dB lower than the fixed gain above, but signal clarity and
+            // floor drift were the same as with it off, within run-to-run
+            // variation. It costs nothing visible and keeps headroom for a strong
+            // signal, so it stays on. Absolute levels float a little as a result.
         }
 
         /// <inheritdoc/>
@@ -629,7 +665,10 @@ namespace Yaesu_Web_Control.Services.Sdr
                 $"decEnable={Marshal.ReadByte(_rxChannelPtr, DecimationEnableOffset)}  " +
                 $"decFactor={Marshal.ReadByte(_rxChannelPtr, DecimationFactorOffset)}  " +
                 $"DCenable={Marshal.ReadByte(_rxChannelPtr, DcEnableOffset)}  " +
-                $"IQenable={Marshal.ReadByte(_rxChannelPtr, IqEnableOffset)}");
+                $"IQenable={Marshal.ReadByte(_rxChannelPtr, IqEnableOffset)}  " +
+                $"agc={Marshal.ReadInt32(_rxChannelPtr, AgcEnableOffset)}  " +
+                $"setPoint={Marshal.ReadInt32(_rxChannelPtr, AgcSetPointOffset)}  " +
+                $"gRdB={Marshal.ReadInt32(_rxChannelPtr, GrDbOffset)}");
 
             _streaming = true;
         }
