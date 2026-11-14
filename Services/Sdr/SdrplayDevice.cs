@@ -98,6 +98,16 @@ namespace Yaesu_Web_Control.Services.Sdr
         private const int    AgcEnableOffset        = 80;
         private const int    AgcSetPointOffset      = 84;
 
+        // Overload guard (see OnPowerOverload). Values from sdrplay_api.h and
+        // sdrplay_api_callback.h.
+        private const int    EventPowerOverloadChange = 1;           // sdrplay_api_PowerOverloadChange
+        private const int    OverloadDetected         = 0;           // sdrplay_api_Overload_Detected
+        private const int    UpdateTunerGr            = 0x00008000;  // sdrplay_api_Update_Tuner_Gr
+        private const int    UpdateCtrlOverloadMsgAck = 0x04000000;  // sdrplay_api_Update_Ctrl_OverloadMsgAck
+        private const int    UpdateExt1None           = 0;
+        private const int    RecoveryTickMs           = 5000;        // how often OverloadGainPolicy.OnTick runs
+        private const int    OverloadSettleMs         = 300;         // wait after each step for Corrected
+
         // sdrplay_api_Bw_MHzT enum values (numeric value = bandwidth in kHz).
         private const int    BW_0_200            = 200;
         private const int    BW_0_300            = 300;
@@ -141,6 +151,10 @@ namespace Yaesu_Web_Control.Services.Sdr
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         private static extern int sdrplay_api_Uninit(IntPtr dev);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int sdrplay_api_Update(
+            IntPtr dev, int tuner, int reasonForUpdate, int reasonForUpdateExt1);
 
         // Returns a pointer to sdrplay_api_ErrorInfoT (owned by the API, do not free).
         // ErrorInfoT layout: file[256] @ 0, function[256] @ 256, line(int) @ 512, message[1024] @ 516
@@ -191,6 +205,12 @@ namespace Yaesu_Web_Control.Services.Sdr
         // it — the return code alone does not.
         private IntPtr _devParamsPtr;
         private IntPtr _rxChannelPtr;     // rxChannelA, or rxChannelB for an RSPduo on Tuner 2
+        private int    _tunerSelect = Tuner_A; // for sdrplay_api_Update
+        private readonly OverloadGainPolicy _gain = new(); // guarded by _gainLock
+        private System.Threading.Timer? _recoveryTimer;
+        private readonly object _gainLock = new();
+        private volatile bool _overloaded;     // between Detected and Corrected events
+        private int    _guardRunning;          // 1 while OnPowerOverload is stepping
         private GCHandle _selfHandle;     // pins 'this' for native callback context
 
         // Delegate fields — kept alive by the instance
@@ -555,6 +575,7 @@ namespace Yaesu_Web_Control.Services.Sdr
             }
             _devParamsPtr  = devParams;
             _rxChannelPtr  = rxChannel;
+            _tunerSelect   = tuner == 2 ? Tuner_B : Tuner_A;
 
             // Sample rate, decimation, analogue bandwidth and IF mode — one
             // decision, because the API only enables low-IF down-conversion for
@@ -617,7 +638,8 @@ namespace Yaesu_Web_Control.Services.Sdr
             // Gain — gRdB 40 (moderate IF gain reduction, safe for strong IF inputs),
             // LNAstate 0 (minimum LNA attenuation = maximum LNA sensitivity).
             // RSP1 valid ranges: gRdB 20–59, LNAstate 0–3.
-            Marshal.WriteInt32(rxChannel, GrDbOffset,     40);
+            lock (_gainLock) _gain.Reset();
+            Marshal.WriteInt32(rxChannel, GrDbOffset,     OverloadGainPolicy.StartGrDb);
             Marshal.WriteInt32(rxChannel, LnaStateOffset,  0);
 
             // AGC off, so the gain stays at the fixed values above. The API's
@@ -628,7 +650,17 @@ namespace Yaesu_Web_Control.Services.Sdr
             // span the RSP1B found 19% and 18% of the weak signals with AGC on,
             // against 46% and 55% with it off (at 5% false alarms). On 20 m at
             // 20 kHz, the control, it made no difference (87/82% on, 83/89% off).
-            // The fixed gain handled the broadcast band without overload.
+            // With the gain fixed, a strong signal can overload the ADC. On
+            // 160 m at the 1 MHz span at night, medium-wave stations in the span
+            // made the RSP1 show a false 46 dB signal at 1389 kHz with AGC off,
+            // and none with it on (same evening, interleaved). So the overload
+            // guard (EventCallback, OverloadGainPolicy) backs the gain off only
+            // while the API reports an overload, not whenever the band is busy,
+            // and gives it back after a quiet spell. With the guard the false
+            // signal was 8-10 dB, as with AGC on. The reduction costs no
+            // sensitivity: after the guard raised gRdB from 40 to 55 (RSP1)
+            // and 46 (RSP1B), the 20 m floor fell 14.6 and 5.8 dB, the same as
+            // the gain, so the radio's IF noise still sets the floor.
             Marshal.WriteInt32(rxChannel, AgcEnableOffset, 0);
         }
 
@@ -684,6 +716,7 @@ namespace Yaesu_Web_Control.Services.Sdr
                 $"gRdB={Marshal.ReadInt32(_rxChannelPtr, GrDbOffset)}");
 
             _streaming = true;
+            _recoveryTimer = new System.Threading.Timer(_ => OnRecoveryTick(), null, RecoveryTickMs, RecoveryTickMs);
         }
 
         /// <inheritdoc/>
@@ -708,6 +741,8 @@ namespace Yaesu_Web_Control.Services.Sdr
         {
             if (!_streaming) return;
             _streaming = false;
+            _recoveryTimer?.Dispose();
+            _recoveryTimer = null;
 
             try { sdrplay_api_Uninit(_devHandle); }
             catch { /* ignore errors during stop */ }
@@ -802,10 +837,84 @@ namespace Yaesu_Web_Control.Services.Sdr
             }
         }
 
-        private static void EventCallback(
-            int _eventId, int _tuner, IntPtr _eventParams, IntPtr _cbContext)
+        private void EventCallback(
+            int eventId, int _tuner, IntPtr eventParams, IntPtr _cbContext)
         {
-            // SDRplay events (gain change, overload, etc.) — not needed for spectrum display.
+            if (eventId != EventPowerOverloadChange || eventParams == IntPtr.Zero || !_streaming) return;
+            int change = Marshal.ReadInt32(eventParams); // powerOverloadParams.powerOverloadChangeType
+            // The API sends no further overload events until this one is acknowledged.
+            // The API's own example acknowledges from inside the event callback.
+            // The gain change is queued to the thread pool rather than made here.
+            sdrplay_api_Update(_devHandle, _tunerSelect, UpdateCtrlOverloadMsgAck, UpdateExt1None);
+            _overloaded = change == OverloadDetected;
+            if (_overloaded)
+            {
+                if (Interlocked.Exchange(ref _guardRunning, 1) == 0)
+                    ThreadPool.QueueUserWorkItem(_ => OnPowerOverload());
+            }
+            else
+                Console.Error.WriteLine($"[SdrplayDevice] {Label}: overload cleared at gRdB={CurrentGrDb()}");
+        }
+
+        private int CurrentGrDb() { lock (_gainLock) return _gain.GrDb; }
+
+        /// <summary>
+        /// The ADC reported an overload. The API reports it once and then
+        /// reports Corrected when it clears, so keep raising the gain
+        /// reduction (see <see cref="OverloadGainPolicy"/>), waiting
+        /// <see cref="OverloadSettleMs"/> after each step, until it clears or
+        /// reaches the maximum.
+        /// </summary>
+        private void OnPowerOverload()
+        {
+            bool atMax;
+            do
+            {
+                try { atMax = StepWhileOverloaded(); }
+                finally { Volatile.Write(ref _guardRunning, 0); }
+            }
+            // An overload reported just as the loop ended found it still
+            // marked running and queued nothing, so look again.
+            while (!atMax && _overloaded && _streaming
+                   && Interlocked.Exchange(ref _guardRunning, 1) == 0);
+        }
+
+        /// <returns>true if the gain reduction is at the maximum.</returns>
+        private bool StepWhileOverloaded()
+        {
+            while (_overloaded && _streaming)
+            {
+                lock (_gainLock)
+                {
+                    if (_gain.OnOverload(DateTime.UtcNow) is not int next)
+                    {
+                        Console.Error.WriteLine($"[SdrplayDevice] {Label}: overload, gain reduction already at the maximum gRdB={_gain.GrDb}");
+                        return true;
+                    }
+                    SetGrDb(next, "overload: gain reduction raised");
+                }
+                Thread.Sleep(OverloadSettleMs);
+            }
+            return false;
+        }
+
+        /// <summary>After a quiet spell, give back the gain the guard took.</summary>
+        private void OnRecoveryTick()
+        {
+            if (!_streaming || Volatile.Read(ref _guardRunning) != 0) return;
+            lock (_gainLock)
+                if (_gain.OnTick(DateTime.UtcNow, _overloaded) is int next)
+                    SetGrDb(next, "no overload for a while: gain reduction lowered");
+        }
+
+        // Called with _gainLock held, so the guard and the recovery timer
+        // can't write the gain out of order.
+        private void SetGrDb(int grDb, string why)
+        {
+            if (!_streaming || _rxChannelPtr == IntPtr.Zero) return;
+            Marshal.WriteInt32(_rxChannelPtr, GrDbOffset, grDb);
+            int err = sdrplay_api_Update(_devHandle, _tunerSelect, UpdateTunerGr, UpdateExt1None);
+            Console.Error.WriteLine($"[SdrplayDevice] {Label}: {why} to gRdB={grDb}" + (err != 0 ? $" (update error {err})" : ""));
         }
 
         // ── Static helpers ────────────────────────────────────────────────────────
