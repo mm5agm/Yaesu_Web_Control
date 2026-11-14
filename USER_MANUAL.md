@@ -1770,7 +1770,7 @@ If you already own an RSPduo, you can still use it. It appears twice in the SDR 
 
 RTL-SDR dongles are supported via the SoapySDR driver path and will function — but for a serious HF-watching setup an RSPplay RSP is a significant step up:
 
-- **Bit depth.** RTL-SDR is 8-bit; RSPplay RSPs are 14-bit. That's about 36 dB more dynamic range — weak signals next to a strong neighbour are far easier to see.
+- **Bit depth.** RTL-SDR is 8-bit. The original SDRplay RSP1 is 12-bit, about 24 dB more dynamic range; the RSP1A, RSP1B and later are 14-bit, about 36 dB more. Either way, weak signals next to a strong neighbour are far easier to see.
 - **HF coverage.** Most RTL-SDR dongles need a separate upconverter to receive HF. RSPs cover 1 kHz to 2 GHz natively.
 - **Front-end filtering.** RSPs have selectable bandpass filters; dongles have essentially none. With a kilowatt-class transmitter on the next band, a dongle overloads long before an RSP does.
 - **Clock stability.** The RSP1A, RSP1B and later use a TCXO; cheap dongles drift visibly during warm-up — the spectrum centred on a 9 MHz IF will appear to slide sideways for the first ten minutes after power-on. (The original RSP1 has a plain crystal — mine is 5 ppm out, which the *SDR frequency trim* setting above corrects.)
@@ -3160,10 +3160,10 @@ If the spectrum shows a flat ripple of noise that never follows the radio, the w
 
 RTL-SDR dongles are supported via SoapySDR and will function — but for a serious HF setup, an SDRplay RSP1B is a significant step up:
 
-- **Bit depth:** RTL-SDR is 8-bit; SDRplay RSPs are 14-bit. That's roughly 36 dB more dynamic range — weak signals next to a strong neighbour are far easier to see.
+- **Bit depth:** RTL-SDR is 8-bit. The original SDRplay RSP1 is 12-bit (about 24 dB more dynamic range); the RSP1A, RSP1B and later are 14-bit (about 36 dB more). Weak signals next to a strong neighbour are far easier to see.
 - **HF coverage:** Most RTL-SDR dongles need a separate upconverter to receive HF. RSPs cover 1 kHz to 2 GHz natively.
 - **Front-end filtering:** RSPs have selectable bandpass filters; dongles have essentially none. With a kilowatt-class transmitter on the next band, a dongle will overload long before an RSP does.
-- **Clock stability:** RSPs use a TCXO. Cheap dongles drift visibly during warm-up — a spectrum centred on the 9 MHz IF will appear to slide sideways for the first ten minutes after power-on.
+- **Clock stability:** the RSP1A, RSP1B and later use a TCXO (the original RSP1 has a plain crystal, which the *SDR frequency trim* setting corrects). Cheap dongles drift visibly during warm-up — a spectrum centred on the 9 MHz IF will appear to slide sideways for the first ten minutes after power-on.
 
 For casual VHF/UHF listening an RTL-SDR is fine. For a permanent HF-band-monitoring setup the RSP is the better tool.
 
