@@ -19,6 +19,13 @@
 //
 // (YWC's server says `acc` for `available`; both are read.)
 //
+// YWC's server also says where the panel's spectrum comes from, `source`:
+// "ACC scope", "SDR" and so on. An ACC panel looks just like an SDR's, so
+// every view says which it is (Colin, 2026-11-13): Classic and Experimental
+// in the card header (addSourceTo), the radio-panel views in the pane label
+// in place of "SDR A" (renameForSource). IWC's server sends none, and
+// nothing changes there.
+//
 // Every view has it (Colin, 2026-11-12), and any new view should too; each
 // app has a test that fails for a view that draws the spectrum without it:
 //   Classic and Experimental                   bindRefineSlider(), on their own slider markup
@@ -113,3 +120,42 @@ export function addRefineTo(strip, vfo, className, before = null, title = REFINE
     if (at) strip.insertBefore(sel, at); else strip.append(sel);
     return sel;
 }
+
+/**
+ * Classic and Experimental: adds " · ACC scope" (or " · SDR") to a card
+ * header such as "Spectrum — VFO A", when the server says the source.
+ * @param {HTMLElement|null} el  the header's text element
+ * @param {'A'|'B'} vfo
+ */
+export function addSourceTo(el, vfo) {
+    if (!el) return;
+    fetchRefine(vfo).then(info => {
+        if (!info?.source) return;
+        const tag = document.createElement('span');
+        tag.className = 'spectrum-source fw-normal';
+        tag.textContent = ' · ' + info.source;
+        tag.title = sourceTitle(info.source);
+        el.append(tag);
+    });
+}
+
+/**
+ * The radio-panel views: when a pane shows a radio's own scope, its label
+ * says so in place of "SDR A" ("MAIN · SDR A" becomes "MAIN · ACC SCOPE").
+ * `rename` is given the new name, and only when it changes.
+ * @param {'A'|'B'} vfo
+ * @param {string} name  the pane's name as built, e.g. 'MAIN · SDR A'
+ * @param {(name:string) => void} rename
+ */
+export function renameForSource(vfo, name, rename) {
+    fetchRefine(vfo).then(info => {
+        const src = info?.source;
+        if (!src || src === 'SDR' || !name.includes('SDR ' + vfo)) return;
+        rename(name.replace('SDR ' + vfo, src.toUpperCase()));
+    });
+}
+
+const sourceTitle = src => src.startsWith('ACC')
+    ? "This spectrum is the radio's own scope, from the board on its ACC socket. Its span and Center or Fixed follow the radio."
+    : src === 'SDR' ? "This spectrum is from the SDR on the radio's IF output."
+    : "This spectrum is the radio's own scope.";
