@@ -943,12 +943,14 @@ try
     // the slider there, and where the panel's spectrum comes from; POST saves the step and applies it on the next frame.
     app.MapGet("/api/sdr/refine", async (
         [Microsoft.AspNetCore.Mvc.FromQuery] string? sdrId,
-        Yaesu_Web_Control.Services.ISettingsService settings) =>
+        Yaesu_Web_Control.Services.ISettingsService settings,
+        Yaesu_Web_Control.Services.Sdr.SdrManager sdr) =>
     {
         var target = (sdrId ?? "A").ToUpperInvariant();
         if (target != "A" && target != "B") return Results.BadRequest("sdrId must be A or B.");
         var s = await settings.GetSettingsAsync();
         var key = target == "A" ? s.SdrDeviceKeyA : s.SdrDeviceKeyB;
+        var warning = Yaesu_Web_Control.Services.Sdr.AccScope.IsAccKey(key) ? sdr.AccLevelWarning(target) : null;
         int level = target == "A" ? s.AccRefineLevelA : s.AccRefineLevelB;
         if (!Yaesu_Web_Control.Services.Sdr.AccScope.IsRefineLevel(level))
             level = Yaesu_Web_Control.Services.Sdr.AccScope.DefaultRefineLevel;
@@ -960,6 +962,10 @@ try
             source = Yaesu_Web_Control.Services.Sdr.AccScope.PanelSource(key, target),
             level,
             max = Yaesu_Web_Control.Services.Sdr.AccScope.MaxRefineLevel,
+            // When the radio's scope LEVEL is cutting the ACC trace off: a
+            // short word for the panel's label and the reason for its tooltip
+            // (spectrum-refine.js watchLevel). Null when the level is fine.
+            levelWarning = warning is { } w ? new { text = w.Short, detail = w.Detail } : null,
         });
     });
 

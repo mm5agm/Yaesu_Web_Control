@@ -26,6 +26,12 @@
 // in place of "SDR A" (renameForSource). IWC's server sends none, and
 // nothing changes there.
 //
+// On a panel showing the ACC scope the server also says when the radio's
+// scope LEVEL is cutting the trace off, `levelWarning` {text, detail}, and
+// the same label says so: "ACC scope · LEVEL too low" (watchLevel). The rows
+// are the radio's display data, after its LEVEL, so too low a LEVEL loses
+// weak signals in a way that otherwise looks like a quiet band.
+//
 // Every view has it (Colin, 2026-11-12), and any new view should too; each
 // app has a test that fails for a view that draws the spectrum without it:
 //   Classic and Experimental                   bindRefineSlider(), on their own slider markup
@@ -158,6 +164,11 @@ export function addSourceTo(el, vfo) {
         tag.textContent = ' · ' + info.source;
         tag.title = sourceTitle(info.source);
         el.append(tag);
+        watchLevel(vfo, info, w => {
+            tag.textContent = ' · ' + info.source + (w ? ' · ' + w.text : '');
+            tag.title = w ? w.detail : sourceTitle(info.source);
+            tag.classList.toggle('text-danger', !!w);
+        });
     });
 }
 
@@ -173,8 +184,42 @@ export function renameForSource(vfo, name, rename) {
     fetchRefine(vfo).then(info => {
         const src = info?.source;
         if (!src || src === 'SDR' || !name.includes('SDR ' + vfo)) return;
-        rename(name.replace('SDR ' + vfo, src.toUpperCase()));
+        const renamed = name.replace('SDR ' + vfo, src.toUpperCase());
+        rename(renamed);
+        watchLevel(vfo, info, w => rename(w ? renamed + ' · ' + w.text.toUpperCase() : renamed));
     });
+}
+
+const LEVEL_POLL_MS = 5000;
+
+/**
+ * While a panel shows the ACC scope, asks the server every few seconds
+ * whether the radio's scope LEVEL is cutting the trace off, and calls
+ * `onChange` with the warning ({text, detail}) or null, only when it changes.
+ * Nothing is asked for a panel that isn't showing the ACC scope, or while the
+ * page is hidden.
+ * @param {'A'|'B'} vfo
+ * @param {object} info  what fetchRefine said first
+ * @param {(w: {text:string, detail:string}|null) => void} onChange
+ */
+export function watchLevel(vfo, info, onChange) {
+    if (!String(info?.source ?? '').startsWith('ACC')) return;
+    let shown = null;
+    const show = w => {
+        const key = w?.text ?? null;
+        if (key === shown) return;
+        shown = key;
+        onChange(w ?? null);
+    };
+    show(info.levelWarning);
+    const tick = async () => {
+        if (!(typeof document !== 'undefined' && document.hidden)) {
+            const now = await fetchRefine(vfo);
+            if (now) show(now.levelWarning);
+        }
+        setTimeout(tick, LEVEL_POLL_MS);
+    };
+    setTimeout(tick, LEVEL_POLL_MS);
 }
 
 const sourceTitle = src => src.startsWith('ACC')

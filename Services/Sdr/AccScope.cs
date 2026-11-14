@@ -170,4 +170,100 @@ public static class AccScope
             if (ReceiverScope.Spans[i] == spanHz) return (char)('0' + i);
         return null;
     }
+
+    /// <summary>
+    /// What a panel's label says while the radio's scope LEVEL is cutting the
+    /// trace off: a short word for the label, and the full reason for its
+    /// tooltip and the log. Null when the level is fine.
+    /// </summary>
+    public static (string Short, string Detail)? LevelWarning(AccLevelProblem problem) => problem switch
+    {
+        AccLevelProblem.TooLow => ("LEVEL too low",
+            "The radio's scope Level is too low for the ACC scope: the floor is sitting on the bottom of the " +
+            "radio's scale, so weak signals there are lost. Raise Level on the radio, or in YWC's Radio Scope " +
+            "panel (§5.20), until this goes. +20 or more is usually right. The radio keeps Level for each band, so " +
+            "set it on every band you use."),
+        AccLevelProblem.TooHigh => ("LEVEL too high",
+            "The radio's scope Level is too high for the ACC scope: strong signals are reaching the top of the " +
+            "radio's scale and being cut off. Lower Level on the radio, or in YWC's Radio Scope panel (§5.20)."),
+        _ => null,
+    };
+}
+
+public enum AccLevelProblem { None, TooLow, TooHigh }
+
+/// <summary>
+/// Watches one receiver's raw ACC rows for a scope LEVEL that cuts the trace
+/// off. The rows are the radio's display data, after its LEVEL: too low and
+/// the floor sits on step 0, where weak signals vanish; too high and strong
+/// signals sit on step 255. Measured 2026-11-14 on an FTdx101MP (see
+/// docs/comparison.md in Yaesu_ACC_Spectrum): at LEVEL 0 at least one floor
+/// point in twenty was on step 0, from +10 up none were.
+/// </summary>
+/// <remarks>
+/// Judged over two seconds of rows (50 at 25 a second) so a single odd row
+/// doesn't flicker the warning, and with a lower bar for clearing than for
+/// raising it so a level right on the edge doesn't flicker either.
+/// </remarks>
+public sealed class AccLevelWatch
+{
+    public const int    WindowRows       = 50;
+    /// <summary>
+    /// The radio's floor clips on step 1, not 0: at LEVEL -10 on 20 m, 36 % of
+    /// points sat on step 1 while step 0 was as rare as steps 2-7.
+    /// </summary>
+    public const byte   BottomStep       = 1;
+    /// <summary>
+    /// Raise "too low" when this share of the span's points is on or below
+    /// BottomStep. Measured on an FTdx101MP: LEVEL +05 gave 10.7 % on 160 m,
+    /// 15.1 % on 10 m and 1.5 % on 20 m; LEVEL 0 on 20 m gave 5.3 %.
+    /// </summary>
+    public const double LowRaiseShare    = 0.05;
+    /// <summary>
+    /// Clear below this. At LEVEL +23.5 the 1 and 2 kHz spans on 10 m reached
+    /// 2.2 % in a window (narrow spans have a lower floor), so 1 % could latch.
+    /// </summary>
+    public const double LowClearShare    = 0.025;
+    /// <summary>Raise "too high" when this share of rows has a point on step 255.</summary>
+    public const double HighRaiseShare   = 0.2;
+    public const double HighClearShare   = 0.05;
+
+    private int  _rows;
+    private long _bottom;
+    private int  _topRows;
+
+    public AccLevelProblem Problem { get; private set; }
+
+    /// <summary>
+    /// Adds one raw row (all 850 points; only those inside the span count).
+    /// Returns true when Problem has just changed.
+    /// </summary>
+    public bool Add(ReadOnlySpan<byte> row)
+    {
+        var span = row.Slice(AccScope.FirstSpanPoint, ReceiverScope.SpanPoints);
+        bool top = false;
+        foreach (byte b in span)
+        {
+            if (b <= BottomStep) _bottom++;
+            else if (b == byte.MaxValue) top = true;
+        }
+        if (top) _topRows++;
+        if (++_rows < WindowRows) return false;
+
+        double bottomShare = (double)_bottom / ((long)WindowRows * ReceiverScope.SpanPoints);
+        double topShare    = (double)_topRows / WindowRows;
+        _rows = 0; _bottom = 0; _topRows = 0;
+
+        var next = Problem switch
+        {
+            AccLevelProblem.TooLow  when bottomShare >= LowClearShare  => AccLevelProblem.TooLow,
+            AccLevelProblem.TooHigh when topShare    >= HighClearShare => AccLevelProblem.TooHigh,
+            _ when bottomShare >= LowRaiseShare => AccLevelProblem.TooLow,
+            _ when topShare    >= HighRaiseShare => AccLevelProblem.TooHigh,
+            _ => AccLevelProblem.None,
+        };
+        if (next == Problem) return false;
+        Problem = next;
+        return true;
+    }
 }
