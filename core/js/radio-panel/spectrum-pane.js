@@ -267,7 +267,9 @@ export class SpectrumPane {
     }
     setSpan(hz) {
         const s = Number(hz) || 0;
-        if (s === this._st.spanHz) return;
+        // Same span: only put the list back if it shows another one (a span
+        // the server refused still shows the one picked).
+        if (s === this._st.spanHz) { if (this._spanSel && this._spanSel.dataset.hz !== String(s)) this._showSpan(); return; }
         this._st.spanHz = s;
         this._draw();
         this._showSpan();
@@ -281,7 +283,9 @@ export class SpectrumPane {
         const sel = h('select', 'rp-pane-span');
         sel.title = 'Span';
         for (const s of spans) sel.append(new Option('SPAN ' + s.label, String(s.hz)));
-        sel.addEventListener('change', () => onSpan(Number(sel.value)));
+        // Once picked, the list lets go of focus and forgets what it showed,
+        // so the next frame puts it right if the server kept another span.
+        sel.addEventListener('change', () => { delete sel.dataset.hz; sel.blur(); onSpan(Number(sel.value)); });
         wrap.append(sel);
         this._label.after(wrap);
         this._spanSel = sel;
@@ -294,6 +298,7 @@ export class SpectrumPane {
         const sel = this._spanSel;
         if (!sel || document.activeElement === sel) return;
         const n = this._st.spanHz;
+        sel.dataset.hz = String(n);
         sel.querySelector('.rp-span-other')?.remove();
         if (!n) { sel.selectedIndex = -1; return; }
         const o = [...sel.options].find(x => Math.abs(Number(x.value) - n) <= Number(x.value) * 0.02);

@@ -33,7 +33,7 @@ import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-e
 import { axisOffsetHz, viewOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 import { RadioScopeControl } from '/js/ui/radio-scope.js';
-import { addRefineTo, renameForSource } from '/js/radio-panel/spectrum-refine.js';
+import { addRefineTo, limitSpansToSource, renameForSource } from '/js/radio-panel/spectrum-refine.js';
 import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js';
 import { PopoutHost } from '/js/popout/popout.js';
 import { txTimeoutBeep, txTimeoutWarning } from '/js/radio-panel/tx-timeout.js';
@@ -211,6 +211,8 @@ export function startYaesuRadioPanel(root, cfg) {
     }).start();
     // REFINE beside SPAN on a pane showing the FTdx101's ACC scope (spectrum-refine.js).
     for (const id of ['A', 'B']) addRefineTo(panel.spectrumTools(id), id, 'rp-select rp-spec-span', '.rp-spec-hold');
+    // The ACC scope has only the radio's spans: the list drops the SDR's 15, 30, 40 kHz and 2 MHz.
+    for (const id of ['A', 'B']) limitSpansToSource(panel.spectrumTools(id)?.querySelector('select.rp-spec-span:not(.rwc-refine)'), id);
     // "MAIN · ACC SCOPE" in place of "MAIN · SDR A" on a pane showing the radio's own scope.
     // The label's source text is then left empty, or it would add "SDR A" back.
     for (const id of ['A', 'B']) {

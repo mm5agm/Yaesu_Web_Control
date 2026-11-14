@@ -647,6 +647,46 @@ test('/rtty-contest: SPOTS opens the spots window, SPAN has 15 kHz, and WF BRIGH
     } catch (e) { await page.close().catch(() => {}); throw e; }
 });
 
+test('/rtty-contest: a span the server keeps from changing does not stay showing in SPAN', async () => {
+    // Colin 2026-11-14: 15 kHz picked on the ACC scope, which kept 10 kHz,
+    // still read "SPAN 15 kHz". The span write is stubbed, so the frames stay at 10 kHz.
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.state('FrequencyA', 14_080_000);
+        const bins = Array.from({ length: 475 }, () => -110);
+        const frame = () => page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 10_000, rfOrdered: true });
+        await frame();
+        const sel = `document.querySelector('.rc-holder:not([hidden]) .rp-pane-span')`;
+        expect(await page.eval(`${sel}.value`) === '10000', `SPAN starts at ${await page.eval(`${sel}.value`)}`);
+        await page.eval(`(() => { const s = ${sel}; s.focus(); s.value = '15000'; s.dispatchEvent(new Event('change')); })()`);
+        await sleep(200);
+        const w = (await page.writes()).filter(x => x.path.startsWith('/api/sdr/span'));
+        expect(w.length === 1 && w[0].path.includes('hz=15000'), `span wrote ${JSON.stringify(w)}`);
+        await frame();
+        expect(await page.eval(`${sel}.value`) === '10000', `after a 10 kHz frame SPAN shows ${await page.eval(`${sel}.value`)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
+test('ACC scope panels list only the radio spans on RTTY Contest, the Radio panel and its pop-out', async () => {
+    const acc = `__rwcTest.getOverrides['/api/sdr/refine'] = { available: true, source: 'ACC scope', level: 1, max: 8 };`;
+    const views = [
+        ['/rtty-contest', '.rc-holder:not([hidden]) .rp-pane-span'],
+        ['/radio', '.rp-spec-tools select.rp-spec-span:not(.rwc-refine)'],
+        ['/RadioSpectrum', '.rp-spop-span'],
+    ];
+    for (const [path, css] of views) {
+        const page = await open(path, { settleMs: 1500, before: acc });
+        try {
+            const spans = await page.eval(`(() => { const s = document.querySelector(${JSON.stringify(css)}); return s ? [...s.options].map(o => o.value).filter(Boolean) : null; })()`);
+            expect(spans && spans.length === 10 && !spans.includes('15000') && !spans.includes('2000000') && spans.includes('10000'),
+                `${path}: the span list is ${JSON.stringify(spans)}`);
+            expect(page.exceptions.length === 0, `${path}: uncaught exceptions:\n${page.exceptions.join('\n')}`);
+        } finally { await page.close(); }
+    }
+});
+
 test('/rtty-contest: a band key goes to the RTTY spot in RTTY-L, 60 m to the band memory, and the wheel over a digit tunes', async () => {
     const page = await open('/rtty-contest', { settleMs: 1500 });
     try {

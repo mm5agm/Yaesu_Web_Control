@@ -505,7 +505,8 @@ export function mountRadioPanel(root, opts = {}) {
                 spanSel.append(o);
             }
             spanSel.value = '';
-            spanSel.addEventListener('change', () => act('span', spanSel.value, d.id));
+            // Let go of focus once picked, so the next state puts back a refused span.
+            spanSel.addEventListener('change', () => { const hz = spanSel.value; spanSel.blur(); act('span', hz, d.id); });
             tools.append(spanSel);
         }
         const holdKey = h('button', 'rp-wkey rp-spec-hold', 'HOLD');
@@ -1447,13 +1448,15 @@ export function mountRadioPanel(root, opts = {}) {
             if (spanHz != null && Number(spanHz) !== st.spanHz[vfo]) {
                 st.spanHz[vfo] = Number(spanHz) || 0;
                 drawOverlays(vfo);
-                // The nearest listed span: a cropped span arrives a few Hz off.
-                if (pn.spanSel && st.spanHz[vfo] > 0 && document.activeElement !== pn.spanSel) {
-                    let best = null;
-                    for (const sp of opts.spectrumSpans)
-                        if (!best || Math.abs(Math.log(sp.hz / st.spanHz[vfo])) < Math.abs(Math.log(best.hz / st.spanHz[vfo]))) best = sp;
-                    pn.spanSel.value = String(best.hz);
-                }
+            }
+            // The nearest listed span: a cropped span arrives a few Hz off.
+            // Checked on every report, not just a change, so a span the
+            // server refused doesn't stay showing in the list.
+            if (spanHz != null && pn.spanSel && st.spanHz[vfo] > 0 && document.activeElement !== pn.spanSel) {
+                let best = null;
+                for (const sp of opts.spectrumSpans)
+                    if (!best || Math.abs(Math.log(sp.hz / st.spanHz[vfo])) < Math.abs(Math.log(best.hz / st.spanHz[vfo]))) best = sp;
+                if (pn.spanSel.value !== String(best.hz)) pn.spanSel.value = String(best.hz);
             }
             if (label !== undefined) pn.text = label ?? '';
             paneLabel(vfo);

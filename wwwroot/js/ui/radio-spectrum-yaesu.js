@@ -12,7 +12,7 @@ import { mountSpectrumPopout } from '/js/radio-panel/spectrum-popout.js';
 import { spanText } from '/js/radio-panel/panel-math.js';
 import { dialStepper } from '/js/radio-panel/dial-stepper.js';
 import { post, startYaesuSpectrumFeed } from '/js/ui/spectrum-feed-yaesu.js';
-import { addRefineTo, renameForSource } from '/js/radio-panel/spectrum-refine.js';
+import { addRefineTo, limitSpansToSource, renameForSource } from '/js/radio-panel/spectrum-refine.js';
 
 // SpectrumSpanPlan.ValidSpans.
 const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 15e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
@@ -55,6 +55,7 @@ export function startYaesuSpectrumPopout(root, cfg) {
     // REFINE beside SPAN on a pane showing the FTdx101's ACC scope (spectrum-refine.js).
     for (const p of panes) addRefineTo(pop.pane(p.id)?.tools, p.id, 'rp-spop-span', '.rp-spop-hold');
     for (const p of panes) renameForSource(p.id, p.name, n => pop.pane(p.id)?.setName(n));
+    for (const p of panes) limitSpansToSource(pop.pane(p.id)?.tools.querySelector('.rp-spop-span'), p.id);
 
     const feed = startYaesuSpectrumFeed({
         conn: cfg.conn,
