@@ -121,6 +121,28 @@ export function addRefineTo(strip, vfo, className, before = null, title = REFINE
     return sel;
 }
 
+// The radio's own scope spans. The SDR has more (15, 30 and 40 kHz and
+// 2 MHz), which the server refuses for an ACC panel.
+export const RADIO_SCOPE_SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6];
+
+/**
+ * A span list (a <select> of Hz values) on a panel showing the radio's own
+ * scope loses the SDR-only spans, so it never offers one that is refused
+ * (Colin, 2026-11-14: 15 kHz on the ACC scope stayed at 10 kHz).
+ * @param {HTMLSelectElement|null} sel
+ * @param {'A'|'B'} vfo
+ */
+export function limitSpansToSource(sel, vfo) {
+    if (!sel) return;
+    fetchRefine(vfo).then(info => {
+        if (!String(info?.source ?? '').startsWith('ACC')) return;
+        for (const o of [...sel.options]) {
+            const hz = Number(o.value);
+            if (hz > 0 && !o.disabled && !RADIO_SCOPE_SPANS_HZ.includes(hz)) o.remove();
+        }
+    });
+}
+
 /**
  * Classic and Experimental: adds " · ACC scope" (or " · SDR") to a card
  * header such as "Spectrum — VFO A", when the server says the source.
