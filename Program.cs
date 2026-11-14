@@ -919,7 +919,7 @@ try
         if (Yaesu_Web_Control.Services.Sdr.AccScope.IsAccKey(key))
         {
             if (Yaesu_Web_Control.Services.Sdr.AccScope.SpanDigit(hz) is not char digit)
-                return Results.Conflict("The radio's scope spans are 1 kHz to 1 MHz; 30 kHz, 40 kHz and 2 MHz are for an SDR.");
+                return Results.Conflict("The radio's scope spans are 1 kHz to 1 MHz; 15 kHz, 30 kHz, 40 kHz and 2 MHz are for an SDR.");
             return await sdr.TrySetAccSpanAsync(key!, digit)
                 ? Results.Ok()
                 : Results.Problem("Couldn't set the radio's scope span: the radio isn't connected or is busy.", statusCode: 503);

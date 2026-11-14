@@ -12,6 +12,20 @@ a different and much older format.
 
 ---
 
+## 2026-11-14 - v2.5.5-pre3 (pre-release)
+
+*Three things for RTTY Contest that Bruce VK2RT asked for during the WAE. Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **SPOTS**, beside DX SPOTS, opens the DX spots list in a window of its own: the band you're on, or all bands. You can check whether a station has been spotted while the spot tags on the spectrum are off. DX SPOTS still turns the tags off and on.
+- **15 kHz** is in the SPAN list, between 10 and 20 kHz. It is on the Radio panel and in Settings too. It's for an SDR: the FTdx101's own scope has no 15 kHz span, so on an ACC scope panel the span stays as it is.
+- **WF BRIGHT**, in the scope row, brightens the waterfall so weak signals show up more, from OFF to +60 dB in 6 dB steps. The spectrum trace isn't changed. It's kept for each receiver, and the waterfall windows follow it.
+
+**Other changes**
+
+- Changes from v2.5.5-pre1 to pre2 still need testing too: see the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md#2026-11-12---v255-pre1-pre-release).
+
 ## 2026-11-13 - v2.5.5-pre2 (pre-release)
 
 *Each spectrum says where it comes from, and choosing the ACC scope is easier to find. Install it over v2.5.4 or any pre-release; your settings are kept.*

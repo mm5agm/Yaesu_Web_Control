@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFrequencyEntry, partsLeft, tidyBoxSize, tidyLayout, BOX_SIZES } from '../../js/rtty-contest/contest-view.js';
+import { parseFrequencyEntry, partsLeft, tidyBoxSize, tidyLayout, tidyLevels, BOX_SIZES } from '../../js/rtty-contest/contest-view.js';
 
 test('under 100 is MHz', () => {
     assert.equal(parseFrequencyEntry('14.08'), 14_080_000);
@@ -102,4 +102,18 @@ test('a saved layout comes back as saved, less what is wrong in it', () => {
     assert.equal(tidyLayout({}).trace, 0.8);
     assert.equal(tidyLayout({ trace: 2 }).trace, 2);
     assert.equal(tidyLayout({ trace: 9 }).trace, 0.8);
+});
+
+// Waterfall brightness is kept with each receiver's levels (Bruce VK2RT,
+// #250 2026-11-14): off unless set, whole dB, 0 to 60, like the Radio
+// panel's SCOPE Bright slider.
+test('tidyLevels keeps a waterfall brightness of 0 to 60 dB', () => {
+    assert.equal(tidyLevels(null).bright, 0);
+    assert.equal(tidyLevels({}).bright, 0);
+    assert.equal(tidyLevels({ bright: 12 }).bright, 12);
+    assert.equal(tidyLevels({ bright: 90 }).bright, 60);
+    assert.equal(tidyLevels({ bright: -6 }).bright, 0);
+    assert.equal(tidyLevels({ bright: 'x' }).bright, 0);
+    // A level saved before brightness existed keeps everything else.
+    assert.deepEqual(tidyLevels({ auto: false, ref: 4, range: 40 }), { auto: false, ref: 4, range: 40, bright: 0 });
 });
