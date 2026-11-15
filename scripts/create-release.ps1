@@ -150,7 +150,7 @@ if ($existingTag) {
 }
 
 # Create GitHub release
-$releaseNotes = "Release $newTag - please send bug reports to mm5agm@outlook.com"
+$releaseNotes = "Release $newTag. Found a bug? Open the **About** page and press **Report a bug**. It opens a bug report with your diagnostics already filled in."
 
 Write-Host "Creating GitHub release $newTag..." -ForegroundColor Cyan
 gh release create $newTag `
