@@ -2306,24 +2306,27 @@
                         </div>
 
                         <label for="sdrDeviceDropdownA" class="form-label small fw-semibold mb-1">VFO A SDR</label>
-                        <select class="form-select form-select-sm mb-1" id="sdrDeviceDropdownA">
+                        <select class="form-select form-select-sm mb-1" id="sdrDeviceDropdownA" aria-describedby="sdrSameSourceA">
                             <option value="">— (none) —</option>
                         </select>
+                        <div id="sdrSameSourceA" class="text-danger small fw-semibold mb-1" hidden>A and B can't use the same source</div>
                         <input type="hidden" asp-for="Settings.SdrDeviceKeyA" id="sdrDeviceKeyInput" />
                         <div id="sdrDeviceKeyDisplay" class="font-monospace small text-muted mb-3"></div>
 
                         <label for="sdrDeviceDropdownB" class="form-label small fw-semibold mb-1">VFO B SDR</label>
-                        <select class="form-select form-select-sm mb-1" id="sdrDeviceDropdownB">
+                        <select class="form-select form-select-sm mb-1" id="sdrDeviceDropdownB" aria-describedby="sdrSameSourceB">
                             <option value="">— (none) —</option>
                         </select>
+                        <div id="sdrSameSourceB" class="text-danger small fw-semibold mb-1" hidden>A and B can't use the same source</div>
                         <input type="hidden" asp-for="Settings.SdrDeviceKeyB" id="sdrDeviceKeyInputB" />
                         <div id="sdrDeviceKeyDisplayB" class="font-monospace small text-muted"></div>
                         <span asp-validation-for="Settings.SdrDeviceKeyB" class="text-danger small"></span>
                         <div id="sdrSameDeviceWarning" class="alert alert-warning small py-2 mt-2 mb-0" role="alert" hidden>
                             <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
-                            The same SDR is chosen for VFO A and VFO B. One SDR can only feed one VFO,
+                            The same source is chosen for VFO A and VFO B. One SDR can only feed one VFO,
                             so one panel would show "SDR device unavailable". Choose (none) for the VFO
-                            it isn't wired to. Settings won't save like this.
+                            it isn't wired to, or on an FTdx101, ACC scope, Main for A and ACC scope, Sub
+                            for B. Settings won't save like this.
                         </div>
 
                         <div id="sdrScanNotes" class="mt-2"></div>
@@ -4204,8 +4207,17 @@
         function updateSameDeviceWarning() {
             const a = document.getElementById(sdrSlots.A.inputId)?.value || '';
             const b = document.getElementById(sdrSlots.B.inputId)?.value || '';
+            const same = !!(a && a === b);
             const warn = document.getElementById('sdrSameDeviceWarning');
-            if (warn) warn.hidden = !(a && a === b);
+            if (warn) warn.hidden = !same;
+            // Both lists go red, each with its own line, so it shows beside
+            // whichever list the eye is on (Colin, 2026-11-15: missed the
+            // warning below them and the save was refused).
+            for (const slot of ['A', 'B']) {
+                document.getElementById(sdrSlots[slot].dropdownId)?.classList.toggle('is-invalid', same);
+                const line = document.getElementById('sdrSameSource' + slot);
+                if (line) line.hidden = !same;
+            }
         }
 
         // Initialise both dropdowns from saved keys on page load, then
