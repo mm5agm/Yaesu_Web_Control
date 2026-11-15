@@ -1,7 +1,7 @@
 
 # Yaesu Web Control
 
-![Latest release](https://img.shields.io/badge/Latest%20release-v2.5.4-blue?style=flat-square)
+![Latest release](https://img.shields.io/badge/Latest%20release-v2.5.5-blue?style=flat-square)
 ![Downloads](https://img.shields.io/github/downloads/mm5agm/Yaesu_Web_Control/latest/Yaesu_Web_Control_Setup.exe?label=Downloads&style=flat-square)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue?style=flat-square)
 
@@ -47,9 +47,9 @@ I wrote YWC because I can't see the FTdx101MP's controls without using a magnify
 
 ## Release Notes
 
-**v2.5.4 brings RTTY Contest and the CW Paddle.** RTTY Contest is a screen for RTTY contesting, and every part of it can go to a window of its own on another monitor. Bruce VK2RT asked for it and tested it through sixteen pre-releases. The CW Paddle sends CW from your own paddle when you operate the radio remotely, through a HaliKey or an ESP32-S3 board you program from the page.
+**v2.5.5 brings the FTdx101's own scope, from its ACC socket, and a much better SDR spectrum.** A small ESP32-S3 board on the FTdx101's rear ACC socket shows the radio's Main and Sub scope in YWC, with no SDR needed ([Yaesu ACC Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum)). The SDR spectrum shows its true 500 kHz span, runs at 25 frames a second at every span, and keeps weak signals on a busy band. RTTY Contest gains SPOTS and WF BRIGHT, and Settings has a search box.
 
-[All of v2.5.4](RELEASE_HISTORY.md#2026-11-03---v254) | [Every earlier version](RELEASE_HISTORY.md) | [Installers](https://github.com/mm5agm/Yaesu_Web_Control/releases)
+[All of v2.5.5](RELEASE_HISTORY.md#2026-11-15---v255) | [Every earlier version](RELEASE_HISTORY.md) | [Installers](https://github.com/mm5agm/Yaesu_Web_Control/releases)
 
 ## Supported transceivers
 

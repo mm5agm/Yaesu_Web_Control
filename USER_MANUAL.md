@@ -1677,7 +1677,7 @@ If you have two SDRs (typically two SDRplay RSPs) and a dual-receiver radio (FTd
 
 If you only have one SDR, set it in the **VFO A SDR** slot and leave **VFO B SDR** as *(none)*. The main page will show only the VFO A panel exactly as in single-SDR setups before v2.3.0.
 
-One SDR can only feed one VFO. If you pick the same device for both slots, Settings shows a warning under the VFO B dropdown and won't save until you change one of them. Saved that way, whichever VFO opened the SDR first kept it, and the other panel showed *SDR device unavailable*.
+One SDR can only feed one VFO. If you pick the same source for both slots, both lists go red with *A and B can't use the same source*, a warning shows under them, and Settings won't save until you change one of them. On an FTdx101 with the ACC scope, choose **ACC scope, Main** for VFO A and **ACC scope, Sub** for VFO B. Saved that way, whichever VFO opened the SDR first kept it, and the other panel showed *SDR device unavailable*.
 
 > **Note on SDRplay devices specifically:** the SDRplay API service only allows one device per host process. YWC works around this by launching a separate background process (`Yaesu_Sdr_Worker.exe`) for each SDR you configure — you'll see them in Task Manager when YWC is streaming. They start and stop automatically; no user action needed. See [docs/decisions/0001-dual-sdr-architecture.md](docs/decisions/0001-dual-sdr-architecture.md) on GitHub if you're curious about the why.
 
