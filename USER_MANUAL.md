@@ -3834,12 +3834,12 @@ Radio Display captures the radio's **external video output** (or any USB UVC web
 
 **This feature is Fabio Valente's (CR7CDC) work, not mine.** He designed it, wrote it and carried it through three pull requests (#97, #117 and #120). All I did was test it on my FTdx101MP and make a couple of suggestions along the way. If it is useful to you, he is the one to thank.
 
-**Two videos** made by other radio amateurs that explain the problem with the Yaesu DVI to monitor connection and how to overcome it:
+**Two videos** made by other radio amateurs, both on the [M8KHC YouTube channel](https://www.youtube.com/@M8KHC), that explain the problem with the Yaesu DVI to monitor connection and how to overcome it:
 
 - **Yaesu DVI-D to HDMI — investigation:** <https://www.youtube.com/watch?v=dtlziYEsXxE> — the possible problems with taking video off the radio's DVI-D socket. Watch this one *before* you plug anything in.
 - **Capturing Yaesu video:** <https://www.youtube.com/watch?v=1EY7m5e91TI> — the feature in action: the radio's screen in the browser, with the CAT scope controls driving it.
 
-**What I use.** These are the two parts on my bench, and the ones the videos were made with. Other cables and capture sticks may well work, but these are the ones I can vouch for:
+**What I use.** These are the two parts on my bench. Other cables and capture sticks may well work, but these are the ones I can vouch for:
 
 - **DVI-D to HDMI cable:** <https://www.amazon.co.uk/dp/B0002GRUIC?th=1>
 - **HDMI to USB capture card:** <https://www.amazon.co.uk/dp/B0C4STMPS2?th=1>
@@ -3923,7 +3923,7 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 
 - Verify that any **DVI-D→HDMI** cable or adapter is electrically suitable for **your** radio model before connecting.
 - Do **not** assume every passive DVI-D→HDMI adapter is safe on every Yaesu transceiver.
-- Follow the radio manufacturer's guidance and published investigations of Yaesu video-output interfaces. My own investigation video (<https://www.youtube.com/watch?v=dtlziYEsXxE>) goes through what I found on the FTdx101MP's DVI-D socket — watch it before connecting anything.
+- Follow the radio manufacturer's guidance and published investigations of Yaesu video-output interfaces. The investigation video on the M8KHC YouTube channel (<https://www.youtube.com/watch?v=dtlziYEsXxE>), made by another radio amateur, goes through the possible problems with the DVI-D socket — watch it before connecting anything.
 - Treat the capture chain as an external accessory under your responsibility.
 
 ### 19.3 Settings and Index panel

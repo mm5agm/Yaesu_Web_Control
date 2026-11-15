@@ -109,7 +109,7 @@ YWC also shows this warning on the Settings page when an SDR is configured, and 
 
 ### DVI-D safety
 
-The DVI-D socket on these radios is not a standard-conforming HDMI source, and not every passive DVI-D-to-HDMI adapter is safe on every Yaesu: there are community investigations of damaged radios. YWC does not supply, protect or vouch for any cable or capture device, and the chain from the radio's socket to the PC is your responsibility. [My own look at the question](https://www.youtube.com/watch?v=dtlziYEsXxE) is worth watching before you plug anything in, and the cable and stick I use on my own FTdx101MP are in [§19](USER_MANUAL.md#19-radio-display). They are not a guarantee for your radio. There is also a [video of the feature in action](https://www.youtube.com/watch?v=1EY7m5e91TI).
+The DVI-D socket on these radios is not a standard-conforming HDMI source, and not every passive DVI-D-to-HDMI adapter is safe on every Yaesu: there are community investigations of damaged radios. YWC does not supply, protect or vouch for any cable or capture device, and the chain from the radio's socket to the PC is your responsibility. [An investigation by another radio amateur](https://www.youtube.com/watch?v=dtlziYEsXxE), on the M8KHC YouTube channel, is worth watching before you plug anything in, and the cable and stick I use on my own FTdx101MP are in [§19](USER_MANUAL.md#19-radio-display). They are not a guarantee for your radio. The same channel also has a [video of the feature in action](https://www.youtube.com/watch?v=1EY7m5e91TI).
 
 ## Privacy
 
