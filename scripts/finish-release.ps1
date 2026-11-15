@@ -489,12 +489,12 @@ Do not install unless you're prepared for bugs and will report them on GitHub.
 
 If you are running a **full release**, nothing in YWC will ever offer you this build or mention that it exists -- you would have to come to this page for it, which is the point. If you are **already testing a pre-release**, YWC will offer you this one and say what is in it.
 
-Please send feedback via GitHub Issues (or mm5agm@outlook.com). Mention the ``$Version`` tag when reporting.
+Please report problems with the **Report a bug** button on the **About** page; it fills in your diagnostics. Mention the ``$Version`` tag when reporting.
 "@
 }
 else {
     Write-Step "Creating GitHub release $Version..."
-    $notesBody = "Please send bug reports to mm5agm@outlook.com"
+    $notesBody = "Found a bug? Open the **About** page and press **Report a bug**. It opens a bug report with your diagnostics already filled in."
 }
 
 # The notes go under whichever preamble applies. It is passed in a
