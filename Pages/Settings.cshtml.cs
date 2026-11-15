@@ -186,8 +186,8 @@ namespace Yaesu_Web_Control.Pages
                 string.Equals(Settings.SdrDeviceKeyA, Settings.SdrDeviceKeyB, StringComparison.Ordinal))
             {
                 ModelState.AddModelError("Settings.SdrDeviceKeyB",
-                    "The same SDR is chosen for VFO A and VFO B. One SDR can only feed one VFO: choose (none) for the VFO it isn't wired to.");
-                StatusMessage = "❌ Settings not saved — the same SDR is chosen for VFO A and VFO B.";
+                    "A and B can't use the same source. One SDR can only feed one VFO: choose (none) for the VFO it isn't wired to, or on an FTdx101, ACC scope, Main for A and ACC scope, Sub for B.");
+                StatusMessage = "❌ Settings not saved — A and B can't use the same source.";
                 NetworkAddresses = GetLocalIPAddresses();
                 return Page();
             }
