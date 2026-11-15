@@ -47,6 +47,8 @@ namespace Yaesu_Web_Control.Services.Sdr
         private const string DllName             = "sdrplay_api";
         private const int    DeviceStructSize    = 96;
         private const int    MaxDevices          = 4;
+
+        private static readonly object _scanLock = new();
         private const int    DevHandleOffset     = 88;
         private const int    HwVerOffset         = 64;
         private const int    DevParamsOffset     = 0;   // within DeviceParamsT
@@ -89,6 +91,22 @@ namespace Yaesu_Web_Control.Services.Sdr
         private const int    IqEnableOffset         = 73;
         private const int    DecimationEnableOffset = 74;
         private const int    DecimationFactorOffset = 75;
+        private const int    WideBandSignalOffset   = 76;
+        // ctrlParams.agc (sdrplay_api_AgcT) follows decimation, aligned to 4:
+        //   agc.enable (enum sdrplay_api_AgcControlT, int) @ 80
+        //   agc.setPoint_dBfs (int)                        @ 84
+        private const int    AgcEnableOffset        = 80;
+        private const int    AgcSetPointOffset      = 84;
+
+        // Overload guard (see OnPowerOverload). Values from sdrplay_api.h and
+        // sdrplay_api_callback.h.
+        private const int    EventPowerOverloadChange = 1;           // sdrplay_api_PowerOverloadChange
+        private const int    OverloadDetected         = 0;           // sdrplay_api_Overload_Detected
+        private const int    UpdateTunerGr            = 0x00008000;  // sdrplay_api_Update_Tuner_Gr
+        private const int    UpdateCtrlOverloadMsgAck = 0x04000000;  // sdrplay_api_Update_Ctrl_OverloadMsgAck
+        private const int    UpdateExt1None           = 0;
+        private const int    RecoveryTickMs           = 5000;        // how often OverloadGainPolicy.OnTick runs
+        private const int    OverloadSettleMs         = 300;         // wait after each step for Corrected
 
         // sdrplay_api_Bw_MHzT enum values (numeric value = bandwidth in kHz).
         private const int    BW_0_200            = 200;
@@ -134,6 +152,10 @@ namespace Yaesu_Web_Control.Services.Sdr
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         private static extern int sdrplay_api_Uninit(IntPtr dev);
 
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int sdrplay_api_Update(
+            IntPtr dev, int tuner, int reasonForUpdate, int reasonForUpdateExt1);
+
         // Returns a pointer to sdrplay_api_ErrorInfoT (owned by the API, do not free).
         // ErrorInfoT layout: file[256] @ 0, function[256] @ 256, line(int) @ 512, message[1024] @ 516
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
@@ -158,8 +180,11 @@ namespace Yaesu_Web_Control.Services.Sdr
         public string Key   { get; }
         public string Label { get; private set; }
 
-        private readonly Channel<float[]> _channel =
-            Channel.CreateBounded<float[]>(new BoundedChannelOptions(4)
+        // Replaced in Configure with one sized to the sample rate.
+        private Channel<float[]> _channel = NewChannel(4);
+
+        private static Channel<float[]> NewChannel(int capacity) =>
+            Channel.CreateBounded<float[]>(new BoundedChannelOptions(capacity)
             {
                 FullMode = BoundedChannelFullMode.DropOldest
             });
@@ -180,6 +205,12 @@ namespace Yaesu_Web_Control.Services.Sdr
         // it — the return code alone does not.
         private IntPtr _devParamsPtr;
         private IntPtr _rxChannelPtr;     // rxChannelA, or rxChannelB for an RSPduo on Tuner 2
+        private int    _tunerSelect = Tuner_A; // for sdrplay_api_Update
+        private readonly OverloadGainPolicy _gain = new(); // guarded by _gainLock
+        private System.Threading.Timer? _recoveryTimer;
+        private readonly object _gainLock = new();
+        private volatile bool _overloaded;     // between Detected and Corrected events
+        private int    _guardRunning;          // 1 while OnPowerOverload is stepping
         private GCHandle _selfHandle;     // pins 'this' for native callback context
 
         // Delegate fields — kept alive by the instance
@@ -261,6 +292,19 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// of any problem encountered (DLL missing, service not running, etc.).
         /// </summary>
         public static IReadOnlyList<SdrDeviceInfo> EnumerateDevices(out string? diagnosticNote)
+        {
+            // The API is not safe to scan from two threads at once: one thread's
+            // sdrplay_api_Close under another's sdrplay_api_GetDevices is an access
+            // violation, which no catch here can stop and which takes the whole
+            // app down. Each Settings page open is a scan, so two page opens that
+            // overlap can do it.
+            lock (_scanLock)
+            {
+                return EnumerateDevicesLocked(out diagnosticNote);
+            }
+        }
+
+        private static IReadOnlyList<SdrDeviceInfo> EnumerateDevicesLocked(out string? diagnosticNote)
         {
             diagnosticNote = null;
             var devices = new List<SdrDeviceInfo>();
@@ -373,7 +417,7 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// unchanged at ~10/s. Nothing beyond 32 has been tried.
         /// </para>
         /// </remarks>
-        private readonly record struct TunePlan(
+        internal readonly record struct TunePlan(
             double HardwareRateHz,
             int    DecimationFactor,
             int    BwType,
@@ -382,7 +426,8 @@ namespace Yaesu_Web_Control.Services.Sdr
             /// <summary>
             /// The API's own low-IF down-conversion decimates by four before
             /// <c>decimationFactor</c> is applied, so fs = 2 MHz reaches user
-            /// decimation as 500 kHz and fs = 8 MHz as 2 MHz.
+            /// decimation as 500 kHz and fs = 8 MHz as 2 MHz. Not with the
+            /// 600 kHz filter: see <see cref="LifDecimation"/>.
             /// </summary>
             /// <remarks>
             /// Omitting this is what made every span four times narrower than it
@@ -394,7 +439,20 @@ namespace Yaesu_Web_Control.Services.Sdr
             /// IF types (450 kHz at fs = 2 MHz, 2.048 MHz at fs = 8 MHz), so the
             /// factor is a property of LIF mode rather than of any one row.
             /// </remarks>
-            public const int LifDecimation = 4;
+            public const int UsualLifDecimation = 4;
+
+            /// <summary>
+            /// The low-IF decimation this row gets. Four, except with the 600 kHz
+            /// filter at fs = 2 MHz, where it is two: the API keeps an output wide
+            /// enough for the filter. Measured 2026-11-14 on an RSP1 and an RSP1B
+            /// on the FTdx101's IF outputs. With decimationFactor 1 that row
+            /// delivered 1.0 MS/s (2000 reads of 1024 samples every 2.04 s) where
+            /// 500 kHz was assumed, and its 500 kHz span showed 1 MHz of signals:
+            /// matched against the radio's own ACC scope, the true width was
+            /// 2.000 times the labelled one. With decimationFactor 2 it delivers
+            /// 504 kS/s and matches the ACC scope at 1.000.
+            /// </summary>
+            public int LifDecimation => BwType == BW_0_600 && IfType == IF_0_450 ? 2 : UsualLifDecimation;
 
             /// <summary>The span actually produced, after both decimations.</summary>
             public double AchievedRateHz =>
@@ -414,16 +472,16 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// bandwidth — around 32 MB/s per device — and is the reason the span list
         /// stops at 2 MHz rather than going wider.
         /// </remarks>
-        private static TunePlan PlanFor(double requestedRateHz) => requestedRateHz switch
+        internal static TunePlan PlanFor(double requestedRateHz) => requestedRateHz switch
         {
             //                      fsHz      ÷   bwType     ifType     → span
-            //                     (÷4 by LIF before this column applies)
+            //                     (÷4 by LIF before this column applies; ÷2 with BW_0_600)
             <=    15_625 => new(2_000_000, 32, BW_0_200, IF_0_450), //  15.625 kHz
             <=    31_250 => new(2_000_000, 16, BW_0_200, IF_0_450), //  31.25  kHz
             <=    62_500 => new(2_000_000, 8, BW_0_200, IF_0_450), //   62.5 kHz
             <=   125_000 => new(2_000_000, 4, BW_0_200, IF_0_450), //  125   kHz
             <=   250_000 => new(2_000_000, 2, BW_0_300, IF_0_450), //  250   kHz
-            <=   500_000 => new(2_000_000, 1, BW_0_600, IF_0_450), //  500   kHz
+            <=   500_000 => new(2_000_000, 2, BW_0_600, IF_0_450), //  500   kHz (LIF ÷2 with this filter)
             <= 1_000_000 => new(8_000_000, 2, BW_5_000, IF_2_048), //    1   MHz
 
             _            => new(8_000_000, 1, BW_5_000, IF_2_048), //    2   MHz
@@ -440,6 +498,12 @@ namespace Yaesu_Web_Control.Services.Sdr
             _fftSize     = fftSize;
             _accumBuffer = new float[fftSize * 2];
             _accumOffset = 0;
+
+            // The API hands samples over in bunches, as much as about 100 ms at
+            // a time, so the queue must hold a quarter of a second of hops or a
+            // bunch overflows it and most of it is dropped. A capacity of 4 lost
+            // about a third of the samples at 500 kHz.
+            _channel = NewChannel(Math.Max(4, (int)Math.Ceiling(sampleRateHz * 0.25 / fftSize)));
 
             // Open the API
             ThrowIfError(sdrplay_api_Open(), "sdrplay_api_Open");
@@ -511,6 +575,7 @@ namespace Yaesu_Web_Control.Services.Sdr
             }
             _devParamsPtr  = devParams;
             _rxChannelPtr  = rxChannel;
+            _tunerSelect   = tuner == 2 ? Tuner_B : Tuner_A;
 
             // Sample rate, decimation, analogue bandwidth and IF mode — one
             // decision, because the API only enables low-IF down-conversion for
@@ -538,6 +603,14 @@ namespace Yaesu_Web_Control.Services.Sdr
                               (byte)(plan.DecimationFactor > 1 ? 1 : 0));
             Marshal.WriteByte(rxChannel, DecimationFactorOffset,
                               (byte)plan.DecimationFactor);
+            // decimation.wideBandSignal = 1: filter with half-band filters before
+            // each decimation stage. The API default (0) uses a simple averager,
+            // which lets strong signals outside the span fold back into it. On
+            // 160 m at the 1 MHz span, a 1089 kHz broadcast station 759 kHz below
+            // the centre showed 46-50 dB above the floor at +241 kHz on both RSPs;
+            // with half-band filters it is gone (under 2 dB). Narrower spans read
+            // the same either way.
+            Marshal.WriteByte(rxChannel, WideBandSignalOffset, 1);
 
             // Centre frequency
             WriteDouble(rxChannel, RfHzOffset, (double)centreFrequencyHz);
@@ -565,8 +638,30 @@ namespace Yaesu_Web_Control.Services.Sdr
             // Gain — gRdB 40 (moderate IF gain reduction, safe for strong IF inputs),
             // LNAstate 0 (minimum LNA attenuation = maximum LNA sensitivity).
             // RSP1 valid ranges: gRdB 20–59, LNAstate 0–3.
-            Marshal.WriteInt32(rxChannel, GrDbOffset,     40);
+            lock (_gainLock) _gain.Reset();
+            Marshal.WriteInt32(rxChannel, GrDbOffset,     OverloadGainPolicy.StartGrDb);
             Marshal.WriteInt32(rxChannel, LnaStateOffset,  0);
+
+            // AGC off, so the gain stays at the fixed values above. The API's
+            // default is on (50 Hz, set point -60 dBFS), and on a busy band it
+            // turns the gain down for the strong stations and loses weak ones.
+            // Measured 2026-11-14 on the FTdx101's IF outputs, interleaved A/B,
+            // same build, two rounds each: on the 31 m broadcast band at a 20 kHz
+            // span the RSP1B found 19% and 18% of the weak signals with AGC on,
+            // against 46% and 55% with it off (at 5% false alarms). On 20 m at
+            // 20 kHz, the control, it made no difference (87/82% on, 83/89% off).
+            // With the gain fixed, a strong signal can overload the ADC. On
+            // 160 m at the 1 MHz span at night, medium-wave stations in the span
+            // made the RSP1 show a false 46 dB signal at 1389 kHz with AGC off,
+            // and none with it on (same evening, interleaved). So the overload
+            // guard (EventCallback, OverloadGainPolicy) backs the gain off only
+            // while the API reports an overload, not whenever the band is busy,
+            // and gives it back after a quiet spell. With the guard the false
+            // signal was 8-10 dB, as with AGC on. The reduction costs no
+            // sensitivity: after the guard raised gRdB from 40 to 55 (RSP1)
+            // and 46 (RSP1B), the 20 m floor fell 14.6 and 5.8 dB, the same as
+            // the gain, so the radio's IF noise still sets the floor.
+            Marshal.WriteInt32(rxChannel, AgcEnableOffset, 0);
         }
 
         /// <inheritdoc/>
@@ -613,10 +708,15 @@ namespace Yaesu_Web_Control.Services.Sdr
                 $"rfHz={ReadDouble(_rxChannelPtr, RfHzOffset):0}  " +
                 $"decEnable={Marshal.ReadByte(_rxChannelPtr, DecimationEnableOffset)}  " +
                 $"decFactor={Marshal.ReadByte(_rxChannelPtr, DecimationFactorOffset)}  " +
+                $"wideBand={Marshal.ReadByte(_rxChannelPtr, WideBandSignalOffset)}  " +
                 $"DCenable={Marshal.ReadByte(_rxChannelPtr, DcEnableOffset)}  " +
-                $"IQenable={Marshal.ReadByte(_rxChannelPtr, IqEnableOffset)}");
+                $"IQenable={Marshal.ReadByte(_rxChannelPtr, IqEnableOffset)}  " +
+                $"agc={Marshal.ReadInt32(_rxChannelPtr, AgcEnableOffset)}  " +
+                $"setPoint={Marshal.ReadInt32(_rxChannelPtr, AgcSetPointOffset)}  " +
+                $"gRdB={Marshal.ReadInt32(_rxChannelPtr, GrDbOffset)}");
 
             _streaming = true;
+            _recoveryTimer = new System.Threading.Timer(_ => OnRecoveryTick(), null, RecoveryTickMs, RecoveryTickMs);
         }
 
         /// <inheritdoc/>
@@ -641,6 +741,8 @@ namespace Yaesu_Web_Control.Services.Sdr
         {
             if (!_streaming) return;
             _streaming = false;
+            _recoveryTimer?.Dispose();
+            _recoveryTimer = null;
 
             try { sdrplay_api_Uninit(_devHandle); }
             catch { /* ignore errors during stop */ }
@@ -735,10 +837,84 @@ namespace Yaesu_Web_Control.Services.Sdr
             }
         }
 
-        private static void EventCallback(
-            int _eventId, int _tuner, IntPtr _eventParams, IntPtr _cbContext)
+        private void EventCallback(
+            int eventId, int _tuner, IntPtr eventParams, IntPtr _cbContext)
         {
-            // SDRplay events (gain change, overload, etc.) — not needed for spectrum display.
+            if (eventId != EventPowerOverloadChange || eventParams == IntPtr.Zero || !_streaming) return;
+            int change = Marshal.ReadInt32(eventParams); // powerOverloadParams.powerOverloadChangeType
+            // The API sends no further overload events until this one is acknowledged.
+            // The API's own example acknowledges from inside the event callback.
+            // The gain change is queued to the thread pool rather than made here.
+            sdrplay_api_Update(_devHandle, _tunerSelect, UpdateCtrlOverloadMsgAck, UpdateExt1None);
+            _overloaded = change == OverloadDetected;
+            if (_overloaded)
+            {
+                if (Interlocked.Exchange(ref _guardRunning, 1) == 0)
+                    ThreadPool.QueueUserWorkItem(_ => OnPowerOverload());
+            }
+            else
+                Console.Error.WriteLine($"[SdrplayDevice] {Label}: overload cleared at gRdB={CurrentGrDb()}");
+        }
+
+        private int CurrentGrDb() { lock (_gainLock) return _gain.GrDb; }
+
+        /// <summary>
+        /// The ADC reported an overload. The API reports it once and then
+        /// reports Corrected when it clears, so keep raising the gain
+        /// reduction (see <see cref="OverloadGainPolicy"/>), waiting
+        /// <see cref="OverloadSettleMs"/> after each step, until it clears or
+        /// reaches the maximum.
+        /// </summary>
+        private void OnPowerOverload()
+        {
+            bool atMax;
+            do
+            {
+                try { atMax = StepWhileOverloaded(); }
+                finally { Volatile.Write(ref _guardRunning, 0); }
+            }
+            // An overload reported just as the loop ended found it still
+            // marked running and queued nothing, so look again.
+            while (!atMax && _overloaded && _streaming
+                   && Interlocked.Exchange(ref _guardRunning, 1) == 0);
+        }
+
+        /// <returns>true if the gain reduction is at the maximum.</returns>
+        private bool StepWhileOverloaded()
+        {
+            while (_overloaded && _streaming)
+            {
+                lock (_gainLock)
+                {
+                    if (_gain.OnOverload(DateTime.UtcNow) is not int next)
+                    {
+                        Console.Error.WriteLine($"[SdrplayDevice] {Label}: overload, gain reduction already at the maximum gRdB={_gain.GrDb}");
+                        return true;
+                    }
+                    SetGrDb(next, "overload: gain reduction raised");
+                }
+                Thread.Sleep(OverloadSettleMs);
+            }
+            return false;
+        }
+
+        /// <summary>After a quiet spell, give back the gain the guard took.</summary>
+        private void OnRecoveryTick()
+        {
+            if (!_streaming || Volatile.Read(ref _guardRunning) != 0) return;
+            lock (_gainLock)
+                if (_gain.OnTick(DateTime.UtcNow, _overloaded) is int next)
+                    SetGrDb(next, "no overload for a while: gain reduction lowered");
+        }
+
+        // Called with _gainLock held, so the guard and the recovery timer
+        // can't write the gain out of order.
+        private void SetGrDb(int grDb, string why)
+        {
+            if (!_streaming || _rxChannelPtr == IntPtr.Zero) return;
+            Marshal.WriteInt32(_rxChannelPtr, GrDbOffset, grDb);
+            int err = sdrplay_api_Update(_devHandle, _tunerSelect, UpdateTunerGr, UpdateExt1None);
+            Console.Error.WriteLine($"[SdrplayDevice] {Label}: {why} to gRdB={grDb}" + (err != 0 ? $" (update error {err})" : ""));
         }
 
         // ── Static helpers ────────────────────────────────────────────────────────

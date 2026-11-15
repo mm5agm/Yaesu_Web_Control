@@ -94,6 +94,10 @@ namespace Yaesu_Web_Control.Services.Voice
                 // v7 → v8+ is additive (ATU commands), so don't reset — just
                 // fill in any core command keys the older pack is missing,
                 // leaving the user's own phrases and translations untouched.
+                // Version 9 made transmit commands wait for "confirm" and took
+                // "key transmitter" out.
+                if (config.Version < 9)
+                    MigrateToV9(config);
                 BackfillMissingCommands(config);
                 return config;
             }
@@ -338,6 +342,9 @@ namespace Yaesu_Web_Control.Services.Voice
             config.SimpleCommands ??= new();
             foreach (var (key, phrases) in defaults.SimpleCommands)
             {
+                // MigrateToV9 decides this one: it stays out of a pack that already
+                // uses the word for something else.
+                if (key == VoiceTransmitConfirm.ConfirmIntent) continue;
                 if (!config.SimpleCommands.ContainsKey(key))
                     config.SimpleCommands[key] = new List<string>(phrases);
             }
@@ -345,12 +352,49 @@ namespace Yaesu_Web_Control.Services.Voice
                 config.Version = defaults.Version;
         }
 
+        /// <summary>
+        /// v8 -> v9: a command that goes on the air now waits for "confirm", so a
+        /// pack has to be able to say it. A pack that already uses the word for
+        /// something else is left without it, which only means nothing can be
+        /// confirmed: the safe way round, and the phrase can be added in Settings.
+        /// "key transmitter" goes because it was a shipped phrase that invited false
+        /// matches. A pack with no other way to say it gets the shipped ones.
+        /// </summary>
+        public static void MigrateToV9(VoicePhrasesConfig config)
+        {
+            config.SimpleCommands ??= new();
+            var defaults = BuildDefaults().SimpleCommands;
+
+            if (config.SimpleCommands.TryGetValue("TxOn", out var txOn) && txOn != null &&
+                txOn.RemoveAll(p => string.Equals(p?.Trim(), "key transmitter", StringComparison.OrdinalIgnoreCase)) > 0 &&
+                txOn.Count == 0)
+            {
+                txOn.AddRange(defaults["TxOn"]);
+            }
+
+            if (!config.SimpleCommands.ContainsKey(VoiceTransmitConfirm.ConfirmIntent))
+            {
+                var taken = config.SimpleCommands.Values
+                    .Concat((config.Macros ?? new()).Select(m => m.Phrases))
+                    .Where(v => v != null)
+                    .SelectMany(v => v!)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Select(p => p.Trim());
+                var phrases = defaults[VoiceTransmitConfirm.ConfirmIntent];
+                if (!phrases.Any(p => taken.Contains(p, StringComparer.OrdinalIgnoreCase)))
+                    config.SimpleCommands[VoiceTransmitConfirm.ConfirmIntent] = new List<string>(phrases);
+            }
+
+            config.Version = 9;
+        }
+
         public static VoicePhrasesConfig BuildDefaults() => new()
         {
             // v8 added the ATU tuner commands (AtuOn / AtuOff / AtuTune).
             // Existing v7 packs aren't reset — BackfillMissingCommands adds
             // just the new keys on load so a user's customisations survive.
-            Version = 8,
+            // v9 made transmit commands wait for "confirm": see MigrateToV9.
+            Version = 9,
             SimpleCommands = new()
             {
                 ["SwapVFO"]          = ["swap v f o", "swap v f os", "swap a and b", "swap a b", "switch v f o", "switch a and b"],
@@ -361,7 +405,8 @@ namespace Yaesu_Web_Control.Services.Voice
                 ["StatusFrequency"]  = ["what frequency", "what is my frequency", "read frequency", "current frequency", "status frequency"],
                 ["StatusMode"]       = ["what mode", "what is my mode", "read mode", "current mode", "status mode"],
                 ["StatusBand"]       = ["what band", "what band am I on", "current band", "status band"],
-                ["TxOn"]             = ["key transmitter", "start transmitting", "transmit now", "transmit on"],
+                ["TxOn"]             = ["start transmitting", "transmit now", "transmit on"],
+                [VoiceTransmitConfirm.ConfirmIntent] = ["confirm"],
                 ["TxOff"]            = ["stop transmitting", "go to receive", "transmit off"],
                 ["SplitOn"]          = ["split on", "enable split", "split transmit"],
                 ["SplitOff"]         = ["split off", "disable split", "simplex"],

@@ -164,6 +164,13 @@
         public double SdrSampleRateHzA { get; set; } = 0;
         public double SdrSampleRateHzB { get; set; } = 0;
 
+        // How much each panel smooths the FTdx101's ACC scope, as the panel's
+        // Refine slider step: 0 is the raw rows, AccScope.MaxRefineLevel the
+        // smoothest (AccScope.RefineWeights). Only used when the panel's
+        // device is an "acc-scope:" key; an SDR's frames are already averaged.
+        public int AccRefineLevelA { get; set; } = 3;   // AccScope.DefaultRefineLevel
+        public int AccRefineLevelB { get; set; } = 3;   // AccScope.DefaultRefineLevel
+
         // Legacy v2.2.x single sample rate. KEPT as a hidden migration anchor:
         // SettingsService reads this and copies into both A and B if those
         // are still 0, then writes 0 on next save. Do not reference outside
@@ -258,7 +265,7 @@
         public int DxSpotAgeMinutes { get; set; } = 15;
 
         // Cluster commands to send each time we log in. One per line.
-        // Useful for set/qra IO85CX, set/name Colin, set/filter, set/skimmer etc.
+        // Useful for set/qra YOUR-GRID, set/name YOUR-NAME, set/filter, set/skimmer etc.
         // Commands are sent in order after the callsign is accepted.
         public string? DxClusterPostLoginCommands { get; set; } = "";
 

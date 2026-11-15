@@ -30,12 +30,14 @@ import { dialStepper } from '/js/radio-panel/dial-stepper.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { loadRttySettings } from '/js/rtty/rtty-settings.js';
 import { post, startYaesuSpectrumFeed } from '/js/ui/spectrum-feed-yaesu.js';
+import { addRefineTo, limitSpansToSource, renameForSource } from '/js/radio-panel/spectrum-refine.js';
 import { BAND_EDGES, getSegments, loadBandPlanFromServer } from '/js/ui/band-plan.js';
 import { ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 
 // The SDR's spans (SpectrumSpanPlan.ValidSpans): the radio's own, with 30 and
-// 40 kHz between 20 and 50 for Bruce VK2RT (Discussion #257).
-const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
+// 40 kHz between 20 and 50 for Bruce VK2RT (Discussion #257), and 15 kHz
+// between 10 and 20 for him too (#250, 2026-11-14).
+const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 15e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
 
 // The bands, as the band keys on the radio panel and Classic have them.
 const HF_BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
@@ -105,6 +107,8 @@ export function startYaesuRttyContest(root, cfg) {
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
         views: cfg.views ?? [],
         menu: cfg.menu ?? [],
+        // The same window as the DX Spots pop-out on Classic and the Radio panel.
+        spotsWindow: { name: 'dx-spots', url: '/DxSpots', size: { width: 760, height: 480 } },
         keys: [{ label: 'CAT SET', id: 'rcCatSet', hidden: !cfg.setup, onClick: key => sendSetup(view.receiver, key, undefined, true),
             title: 'Send your RTTY setup from Settings to the radio: the lines for every band, then the ones for the band on screen. Widths kept for each band are forgotten' }],
         // MEM beside BANDS: YWC's memories, the ones the Mem panel has
@@ -129,6 +133,13 @@ export function startYaesuRttyContest(root, cfg) {
         layoutsApi: cfg.layoutsApi,
         onDecode: cfg.onDecode,
     });
+
+    // REFINE in the pane's bar on a receiver showing the FTdx101's ACC scope
+    // (spectrum-refine.js). A window showing only the waterfall has no pane.
+    for (const r of receivers) addRefineTo(view.pane(r.id)?.tools, r.id, 'rc-step');
+    for (const r of receivers) renameForSource(r.id, r.name, n => view.pane(r.id)?.setName(n));
+    // The ACC scope has only the radio's spans: SPAN drops the SDR's 15, 30, 40 kHz and 2 MHz.
+    for (const r of receivers) limitSpansToSource(view.pane(r.id)?.bar.querySelector('.rp-pane-span'), r.id);
 
     const feed = startYaesuSpectrumFeed({
         conn: cfg.conn,

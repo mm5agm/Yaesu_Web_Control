@@ -348,17 +348,25 @@ properties. `finish-release.ps1` now refuses to release unless all five agree.
 
 Then update the documentation:
 
-- `README.md` — add the release-notes entry (date-first heading, e.g.
-  `## 2026-08-01 - v2.4.2`), and bump the per-release badge in the shields.io
-  URL near the top. Pre-releases get their own heading too, but **not** a badge
-  bump — the badge tracks full releases only.
+- `RELEASE_HISTORY.md` — add the release-notes entry at the top (date-first
+  heading, e.g. `## 2026-08-01 - v2.4.2`). Pre-releases get their own heading too.
+  `finish-release.ps1` lifts the notes from there into the GitHub release.
+- `README.md` — for a full release only, bump the badge in the shields.io URL
+  near the top, and replace the short summary and link under `## Release Notes`.
+  The notes themselves stay out of the README, so it stays short.
 - `USER_MANUAL.md` — bring every section the release touches in line with what
   the app now does, and re-capture any screenshot the change makes wrong.
+
+`.\scripts\check-manual-links.ps1` checks all three for links that go nowhere
+(an anchor with no heading, a missing file or picture, a bad anchor in another
+.md) and for manual sections missing from the contents. `finish-release.ps1`
+refuses to release while it fails, and the CI `test` job runs it on every PR.
+Run it after any doc edit. IWC has the same script; keep the two the same.
 
 Do not start the git steps until both documents are done. `finish-release.ps1`
 helps with the mechanical half — it rewrites the version strings in the manual
 and the README badge — but it refuses to release at all unless you have written
-the README release-notes entry yourself, and it can only *warn* that the manual
+the `RELEASE_HISTORY.md` entry yourself, and it can only *warn* that the manual
 looks stale, never judge whether a section is right.
 
 ```powershell
@@ -378,7 +386,7 @@ git push origin main
 git push origin vX.Y.Z
 
 # 4. Create the GitHub Release — this triggers the build workflow
-gh release create vX.Y.Z --title "vX.Y.Z" --notes "See README.md for full release notes."
+gh release create vX.Y.Z --title "vX.Y.Z" --notes "See RELEASE_HISTORY.md for full release notes."
 ```
 
 **Step 4 is required.** The build workflow triggers on `release: [created]`, not on tag push alone.
@@ -395,7 +403,7 @@ place, it has none of those checks, and it generates release notes from git log.
 **Install the hooks in every clone.** `.githooks/pre-push` refuses to push
 `main` anything that is neither a release merge (a commit whose subject is
 `Release vX.Y.Z`, which is what `finish-release.ps1` makes) nor a
-documentation-only change (`README.md`, `USER_MANUAL.md`, `docs/`,
+documentation-only change (`README.md`, `RELEASE_HISTORY.md`, `USER_MANUAL.md`, `docs/`,
 `pictures/`, which is how README corrections have always reached `main`
 between releases). That guard was missing on 2026-09-19, when a mistyped `cd`
 ran IWC's docs merge in this repo and pushed 31 unreleased commits to `main` --
@@ -587,6 +595,36 @@ Device code (still in `Services/Sdr/` but linked into both projects):
   - `devParams.fsFreq.fsHz` @ offset 8 within DevParamsT
 - `SoapySdrDevice` — SoapySDR wrapper for RTL-SDR, Airspy, etc.
 - `FftProcessor` — Hann-windowed FFT → dBFS bins.
+
+### ACC scope — the FTdx101's own scope as an SDR panel source
+
+The FTdx101MP/D send Main and Sub scope rows out of the rear ACC socket. The
+ACC board (ESP32-S3, [Yaesu_ACC_Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum))
+passes them over USB, and the **YaesuAccScope** NuGet package decodes them.
+It comes from nuget.org (0.2.0 from 2026-11-12). To take a new library version,
+publish it from the ACC repo (a `library-vX.Y.Z` tag publishes it through
+Trusted Publishing; see that repo's `.github/workflows/library.yml`) and bump
+the `PackageReference`. Until 2026-11-12 the package was checked in under
+`local-packages/` with a `nuget.config`; both are gone.
+
+- **Keys** `acc-scope:main` / `acc-scope:sub` appear in the SDR dropdowns only
+  for FTdx101MP/D (`AccScope.ModelHasAcc`). They **never go to the SDR worker**:
+  one board feeds both panels, so `AccScopeService` owns the port in the main
+  process and `SdrManager.RunAccSessionAsync` turns frames into `SpectrumUpdate`s.
+  The service only opens Espressif ports (USB VID 303A), never the CAT ports,
+  and lets go of the board when no panel uses it.
+- **Placement** comes from each frame (VFO, span, Center/Cursor/Fix), so nothing
+  is polled over CAT. Span buttons send the CAT scope span command for that
+  receiver (`TrySetAccSpanAsync`).
+- **Refine:** each panel runs the library's `ScopeRefiner` (same method as core
+  `SpectrumRefiner`) on the rows before they are drawn. Steps are
+  `AccScope.RefineWeights` = 1, .6, .45, .3, .2, .12, per panel in
+  `AccRefineLevelA/B`, served at `/api/sdr/refine` (`acc: true` only on a panel
+  showing the ACC scope). The page control is core
+  `js/radio-panel/spectrum-refine.js`, and `RefineEveryViewTests` fails any view
+  that draws the spectrum without it. Shared design note:
+  [core/docs/design/spectrum-refine.md](core/docs/design/spectrum-refine.md).
+- Checked on receive only. Not yet checked while transmitting, or in Docker.
 
 ### CAT Scope Control — a separate thing from the SDR panel
 

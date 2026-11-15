@@ -47,6 +47,7 @@
 </style>
 
 <div class="mt-4">
+    <div id="settingsSearch"></div>
 
     @* Restart-required banner — shown when a setting like the radio model was
        changed and the running app needs a restart for it to fully take effect.
@@ -421,7 +422,7 @@
                         onclick="ywcOpenGrammarsFolder()">
                     <i class="bi bi-folder2-open" aria-hidden="true"></i>&nbsp;Open user grammars folder
                 </button>
-                <button type="button" id="testPackBtn" class="btn btn-sm btn-outline-secondary"
+                <button type="button" id="testPackBtn" class="btn btn-sm btn-outline-secondary" data-setting="voice-test-pack"
                         data-bs-toggle="modal" data-bs-target="#voiceTestPackModal">
                     <i class="bi bi-mic" aria-hidden="true"></i>&nbsp;Test this pack
                 </button>
@@ -1088,7 +1089,7 @@
                 SwapVFO:'Swap VFO', NudgeUp:'Step up', NudgeDown:'Step down',
                 BandUp:'Band up', BandDown:'Band down',
                 StatusFrequency:'What frequency?', StatusMode:'What mode?', StatusBand:'What band?',
-                TxOn:'Key transmitter', TxOff:'Stop transmitting',
+                TxOn:'Start transmitting', ConfirmTransmit:'Confirm a transmit', TxOff:'Stop transmitting',
                 SplitOn:'Split on', SplitOff:'Split off',
                 NudgeIfWidthUp:'Filter wider', NudgeIfWidthDown:'Filter narrower',
                 Help:'Help',
@@ -1097,7 +1098,7 @@
             const SIMPLE_CATEGORY_OF = {
                 SwapVFO:'tuning', NudgeUp:'tuning', NudgeDown:'tuning', BandUp:'tuning', BandDown:'tuning',
                 NudgeIfWidthUp:'radio', NudgeIfWidthDown:'radio',
-                TxOn:'transmit', TxOff:'transmit', SplitOn:'transmit', SplitOff:'transmit',
+                TxOn:'transmit', ConfirmTransmit:'transmit', TxOff:'transmit', SplitOn:'transmit', SplitOff:'transmit',
                 StatusFrequency:'status', StatusMode:'status', StatusBand:'status', Help:'status',
             };
 
@@ -1669,7 +1670,9 @@
             // button (VoiceControlService.TryPhraseAsync isn't involved here --
             // this is the normal grammar-driven /api/voice/start /stop path,
             // just with dryRun=true by default so nothing reaches the radio).
-            (function () {
+            // Waits for the page: the modal is further down than this script, so
+            // looking for it straight away finds nothing and the button stays dead.
+            document.addEventListener('DOMContentLoaded', function () {
                 const modalEl   = document.getElementById('voiceTestPackModal');
                 const holdBtn   = document.getElementById('voiceTestHoldBtn');
                 const dryRunCb  = document.getElementById('voiceTestDryRun');
@@ -1694,16 +1697,18 @@
                 const badgeClass = {
                     Idle: 'text-bg-secondary', Listening: 'text-bg-danger', Heard: 'text-bg-success',
                     Executing: 'text-bg-success', Unrecognised: 'text-bg-warning', Error: 'text-bg-danger',
+                    ConfirmNeeded: 'text-bg-warning',
                 };
+                const stateLabel = { ConfirmNeeded: 'Say confirm' };
 
                 function onTestStatusUpdate(status) {
                     if (!testActive) return;
-                    stateBadge.textContent = status.state || '—';
+                    stateBadge.textContent = stateLabel[status.state] || status.state || '—';
                     stateBadge.className = 'badge ' + (badgeClass[status.state] || 'text-bg-secondary');
-                    if (status.state === 'Heard' || status.state === 'Unrecognised' || status.state === 'Error') {
+                    if (status.state === 'Heard' || status.state === 'Unrecognised' || status.state === 'Error' || status.state === 'ConfirmNeeded') {
                         const parts = [];
-                        parts.push('<strong>' + escapeHtml(status.state) + '</strong>');
-                        if (status.lastHeard) parts.push('heard &ldquo;' + escapeHtml(status.lastHeard) + '&rdquo;');
+                        parts.push('<strong>' + escapeHtml(stateLabel[status.state] || status.state) + '</strong>');
+                        if (status.lastHeard) parts.push('&ldquo;' + escapeHtml(status.lastHeard) + '&rdquo;');
                         if (status.lastIntent) parts.push('→ ' + escapeHtml(status.lastIntent));
                         if (status.confidence !== null && status.confidence !== undefined)
                             parts.push('(confidence ' + status.confidence.toFixed(2) + ')');
@@ -1712,6 +1717,9 @@
                         traceLine(parts.join(' '));
                     }
                 }
+
+                // For Tests/ui: a real phrase needs a microphone.
+                window.voiceTestShowStatus = onTestStatusUpdate;
 
                 function attachSignalR() {
                     const conn = window.signalRConnection || window.connection;
@@ -1727,7 +1735,8 @@
                     holdBtn.classList.add('btn-danger');
                     try {
                         const dryRun = dryRunCb.checked;
-                        await fetch('/api/voice/start?dryRun=' + (dryRun ? 'true' : 'false'), { method: 'POST' });
+                        const started = await fetch('/api/voice/start?dryRun=' + (dryRun ? 'true' : 'false'), { method: 'POST' });
+                        if (!started.ok) throw new Error('the speech recogniser did not start');
                         traceLine('Listening…' + (dryRun ? ' <span class="text-muted">[dry run]</span>' : ''));
                     } catch (e) {
                         traceLine('<span class="text-danger">Start failed: ' + escapeHtml(String(e)) + '</span>');
@@ -1766,7 +1775,7 @@
                     testActive = false;
                     if (pressed) stopTest();
                 });
-            })();
+            });
         </script>
     </details>
     }
@@ -2292,27 +2301,32 @@
                             Plug in your SDR(s) before scanning. Each VFO can have its own SDR — the user
                             tells YWC which physical SDR is wired to which VFO's IF output. Leave a slot
                             blank if that VFO has no SDR.
+                            On an FTdx101MP or D, the radio's own scope is in these lists too: choose
+                            <strong>ACC scope, Main</strong> for VFO A and <strong>ACC scope, Sub</strong> for VFO B.
                         </div>
 
                         <label for="sdrDeviceDropdownA" class="form-label small fw-semibold mb-1">VFO A SDR</label>
-                        <select class="form-select form-select-sm mb-1" id="sdrDeviceDropdownA">
+                        <select class="form-select form-select-sm mb-1" id="sdrDeviceDropdownA" aria-describedby="sdrSameSourceA">
                             <option value="">— (none) —</option>
                         </select>
+                        <div id="sdrSameSourceA" class="text-danger small fw-semibold mb-1" hidden>A and B can't use the same source</div>
                         <input type="hidden" asp-for="Settings.SdrDeviceKeyA" id="sdrDeviceKeyInput" />
                         <div id="sdrDeviceKeyDisplay" class="font-monospace small text-muted mb-3"></div>
 
                         <label for="sdrDeviceDropdownB" class="form-label small fw-semibold mb-1">VFO B SDR</label>
-                        <select class="form-select form-select-sm mb-1" id="sdrDeviceDropdownB">
+                        <select class="form-select form-select-sm mb-1" id="sdrDeviceDropdownB" aria-describedby="sdrSameSourceB">
                             <option value="">— (none) —</option>
                         </select>
+                        <div id="sdrSameSourceB" class="text-danger small fw-semibold mb-1" hidden>A and B can't use the same source</div>
                         <input type="hidden" asp-for="Settings.SdrDeviceKeyB" id="sdrDeviceKeyInputB" />
                         <div id="sdrDeviceKeyDisplayB" class="font-monospace small text-muted"></div>
                         <span asp-validation-for="Settings.SdrDeviceKeyB" class="text-danger small"></span>
                         <div id="sdrSameDeviceWarning" class="alert alert-warning small py-2 mt-2 mb-0" role="alert" hidden>
                             <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
-                            The same SDR is chosen for VFO A and VFO B. One SDR can only feed one VFO,
+                            The same source is chosen for VFO A and VFO B. One SDR can only feed one VFO,
                             so one panel would show "SDR device unavailable". Choose (none) for the VFO
-                            it isn't wired to. Settings won't save like this.
+                            it isn't wired to, or on an FTdx101, ACC scope, Main for A and ACC scope, Sub
+                            for B. Settings won't save like this.
                         </div>
 
                         <div id="sdrScanNotes" class="mt-2"></div>
@@ -2458,6 +2472,7 @@
                             <option value="2000">2 kHz — one CW signal and its close neighbours (software zoom)</option>
                             <option value="5000">5 kHz — a CW QSO and its neighbours, or one SSB signal (software zoom)</option>
                             <option value="10000">10 kHz — a few CW signals or a couple of SSB QSOs (software zoom)</option>
+                            <option value="15000">15 kHz (software zoom)</option>
                             <option value="20000">20 kHz — a CW sub-band (software zoom)</option>
                             <option value="30000">30 kHz (software zoom)</option>
                             <option value="40000">40 kHz (software zoom)</option>
@@ -2469,14 +2484,14 @@
                             <option value="2000000">2 MHz (recommended)</option>
                         </select>
                         <div class="form-text">
-                            The same spans as the radio's own scope, plus 30 kHz, 40 kHz and 2 MHz. Wider spans need
+                            The same spans as the radio's own scope, plus 15 kHz, 30 kHz, 40 kHz and 2 MHz. Wider spans need
                             a higher SDR sample rate and more CPU; not all devices
                             support all rates. Spans of 100 kHz and below all run the
                             SDR at 125 kHz and zoom in software, so switching between
                             them is instant.
-                            <strong>Saving this resets both VFOs</strong> to the chosen span;
-                            use the span buttons above each spectrum on the main page
-                            to set each VFO independently afterwards.
+                            <strong>Changing this and saving resets both VFOs</strong> to the chosen span;
+                            left unchanged, each VFO keeps its own. Use the span buttons above each
+                            spectrum on the main page to set each VFO independently.
                         </div>
                     </div>
                     <div class="mb-3">
@@ -2562,7 +2577,7 @@
                                     Login callsign
                                 </label>
                                 <input asp-for="Settings.DxClusterLoginCallsign" class="form-control"
-                                       placeholder="Your callsign, e.g. MM5AGM" autocomplete="off"
+                                       placeholder="Your callsign" autocomplete="off"
                                        style="text-transform: uppercase" />
                                 <div class="form-text">
                                     Sent to the cluster when it prompts for login. Use your own amateur
@@ -2586,11 +2601,11 @@
                             Post-login commands
                         </label>
                         <textarea asp-for="Settings.DxClusterPostLoginCommands" class="form-control font-monospace"
-                                  rows="4" placeholder="set/qra IO85CX&#10;set/name Colin"></textarea>
+                                  rows="4" placeholder="set/qra YOUR-GRID&#10;set/name YOUR-NAME"></textarea>
                         <div class="form-text">
                             One DXSpider command per line. Sent each time the app connects, after the callsign
-                            is accepted. Use this to set your Maidenhead grid (<code>set/qra IO85CX</code>),
-                            name (<code>set/name Colin</code>), or any spot filters you prefer. Lines starting
+                            is accepted. Use this to set your own Maidenhead grid (<code>set/qra YOUR-GRID</code>),
+                            name (<code>set/name YOUR-NAME</code>), or any spot filters you prefer. Lines starting
                             with <code>#</code> are ignored. Leading <code>/</code> is stripped.
                         </div>
                     </div>
@@ -3861,6 +3876,8 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/ui/settings-search-keywords.js" asp-append-version="true"></script>
+    <script src="~/js/settings/settings-search.js" asp-append-version="true"></script>
     <script>
         // Serial port dropdown — same /api/ports source as Diagnostics
         (function () {
@@ -4141,6 +4158,9 @@
             if (!key) return '';
             // The radio's own scope, not an SDR (Ft710ScopeFrame.KeyPrefix).
             if (key.startsWith('yaesu-scope:')) return 'FT-710 internal scope [radio]';
+            // The FTdx101's own scope from its ACC socket (AccScope.KeyPrefix).
+            if (key === 'acc-scope:main') return 'ACC scope, Main (FTdx101 ACC socket) [radio]';
+            if (key === 'acc-scope:sub')  return 'ACC scope, Sub (FTdx101 ACC socket) [radio]';
             if (key.startsWith('sdrplay:')) {
                 const { hwVer, serial } = parseSdrplayKey(key);
                 const model = hwVer != null ? (SDRPLAY_HW_VER_NAMES[hwVer] || `hw${hwVer}`) : null;
@@ -4187,8 +4207,17 @@
         function updateSameDeviceWarning() {
             const a = document.getElementById(sdrSlots.A.inputId)?.value || '';
             const b = document.getElementById(sdrSlots.B.inputId)?.value || '';
+            const same = !!(a && a === b);
             const warn = document.getElementById('sdrSameDeviceWarning');
-            if (warn) warn.hidden = !(a && a === b);
+            if (warn) warn.hidden = !same;
+            // Both lists go red, each with its own line, so it shows beside
+            // whichever list the eye is on (Colin, 2026-11-15: missed the
+            // warning below them and the save was refused).
+            for (const slot of ['A', 'B']) {
+                document.getElementById(sdrSlots[slot].dropdownId)?.classList.toggle('is-invalid', same);
+                const line = document.getElementById('sdrSameSource' + slot);
+                if (line) line.hidden = !same;
+            }
         }
 
         // Initialise both dropdowns from saved keys on page load, then

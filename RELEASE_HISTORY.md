@@ -12,6 +12,137 @@ a different and much older format.
 
 ---
 
+## 2026-11-15 - v2.5.5
+
+*The FTdx101's own scope from its ACC socket, no SDR needed, and a much better SDR spectrum. Everything in the v2.5.5 pre-releases is included; their notes are in [RELEASE_HISTORY.md](RELEASE_HISTORY.md). Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**The FTdx101's own scope, no SDR needed** *(experimental, Windows only)* [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- On an FTdx101MP or FTdx101D, a small ESP32-S3 board on the rear ACC socket brings the radio's Main and Sub scope into the SDR panels, 25 frames a second. In **Settings → SDR Spectrum Display**, press **Scan**, then choose **ACC scope, Main** in the **VFO A SDR** list and **ACC scope, Sub** in the **VFO B SDR** list, and save. The board's firmware and wiring are in the [Yaesu ACC Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum) project.
+- **Refine** settles the noise floor so weak signals stand out: a slider beside Bright on a panel showing the ACC scope, and a **REFINE** list beside SPAN on the Radio panel, its pop-out spectrum and RTTY Contest.
+- **Each spectrum says where it comes from**, ACC scope or SDR, because the two look alike.
+- **LEVEL too low** shows on a panel when the radio's scope Level is so low that weak signals are lost. Raise Level until it goes; the radio keeps Level for each band.
+- The SPAN list offers only the radio's own spans, 1 kHz to 1 MHz.
+- Tested on one FTdx101MP so far. Please say on GitHub how it goes on yours.
+
+**SDR spectrum** [§6.3](USER_MANUAL.md#63-sdr-spectrum-display)
+
+- **The 500 kHz span really is 500 kHz.** It showed 1 MHz, so signals appeared at half their true distance from the dial.
+- **25 frames a second at every span**, so the trace moves smoothly. It managed about 10 a second up to 100 kHz.
+- **No false signals from stations outside the span.** At 1 MHz a medium-wave broadcaster showed on 160 m, 46 dB above the noise.
+- **Weak signals on a busy band.** The SDRplay's automatic gain is off, so strong stations no longer push weak ones into the noise. If the SDR overloads, YWC backs the gain off, and gives it back later.
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **SPOTS** opens the DX spots list in a window of its own, so you can check whether a station has been spotted while the spot tags are off.
+- **WF BRIGHT** brightens the waterfall, from OFF to +60 dB, without changing the spectrum trace.
+- **15 kHz** is in the SPAN list for an SDR.
+
+**Settings**
+
+- **A search box** at the top finds any setting, and a link can go straight to one.
+- **Both SDR lists go red** with "A and B can't use the same source" when VFO A and VFO B have the same one, and Settings won't save until you change one.
+- **Meter Poll Interval** is saved. Overlapping SDRplay scans no longer crash YWC, and saving keeps each VFO's span.
+
+**Voice control**
+
+- Commands that start a transmission need a much clearer match, and are held until you say "confirm" within 6 seconds. Stop commands are not held. "Key transmitter" has been removed.
+- The Test this pack window works, a dry run stays dry, and Trace is fixed.
+
+**Other changes**
+
+- The Radio and RTTY Contest views say when there is a new release.
+- The Mac app build has the right icons.
+
+## 2026-11-14 - v2.5.5-pre5 (pre-release)
+
+*SDR spectrum fixes. This build was not put out as a pre-release: it went straight into v2.5.5.*
+
+**SDR spectrum** [§6.3](USER_MANUAL.md#63-sdr-spectrum-display)
+
+- The 500 kHz SDR span really showed 1 MHz of band. Signals were drawn at half their true distance from the dial, so a signal 200 kHz away appeared 100 kHz away. It now shows 500 kHz. The other spans were checked against the radio's own scope and were already right.
+- SDR panels now update 25 times a second at every span. Before, they managed only about 10 a second up to 100 kHz, so the trace looked jerky. Signals don't look any clearer, but the trace moves smoothly.
+- At wide spans, part of the SDR's signal was being thrown away before it reached the screen. It isn't now.
+- At the 1 MHz span, a strong station outside the span could show up inside it as a false signal. On 160 m a medium-wave broadcaster appeared 241 kHz above the dial, 46 dB above the noise. The SDR now filters it out properly, so only real signals are drawn.
+- On a busy band the SDR missed weak signals. Its automatic gain turned the gain down for the strong stations, and weak ones sank into the noise. On the 31 m broadcast band it found fewer than half as many weak signals as it does now. The automatic gain is now off and the gain is fixed. If a very strong signal overloads the SDR, as medium-wave stations do on 160 m at night, YWC turns the gain down only as far as it needs to, and turns it back up a little while after the overload ends. Quiet bands look the same as before.
+
+**ACC scope (FTdx101)** [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- A panel showing the ACC scope now says **LEVEL too low** when the radio's scope Level is so low that the noise floor sits on the bottom of the radio's scale, where weak signals are lost. Raise Level until it goes. The radio keeps Level for each band, so check it on every band you use; +05 was too low on 160 m and 10 m here, and +23.5 was fine everywhere.
+
+**Other changes**
+
+- Changes from v2.5.5-pre1 to pre4 still need testing too: see the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md#2026-11-14---v255-pre4-pre-release).
+
+## 2026-11-14 - v2.5.5-pre4 (pre-release)
+
+*A fix for the SPAN list on the FTdx101's own scope. Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**SPAN on the ACC scope** [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- On a panel showing the ACC scope, the SPAN list now offers only the radio's own spans, 1 kHz to 1 MHz. Before, it also offered 15, 30 and 40 kHz and 2 MHz, which the radio's scope doesn't have: picking 15 kHz kept the scope at 10 kHz while the list read 15 kHz. This is on RTTY Contest, the Radio panel and its pop-out spectrum. An SDR still has every span.
+- If a span can't be set, every SPAN list now goes back to the span you're actually seeing.
+
+**Other changes**
+
+- Changes from v2.5.5-pre1 to pre3 still need testing too: see the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md#2026-11-12---v255-pre1-pre-release).
+
+## 2026-11-14 - v2.5.5-pre3 (pre-release)
+
+*Three things for RTTY Contest that Bruce VK2RT asked for during the WAE. Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**RTTY Contest** [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- **SPOTS**, beside DX SPOTS, opens the DX spots list in a window of its own: the band you're on, or all bands. You can check whether a station has been spotted while the spot tags on the spectrum are off. DX SPOTS still turns the tags off and on.
+- **15 kHz** is in the SPAN list, between 10 and 20 kHz. It is on the Radio panel and in Settings too. It's for an SDR: the FTdx101's own scope has no 15 kHz span, so on an ACC scope panel the span stays as it is.
+- **WF BRIGHT**, in the scope row, brightens the waterfall so weak signals show up more, from OFF to +60 dB in 6 dB steps. The spectrum trace isn't changed. It's kept for each receiver, and the waterfall windows follow it.
+
+**Other changes**
+
+- Changes from v2.5.5-pre1 to pre2 still need testing too: see the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md#2026-11-12---v255-pre1-pre-release).
+
+## 2026-11-13 - v2.5.5-pre2 (pre-release)
+
+*Each spectrum says where it comes from, and choosing the ACC scope is easier to find. Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**The FTdx101's own scope** [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- Each spectrum now says where it comes from, because the ACC scope and an SDR look alike: **Spectrum — VFO A · ACC scope** (or **· SDR**) on Classic and Experimental, and **MAIN · ACC SCOPE** on the Radio panel, its pop-out spectrum and RTTY Contest.
+- **Settings → SDR Spectrum Display** now says the ACC scope is in the **VFO A SDR** and **VFO B SDR** lists after you press **Scan**.
+
+**Other changes**
+
+- The new-release notice no longer shows a line pointing at notes that aren't there.
+- Changes from v2.5.5-pre1 still need testing too: see the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md#2026-11-12---v255-pre1-pre-release).
+
+## 2026-11-12 - v2.5.5-pre1 (pre-release)
+
+*The FTdx101's own scope from its ACC socket, Refine, and a settings search. Everything in v2.5.4 is included. Install it over v2.5.4 or any pre-release; your settings are kept.*
+
+**The FTdx101's own scope, no SDR needed** *(experimental, Windows only)* [§6.3](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- On an FTdx101MP or FTdx101D, a small ESP32-S3 board on the rear ACC socket brings the radio's Main and Sub scope into the SDR panels, 25 frames a second. In **Settings → SDR Spectrum Display**, press **Scan**, then open the **VFO A SDR** list and choose **ACC scope, Main**, and in the **VFO B SDR** list choose **ACC scope, Sub**. Save. The board's firmware and wiring are in the [Yaesu ACC Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum) project.
+- **Refine** settles the noise floor so weak signals stand out: a slider beside Bright on a panel showing the ACC scope, and a **REFINE** list beside SPAN on the Radio panel, its pop-out spectrum and RTTY Contest. On 20m FT8 signals stood about two and a half times as high above the floor at the top step. An SDR's spectrum is averaged already, so Refine only appears for the ACC scope.
+- Tested on one FTdx101MP so far. Please say on GitHub how it goes on yours.
+
+**Settings**
+
+- **A search box** at the top finds any setting, and a link can go straight to one.
+- **Meter Poll Interval** is saved.
+- Overlapping SDRplay scans no longer crash YWC, and saving keeps each VFO's span.
+
+**Voice control**
+
+- Commands that start a transmission need a much clearer match, and are held until you say "confirm" within 6 seconds. Stop commands are not held. "Key transmitter" has been removed.
+- The Test this pack window works, a dry run stays dry, and Trace is fixed.
+
+**Other changes**
+
+- The Radio and RTTY Contest views say when there is a new release.
+- The Mac app build has the right icons.
+- The manual says macOS and Linux are not CAT-only, and that Remote Audio works in Docker.
+- The release notes' links are checked before each release.
+
 ## 2026-11-03 - v2.5.4
 
 *RTTY Contest, a screen for RTTY contesting, and the CW Paddle, for sending CW from your own paddle when you operate remotely. Everything in the v2.5.4 pre-releases is included; their notes are in [RELEASE_HISTORY.md](RELEASE_HISTORY.md). Install it over v2.5.3 or any pre-release; your settings are kept.*

@@ -1,7 +1,7 @@
 
 # Yaesu Web Control
 
-![Latest release](https://img.shields.io/badge/Latest%20release-v2.5.4-blue?style=flat-square)
+![Latest release](https://img.shields.io/badge/Latest%20release-v2.5.5-blue?style=flat-square)
 ![Downloads](https://img.shields.io/github/downloads/mm5agm/Yaesu_Web_Control/latest/Yaesu_Web_Control_Setup.exe?label=Downloads&style=flat-square)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue?style=flat-square)
 
@@ -28,7 +28,7 @@ I wrote YWC because I can't see the FTdx101MP's controls without using a magnify
 
 **See the band**
 
-- **[SDR spectrum and waterfall](USER_MANUAL.md#63-sdr-spectrum-display)** from an SDR on the radio's IF output, one per receiver on an FTdx101. Spans run from 1 kHz to 2 MHz, the IF passband is drawn on the trace, and a click tunes to the signal. Please read the [SDR safety warning](#sdr-safety) first. **The FT-710 needs no SDR:** it can [send its own scope over the USB lead](USER_MANUAL.md#ft-710-the-radios-own-scope-no-sdr-needed-experimental). *Experimental, and Windows only.*
+- **[SDR spectrum and waterfall](USER_MANUAL.md#63-sdr-spectrum-display)** from an SDR on the radio's IF output, one per receiver on an FTdx101. Spans run from 1 kHz to 2 MHz, the IF passband is drawn on the trace, and a click tunes to the signal. Please read the [SDR safety warning](#sdr-safety) first. **The FT-710 needs no SDR:** it can [send its own scope over the USB lead](USER_MANUAL.md#ft-710-the-radios-own-scope-no-sdr-needed-experimental). **Nor does the FTdx101MP or FTdx101D:** a small ESP32-S3 board on the rear ACC socket [brings in the radio's own Main and Sub scope](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental), with **Refine** to settle the noise floor so weak signals stand out. *Experimental, and Windows only.*
 - **[Radio Display](USER_MANUAL.md#19-radio-display)**: the radio's own screen in the browser, captured from its DVI-D socket with an HDMI-to-USB stick. Click a signal to tune to it, and click the readouts and soft-buttons, with the radio's [scope controls](USER_MANUAL.md#194-cat-scope-controls) beside it. By Fabio. Please read the [DVI-D safety warning](#dvi-d-safety) first, and set the radio's EXT MONITOR PIXEL menu to 800x600.
 - **[DX spots](USER_MANUAL.md#517-dx-spots-list)** on the spectrum, and a [watch list](USER_MANUAL.md#514-dx-watch-panel) that alerts you when a callsign or prefix appears.
 
@@ -47,9 +47,9 @@ I wrote YWC because I can't see the FTdx101MP's controls without using a magnify
 
 ## Release Notes
 
-**v2.5.4 brings RTTY Contest and the CW Paddle.** RTTY Contest is a screen for RTTY contesting, and every part of it can go to a window of its own on another monitor. Bruce VK2RT asked for it and tested it through sixteen pre-releases. The CW Paddle sends CW from your own paddle when you operate the radio remotely, through a HaliKey or an ESP32-S3 board you program from the page.
+**v2.5.5 brings the FTdx101's own scope, from its ACC socket, and a much better SDR spectrum.** A small ESP32-S3 board on the FTdx101's rear ACC socket shows the radio's Main and Sub scope in YWC, with no SDR needed ([Yaesu ACC Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum)). The SDR spectrum shows its true 500 kHz span, runs at 25 frames a second at every span, and keeps weak signals on a busy band. RTTY Contest gains SPOTS and WF BRIGHT, and Settings has a search box.
 
-[All of v2.5.4](RELEASE_HISTORY.md#2026-11-03---v254) | [Every earlier version](RELEASE_HISTORY.md) | [Installers](https://github.com/mm5agm/Yaesu_Web_Control/releases)
+[All of v2.5.5](RELEASE_HISTORY.md#2026-11-15---v255) | [Every earlier version](RELEASE_HISTORY.md) | [Installers](https://github.com/mm5agm/Yaesu_Web_Control/releases)
 
 ## Supported transceivers
 

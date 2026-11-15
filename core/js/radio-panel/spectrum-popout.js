@@ -117,7 +117,8 @@ export function mountSpectrumPopout(root, opts) {
             const sel = h('select', 'rp-spop-span');
             sel.title = 'Span';
             for (const s of opts.spans) sel.append(new Option('SPAN ' + s.label, String(s.hz)));
-            sel.addEventListener('change', () => opts.onSpan?.(p.id, Number(sel.value)));
+            // Let go of focus once picked, so setSpanValue puts back a refused span.
+            sel.addEventListener('change', () => { sel.blur(); opts.onSpan?.(p.id, Number(sel.value)); });
             pane.tools.append(sel);
             spanSel[p.id] = sel;
         }

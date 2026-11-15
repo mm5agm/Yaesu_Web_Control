@@ -148,6 +148,17 @@ namespace Yaesu_Web_Control.Controllers
                     notes.Add(Ft4222Libraries.MissingMessage);
             }
 
+            // ── The FTdx101's own scope from its ACC socket (the ACC board) ──
+            // Offered whenever the radio is set up as an FTdx101MP or D, one
+            // entry per receiver; not probed here, because finding the board
+            // takes a few seconds per Espressif port and a scan must not. The
+            // panel says plainly if the board isn't there.
+            if (AccScope.ModelHasAcc(_settings.GetCachedSettings().RadioModel))
+            {
+                all.Add(new SdrDeviceInfo(AccScope.MainKey, AccScope.MainLabel, "radio"));
+                all.Add(new SdrDeviceInfo(AccScope.SubKey,  AccScope.SubLabel,  "radio"));
+            }
+
             // Merge in devices currently held by running workers. The SDRplay
             // API hides Selected devices from GetDevices in other processes,
             // so without this the Settings Scan would report the user's
@@ -164,7 +175,12 @@ namespace Yaesu_Web_Control.Controllers
 
                 // Build a synthetic entry from the key alone.
                 string label, driver;
-                if (Ft710ScopeFrame.IsScopeKey(key))
+                if (AccScope.IsAccKey(key))
+                {
+                    label  = AccScope.LabelFor(key);
+                    driver = "radio";
+                }
+                else if (Ft710ScopeFrame.IsScopeKey(key))
                 {
                     label  = Ft710ScopeLabel;
                     driver = "radio";

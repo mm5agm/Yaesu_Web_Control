@@ -72,6 +72,12 @@ jobs:
       - name: Run unit tests
         run: dotnet test Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj --configuration Release --verbosity normal
 
+      # Links in USER_MANUAL.md, README.md and RELEASE_HISTORY.md that go
+      # nowhere, and manual sections missing from the contents.
+      - name: Check the docs' links
+        shell: pwsh
+        run: ./scripts/check-manual-links.ps1
+
   build-windows:
     # Unstable snapshots of develop are published by unstable.yml. Creating
     # that GitHub Release would otherwise re-enter this workflow (on:

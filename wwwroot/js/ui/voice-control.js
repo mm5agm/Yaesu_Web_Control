@@ -202,6 +202,7 @@
                 case 'Heard':        setHeardVisual();       break;
                 case 'Executing':    setExecutingVisual();   break;
                 case 'Unrecognised': setUnrecognisedVisual();break;
+                case 'ConfirmNeeded': setUnrecognisedVisual();break;
                 case 'Error':        setErrorVisual();       break;
                 default:             /* leave as-is */       break;
             }
@@ -212,6 +213,8 @@
                 btn.title = 'Voice error: ' + status.errorMessage;
             } else if (status.state === 'Listening') {
                 btn.title = 'Listening… release to stop';
+            } else if (status.state === 'ConfirmNeeded') {
+                btn.title = 'Say confirm to go ahead';
             } else {
                 btn.title = 'Hold to give a VFO ' + vfo + ' voice command';
             }

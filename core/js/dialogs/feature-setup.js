@@ -144,7 +144,7 @@ async function openDxCluster() {
             </div>
             <div class="col-8">
                 <label class="form-label small mb-1" for="fsDxCall">Your callsign</label>
-                <input class="form-control text-uppercase" id="fsDxCall" placeholder="MM5AGM">
+                <input class="form-control text-uppercase" id="fsDxCall" placeholder="Your callsign">
             </div>
         </div>
         <div class="form-check">

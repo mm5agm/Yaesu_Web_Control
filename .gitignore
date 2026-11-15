@@ -43,6 +43,7 @@ ScaffoldingReadMe.txt
 
 # NuGet Packages
 *.nupkg
+!local-packages/*.nupkg
 *.snupkg
 **/[Pp]ackages/*
 !**/[Pp]ackages/build/

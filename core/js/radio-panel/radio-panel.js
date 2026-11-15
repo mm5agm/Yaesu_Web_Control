@@ -505,7 +505,8 @@ export function mountRadioPanel(root, opts = {}) {
                 spanSel.append(o);
             }
             spanSel.value = '';
-            spanSel.addEventListener('change', () => act('span', spanSel.value, d.id));
+            // Let go of focus once picked, so the next state puts back a refused span.
+            spanSel.addEventListener('change', () => { const hz = spanSel.value; spanSel.blur(); act('span', hz, d.id); });
             tools.append(spanSel);
         }
         const holdKey = h('button', 'rp-wkey rp-spec-hold', 'HOLD');
@@ -615,7 +616,7 @@ export function mountRadioPanel(root, opts = {}) {
         const pinRead = h('div', 'rp-pin-read');
         spec.append(pinRead);
         sdrView.append(box);
-        panes[d.id] = { box, spec, pb, pbMid, cursor, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '',
+        panes[d.id] = { box, spec, pb, pbMid, cursor, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, tools, name: d.name ?? '', text: '',
             pinHz: null, pinLines, pinRead, reread: xReread };
         drawPin(panes[d.id], 0, 0);
     }
@@ -1447,13 +1448,15 @@ export function mountRadioPanel(root, opts = {}) {
             if (spanHz != null && Number(spanHz) !== st.spanHz[vfo]) {
                 st.spanHz[vfo] = Number(spanHz) || 0;
                 drawOverlays(vfo);
-                // The nearest listed span: a cropped span arrives a few Hz off.
-                if (pn.spanSel && st.spanHz[vfo] > 0 && document.activeElement !== pn.spanSel) {
-                    let best = null;
-                    for (const sp of opts.spectrumSpans)
-                        if (!best || Math.abs(Math.log(sp.hz / st.spanHz[vfo])) < Math.abs(Math.log(best.hz / st.spanHz[vfo]))) best = sp;
-                    pn.spanSel.value = String(best.hz);
-                }
+            }
+            // The nearest listed span: a cropped span arrives a few Hz off.
+            // Checked on every report, not just a change, so a span the
+            // server refused doesn't stay showing in the list.
+            if (spanHz != null && pn.spanSel && st.spanHz[vfo] > 0 && document.activeElement !== pn.spanSel) {
+                let best = null;
+                for (const sp of opts.spectrumSpans)
+                    if (!best || Math.abs(Math.log(sp.hz / st.spanHz[vfo])) < Math.abs(Math.log(best.hz / st.spanHz[vfo]))) best = sp;
+                if (pn.spanSel.value !== String(best.hz)) pn.spanSel.value = String(best.hz);
             }
             if (label !== undefined) pn.text = label ?? '';
             paneLabel(vfo);
@@ -1487,6 +1490,17 @@ export function mountRadioPanel(root, opts = {}) {
         setSpots(list) { st.spots = list ?? []; drawOverlays(); },
         // Band edges in Hz, and band-plan marks as { hz, label }, drawn on every pane.
         setBandMarks({ edges, ticks } = {}) { st.marks = { edges: edges ?? [], ticks: ticks ?? [] }; drawOverlays(); },
+        // A pane's tool strip (SPAN, HOLD, SCOPE), for the adapter to add
+        // its own keys to, e.g. REFINE from spectrum-refine.js.
+        spectrumTools(vfo = 'A') { return panes[vfo]?.tools ?? null; },
+        /** The pane's name at the start of its label, e.g. 'MAIN · ACC SCOPE'
+         *  once the server says the pane shows the radio's own scope. */
+        setSpectrumName(vfo, name) {
+            const pn = panes[vfo];
+            if (!pn) return;
+            pn.name = name ?? '';
+            paneLabel(vfo);
+        },
         spectrumView() { return st.specView; },
         setSpectrumView: id => setSpecView(id),
         setTheme,

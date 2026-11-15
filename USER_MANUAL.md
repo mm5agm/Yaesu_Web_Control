@@ -170,7 +170,7 @@
 
 Yaesu Web Control — **YWC** for short — is a web-based control panel for Yaesu HF transceivers.
 
-The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the full product: system-tray host, SDR spectrum, and Voice Control. **macOS** gets an unsigned CAT-only DMG from the same Releases page (menu-bar host; no SDR / Voice Control). **Linux** runs the same CAT-only host from source or via Docker (x64 PCs and arm64 Raspberry Pi). On those platforms the browser UI still talks to the radio over CAT. You can always open the browser UI from another device on your LAN (tablet, phone, another laptop) once the host is running.
+The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the full product: system-tray host, SDR spectrum, and Voice Control. **macOS** gets an unsigned DMG from the same Releases page (menu-bar host). **Linux** runs the same host from source or via Docker (x64 PCs and arm64 Raspberry Pi). Those platforms have everything except the SDR spectrum and Voice Control, including CAT control and Remote Audio. You can always open the browser UI from another device on your LAN (tablet, phone, another laptop) once the host is running.
 
 ### Platforms at a glance
 
@@ -182,7 +182,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | SDR spectrum / waterfall | Yes | No | No |
 | Voice Control (SAPI mic) | Yes | No | No |
 | Radio Display (USB capture → MJPEG) | Yes | Yes | Yes (map `/dev/video*` in Docker) |
-| Remote Audio (RX to browser, mic to radio) | Yes | Yes | Yes from source; not Docker |
+| Remote Audio (RX to browser, mic to radio) | Yes | Yes | Yes (Docker maps `/dev/snd`) |
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
 | CW Send ([§21](#21-cw-send)) | Yes | Yes | Yes |
@@ -288,7 +288,7 @@ These are one-time steps — once the app is installed you won't see them again.
 
 The macOS and Linux/Docker builds, and the release pipeline that produces them, are all Fabio Valente's (CR7CDC) work — I only tested the Docker image on a Raspberry Pi 3B.
 
-macOS ships as an **unsigned CAT-only** app (menu-bar status item; no SDR spectrum or Windows Voice Control). There is no Apple Developer ID / notarization — this is an open-source project and that licence costs money every year. Gatekeeper will warn the first time you open a download from the internet, the same way Windows warns about the unsigned installer.
+macOS ships as an **unsigned** app (menu-bar status item; no SDR spectrum or Windows Voice Control). There is no Apple Developer ID / notarization — this is an open-source project and that licence costs money every year. Gatekeeper will warn the first time you open a download from the internet, the same way Windows warns about the unsigned installer.
 
 1. Download the DMG that matches your Mac from the [GitHub Releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases):
    - Apple Silicon (M1 / M2 / M3 / …): `Yaesu_Web_Control_CAT_*_macos-arm64.dmg`
@@ -305,7 +305,7 @@ Set **Serial Port** to a `/dev/cu.*` device (see §3). SDR and Voice Control sec
 
 #### Alternative: build from source (macOS / Linux)
 
-If you prefer not to use the DMG, or you are on Linux without Docker, build the **CAT-only** target with the [.NET 10 SDK](https://dotnet.microsoft.com/download):
+If you prefer not to use the DMG, or you are on Linux without Docker, build the **`net10.0`** target with the [.NET 10 SDK](https://dotnet.microsoft.com/download):
 
 ```bash
 git clone https://github.com/mm5agm/Yaesu_Web_Control.git
@@ -323,7 +323,7 @@ Then open `http://localhost:8080` (or the port shown in the console / menu-bar t
 
 Like the macOS build, the Dockerfile, the multi-arch image and its build pipeline are Fabio Valente's (CR7CDC) work. The Raspberry Pi 3B is what I tested it on.
 
-For an always-on CAT controller on an x64 PC or arm64 Pi, use the published multi-arch image (`linux/amd64` and `linux/arm64`) from the GitHub Container Registry, or build locally from the repo `Dockerfile` / `docker-compose.yml`.
+For an always-on host on an x64 PC or arm64 Pi, use the published multi-arch image (`linux/amd64` and `linux/arm64`) from the GitHub Container Registry, or build locally from the repo `Dockerfile` / `docker-compose.yml`.
 
 **Image:** `ghcr.io/mm5agm/yaesu_web_control` — each release is tagged (e.g. `v2.4.2`, `v2.4.3-pre6`); `latest` tracks the newest **full** release only (not pre-releases).
 
@@ -440,13 +440,13 @@ A small **YWC tray icon** appears in the Windows system tray (down by the clock,
 
 ![YWC tray icon with right-click menu open, showing Open / About / Open user data folder / Exit](pictures/SystemTrayIcon.png)
 
-### macOS (CAT-only host)
+### macOS
 
 Launch **Yaesu Web Control** from Applications (DMG install — [§2.2](#22-macos-dmg)), or run `dotnet run --framework net10.0` from a source checkout. Either way Kestrel starts and a **menu-bar status item** offers the same Open / About / Open user data folder / Exit actions as the Windows tray. User data lives under `~/.config/MM5AGM/Yaesu Web Control/`. With **Open browser automatically on startup** enabled (default), the browser opens on a desktop Mac; if you turned it off (or it didn’t open), use the menu-bar **Open** item or browse to the URL yourself.
 
 ### Linux (from source)
 
-Same CAT-only host as macOS, but **no tray**. Watch the console for the listening URL, open a browser yourself, and stop with **Ctrl+C**. For a shack Pi that should stay up with no tabs open, disable **Automatically exit when no browser is connected** in Settings.
+Same host as macOS, but **no tray**. Watch the console for the listening URL, open a browser yourself, and stop with **Ctrl+C**. For a shack Pi that should stay up with no tabs open, disable **Automatically exit when no browser is connected** in Settings.
 
 ### Linux Docker
 
@@ -468,7 +468,7 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 ### 5.1 Top Bar
 
-The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.4**) are shown in the top-left corner.
+The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.5**) are shown in the top-left corner.
 
 **Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner listing what has changed, with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the newest version or if the internet is not available.
 
@@ -1383,7 +1383,7 @@ Everything on it works the radio: the keys, the knobs, the main dial and the win
   - **Click** to tune there, or turn the **mouse wheel** to tune one step a notch. A thin line and a readout follow the mouse and show exactly the frequency a click would send. While the dial moves under a still mouse, the readout keeps showing the frequency now under it. In RTTY the readout also shows **→ dial**, because the dial is set half the shift away from where you click, so that the signal lands in the middle of the filter ([§22](#22-rtty)).
   - **Shift+click** drops a marker; Shift+click on it again to clear it. Markers are not saved.
   - **Why the passband is not centred on the dial.** The dial shows the carrier frequency, not the middle of what you hear. In **USB** and **DATA-U** the radio passes the band just above the dial, so the shading starts 100 Hz above the dial and runs upward for the IF width. On 14.074 with a 4 kHz width it covers roughly 14.0741 to 14.0781, which is where the FT8 signals are, and a signal 1,500 Hz above the dial comes out of the speaker as a 1,500 Hz tone. **LSB** and **DATA-L** are the mirror image, with the shading just below the dial. On the FTdx101, **DATA-U** and **DATA-L** are shaded around the radio's **DATA SHIFT** menu (1500 Hz by default) above or below the dial, because that is where the radio centres its DATA filter; a narrow DATA filter is a narrow band 1500 Hz from the dial, not one beside it. **CW**, **AM** and **FM** are shaded evenly either side of the dial. The 100 Hz gap is drawn as the usual low edge of a voice filter, not read from the radio. The span (5 kHz, 10 kHz and so on) is the width of the whole display, not the passband.
-  - In the waterfall's bottom-left corner are the **span** list, **HOLD**, and **SCOPE**, which sets the range, speed, brightness, smoothing and passband shading.
+  - In the waterfall's bottom-left corner are the **span** list, **REFINE** (only for the ACC scope, [§6.3](#63-sdr-spectrum-display)), **HOLD**, and **SCOPE**, which sets the range, speed, brightness, smoothing and passband shading.
   - The **⇱** key opens the spectrum in a browser window of its own, for a second screen. It works as the spectrum on the panel does: **click** to tune there, and turn the **mouse wheel** to move the dial by the panel's **STEP** a notch. The line and readout follow the mouse there too, with **→ dial** in RTTY.
 - **Radio screen.** The **SDR / Radio screen** switch in the corner of the waterfall swaps the spectrum for the picture of the radio's own display, the same one the Radio Display panel shows ([§19](#19-radio-display)). It needs a capture device chosen in that panel on the Classic page first. The picture is stretched to fill the box, so it is a little wider than on the radio. It works as it does on the Radio Display page: click the radio's spectrum to tune there, click the readouts along the ANT…AGC row to change them, and click the meters to choose which TX meters the radio shows. Hold the mouse over a digit of the radio's frequency, and a box appears round it; the mouse wheel then moves that digit up or down. On the RTTY and PSK decode screen the meters, the frequency and the ANT…AGC row still work; the rest of the picture is not clickable there.
 - **The top strip** has lamps for the connection to the radio (**CAT**), the SDR and the DX cluster: green is working, amber is connecting, red is a fault. **Click CAT** to disconnect from the radio, and again to connect, as **Connect** does on the Classic page; while it is disconnected YWC lets go of the COM port, so another program can use it. Beside the lamps are WSJT-X's transmit state and a UTC clock. **F** fills the screen with the panel; Esc goes back. **MENU**, at the right-hand end, drops down YWC's other pages: Settings, Application Setup, Memories, Labels, Meter Calibration and Diagnostics, then the User Manual and About. Each opens in a new tab, so the panel keeps running behind it. Click elsewhere or press Esc to close the list without choosing.
@@ -1458,8 +1458,10 @@ While it is open, its tuner keeps the radio in the mode chosen in **MODE** (belo
 - **MODE** is a list of RTTY-L, RTTY-U, DATA-L and DATA-U: DATA-L for AFSK, where your RTTY software makes the tones. A pick is kept (it is the same setting as **RTTY mode** in Settings), the tuner holds the radio in it, and the band keys use it. A mode outside the four, CW say, shows as itself in amber, so you can see at a glance that the radio isn't in RTTY: open the list to pick one. Then the tuner's **MARK / SHIFT**, then **RX** or **TX**.
 - **Meters:** S, and PO, SWR and ALC while transmitting. **METERS** hides or shows them.
 - **Main / Sub** chooses which receiver's spectrum is on screen, where there are two SDRs. The strip follows it. **BANDS** (below) can hide SUB.
-- **DX SPOTS** switches the spot tags on the spectrum on and off.
-- **SPAN** is a list in the label at the top of the spectrum, beside the frequency, and sets the SDR's span. As well as the radio's own spans it has **30 kHz** and **40 kHz**, to fill the jump from 20 to 50; they are on the Radio panel and in Settings too, but not on Classic's span buttons.
+- **DX SPOTS** switches the spot tags on the spectrum on and off. A tag sits at the frequency the spot gave on the cluster.
+- **SPOTS** opens the DX spots list in a window of its own, the same window as the DX Spots pop-out on Classic. It shows the band you are on, or all bands with **All bands** ticked, so you can check whether a station has been spotted while the tags are off. Click a spot there to tune to it. The key is lit while the window is open; click it then to bring the window to the front. *New in v2.5.5, as Bruce VK2RT asked.*
+- **SPAN** is a list in the label at the top of the spectrum, beside the frequency, and sets the SDR's span. As well as the radio's own spans it has **15 kHz** between 10 and 20, and **30 kHz** and **40 kHz** to fill the jump from 20 to 50. They are on the Radio panel and in Settings too, but not on Classic's span buttons. The FTdx101's own scope has none of the three, so an ACC scope panel leaves them out of the list.
+- **REFINE**, beside SPAN, appears when the spectrum is the FTdx101's own scope from its ACC socket. It is how much the radio's frames are averaged before they are drawn, from **RAW** to **5**; see **Refine** in [§6.3](#63-sdr-spectrum-display).
 - **LAYOUT** saves and recalls named layouts (below).
 - **The theme list**, beside LAYOUT, is this page's colour theme, the same themes as the Radio panel. Until you pick one here the page follows the Radio panel's theme; once you have, the two are separate. The page's windows follow it, and it is kept in this browser, not in a layout. *New in v2.5.4.*
 
@@ -1477,6 +1479,7 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 
 - **REF** moves the bottom of the trace up or down from the noise floor. **AUTO** lets the floor follow the noise; off, it stays where it is.
 - **RANGE** is how many dB the trace covers. **FIT** sets it so the strongest signal of the last few seconds just fits, as does a double-click on the bar between the spectrum and the waterfall.
+- **WF BRIGHT** brightens the waterfall, so weak signals show up more. **+** and **−** go in 6 dB steps from **OFF** to +60. The spectrum trace is not changed. It is kept for each receiver, as REF and RANGE are, and the waterfall windows follow it. It works like **Bright** in the Radio panel's SCOPE box, but is kept separately. *New in v2.5.5, as Bruce VK2RT asked.*
 - **WF ON TOP** puts the waterfall above the spectrum.
 - **FIXED** holds the spectrum still while the dial moves. Click a signal and only the passband and the dial line move, so the stations stay where you saw them. The spectrum moves on only when the passband goes past the edge of the screen, or you change the span or the band. Tuning past an edge turns the page: the next stretch of band comes up with the passband near the opposite edge, so tuning up the band carries on from left to right. A jump of more than a screen width, such as a band change or a typed frequency, centres the passband instead. With an SDR on the radio's IF the picture is filled to both edges. Off, the spectrum is centred as described under Tuning.
 - **STEP** is how far one notch of the mouse wheel moves the dial over the spectrum, 1 Hz to 1 kHz.
@@ -1554,6 +1557,8 @@ Drag the right edge, the bottom edge or the bottom-right corner of the spectrum,
 ## 6. Settings Page
 
 Access Settings from the navigation bar or by clicking the settings icon. Changes take effect only after clicking **Save Settings**.
+
+**Finding a setting.** The search box at the top of the page finds a setting by its name, by words in its help text, or by a word you might try for it, such as *debug* or *PTT*. Matching settings are listed under the box and the sections with no match are hidden while you search. Choose a result to open its section and jump to it; press Esc to clear the search and put the page back as it was. Each setting also has its own link, such as `/Settings#detailed-logging` added to your YWC address, which you can bookmark or send to someone.
 
 At the top of the page, the **Network Access URLs** card lists the addresses you can use to reach YWC from this PC and from other devices on the LAN; the **Current Configuration** card on the right shows a one-line summary of what YWC is using right now (radio model, serial port, baud rate, network interface, web port, SDR device). The web port shown here is whichever port YWC actually managed to bind — usually 8080 but possibly 8081–8089 if 8080 was already in use on your PC.
 
@@ -1672,7 +1677,7 @@ If you have two SDRs (typically two SDRplay RSPs) and a dual-receiver radio (FTd
 
 If you only have one SDR, set it in the **VFO A SDR** slot and leave **VFO B SDR** as *(none)*. The main page will show only the VFO A panel exactly as in single-SDR setups before v2.3.0.
 
-One SDR can only feed one VFO. If you pick the same device for both slots, Settings shows a warning under the VFO B dropdown and won't save until you change one of them. Saved that way, whichever VFO opened the SDR first kept it, and the other panel showed *SDR device unavailable*.
+One SDR can only feed one VFO. If you pick the same source for both slots, both lists go red with *A and B can't use the same source*, a warning shows under them, and Settings won't save until you change one of them. On an FTdx101 with the ACC scope, choose **ACC scope, Main** for VFO A and **ACC scope, Sub** for VFO B. Saved that way, whichever VFO opened the SDR first kept it, and the other panel showed *SDR device unavailable*.
 
 > **Note on SDRplay devices specifically:** the SDRplay API service only allows one device per host process. YWC works around this by launching a separate background process (`Yaesu_Sdr_Worker.exe`) for each SDR you configure — you'll see them in Task Manager when YWC is streaming. They start and stop automatically; no user action needed. See [docs/decisions/0001-dual-sdr-architecture.md](docs/decisions/0001-dual-sdr-architecture.md) on GitHub if you're curious about the why.
 
@@ -1725,7 +1730,7 @@ To remove the cursor, **Shift-click on or near it** (within ~10 pixels). Each pa
 
 Each spectrum panel header has its own **1k / 2k / 5k / 10k / 20k / 50k / 100k / 200k / 500k / 1M / 2M** span buttons — the FTdx101's own scope list plus 2 MHz. Set VFO A to **2M** for a wide overview of the calling band and VFO B to **20k** zoomed in on the QSO you're working — both at the same time, independently. A change on one panel never touches the other.
 
-The Settings page Sample Rate dropdown still exists but now acts as a "reset both VFOs to this default" control. Use it to set a starting point; use the per-panel buttons to diverge from there.
+The Settings page Sample Rate dropdown still exists but now acts as a "reset both VFOs to this default" control. Use it to set a starting point; use the per-panel buttons to diverge from there. It only acts when you change it: saving Settings with it left alone keeps each VFO's own rate.
 
 **How the narrow spans work.** An RSP cannot be run at 1 kHz, and it should not be: the narrower the hardware rate, the slower the display. So from **100k** down the SDR stays at a fixed 125 kHz and the worker runs a 16,384-point FFT — 7.6 Hz per bin — over it, then sends the browser only the bins under the span you asked for. Stepping between 1k and 100k is therefore instant: nothing is retuned, the trace never blanks, and the frame rate stays the same at every span. Above 100k the SDR is retuned to the tightest rate that covers the span (250 kHz for 200k; 500k, 1M and 2M are the stream itself) and that VFO's panel pauses for a few seconds — see below.
 
@@ -1765,7 +1770,7 @@ If you already own an RSPduo, you can still use it. It appears twice in the SDR 
 
 RTL-SDR dongles are supported via the SoapySDR driver path and will function — but for a serious HF-watching setup an RSPplay RSP is a significant step up:
 
-- **Bit depth.** RTL-SDR is 8-bit; RSPplay RSPs are 14-bit. That's about 36 dB more dynamic range — weak signals next to a strong neighbour are far easier to see.
+- **Bit depth.** RTL-SDR is 8-bit. The original SDRplay RSP1 is 12-bit, about 24 dB more dynamic range; the RSP1A, RSP1B and later are 14-bit, about 36 dB more. Either way, weak signals next to a strong neighbour are far easier to see.
 - **HF coverage.** Most RTL-SDR dongles need a separate upconverter to receive HF. RSPs cover 1 kHz to 2 GHz natively.
 - **Front-end filtering.** RSPs have selectable bandpass filters; dongles have essentially none. With a kilowatt-class transmitter on the next band, a dongle overloads long before an RSP does.
 - **Clock stability.** The RSP1A, RSP1B and later use a TCXO; cheap dongles drift visibly during warm-up — the spectrum centred on a 9 MHz IF will appear to slide sideways for the first ten minutes after power-on. (The original RSP1 has a plain crystal — mine is 5 ppm out, which the *SDR frequency trim* setting above corrects.)
@@ -1800,6 +1805,30 @@ The FT-710 has no IF output, but it can send its own spectrum scope to the compu
 - **The span is the radio's.** Change it on the radio. The span buttons are hidden for this panel, and the width follows the radio within about a second.
 - **The panel follows VFO A.**
 - **The first connection can be slow.** Opening the radio's USB scope for the first time after power-on can take a while. If it hasn't opened after 20 seconds, YWC tries again.
+
+#### FTdx101: the radio's own scope from its ACC socket *(experimental)*
+
+The FTdx101MP and FTdx101D send their own Main and Sub scope out of the rear **ACC** socket. A small board I built, the **ACC board** (an ESP32-S3), passes that to the computer over USB. YWC can show it in the spectrum panels, so you don't need an SDR, a splitter or a T/R switch, and nothing is at risk when you transmit. The board, its wiring and its firmware are in [Yaesu_ACC_Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum).
+
+> I've checked this on my FTdx101MP on receive: Main's signals land at their true frequency, and the span buttons change the radio's scope span. I haven't checked it while transmitting yet.
+
+**Setting it up:**
+
+1. Build and wire the ACC board as described in [Yaesu_ACC_Spectrum](https://github.com/mm5agm/Yaesu_ACC_Spectrum), and plug its socket marked **USB** into the PC that runs YWC. **ACC Spectrum Viewer**, from the same place, checks the wiring.
+2. Close ACC Spectrum Viewer and ACC Firmware Flasher. Only one program can have the board at a time.
+3. In **Settings → SDR Spectrum Display**, with the radio model set to FTdx101MP or FTdx101D and saved, press **Scan** under **SDR Devices**. Then open the **VFO A SDR** list and choose **ACC scope, Main**, and in the **VFO B SDR** list choose **ACC scope, Sub**. Save. Each spectrum then says where it comes from: **Spectrum — VFO A · ACC scope** on Classic and Experimental, **MAIN · ACC SCOPE** on the Radio panel, its pop-out spectrum and RTTY Contest.
+
+YWC finds the board by itself. It only looks at the board's own kind of USB port (Espressif, USB ID 303A), so it never opens the radio's CAT ports.
+
+**What's different from an SDR:**
+
+- **The span is the radio's.** The span buttons set the radio's scope span over CAT, for that panel's receiver, as the Scope window does. If you change it on the radio, the panel follows at once. The radio has no 15 kHz, 30 kHz, 40 kHz or 2 MHz span, so the SPAN list on the Radio panel, its pop-out spectrum and RTTY Contest leaves them out, and any such button does nothing on this panel.
+- **CENTER, CURSOR and FIX all work.** Each frame from the radio says where its picture sits.
+- **One board feeds both panels.** YWC lets go of the board when no panel is using it.
+- **Refine.** Each frame from the radio is a separate snapshot, 25 a second, and its noise floor is rough. YWC draws a refined trace: each point averaged over the last few frames, so the floor settles into a thin line and weak signals stand up out of it. The **Refine** slider, beside Bright on a panel showing the ACC scope, sets how much, from **Raw** (the frames exactly as the radio sends them) to **5**. Higher is calmer but slower to follow a signal that comes and goes; the default, **3**, adds about a quarter of a second before a new signal reaches full height, and **5** about half a second. Tuning doesn't smear the trace, because the average moves with the dial; a new span or a big jump starts it again. Each panel has its own setting, and it is kept in YWC, so every view and browser sees the same trace. On the Radio panel, its pop-out spectrum and RTTY Contest the same setting is a **REFINE** list beside **SPAN**. An SDR's spectrum is averaged already, so Refine only appears on a panel showing the ACC scope.
+  On 20 m FT8 I measured how far signals stand out of the floor's roughness: about 2½ times as far with Refine at 3 as raw.
+- **Set the radio's scope Level.** The ACC scope sends the radio's own display, after its scope **Level**, so too low a Level sits the noise floor on the bottom of the radio's scale and weak signals there are lost. It looks just like a quiet band. When that happens the panel's label says **LEVEL too low**; raise Level on the radio, or in the Radio Scope panel (§5.20), until it goes. On an FTdx101MP, +23.5 kept the floor clear on every band from 160 m to 10 m, and +05 didn't on 160 m or 10 m. The radio keeps Level **for each band**, so set it on every band you use. If strong signals reach the top of the scale the label says **LEVEL too high**. The radio's PEAK and SPEED settings make no difference to the ACC scope.
+- **If the panel says nothing is coming from the radio,** the board is connected but the radio isn't sending. Check that the radio is switched on, that ACC pins 11 and 12 are linked so it streams, and that ground (ACC pin 2) is connected. ACC Spectrum Viewer's wiring check shows which wire is missing.
 
 ---
 
@@ -3132,10 +3161,10 @@ If the spectrum shows a flat ripple of noise that never follows the radio, the w
 
 RTL-SDR dongles are supported via SoapySDR and will function — but for a serious HF setup, an SDRplay RSP1B is a significant step up:
 
-- **Bit depth:** RTL-SDR is 8-bit; SDRplay RSPs are 14-bit. That's roughly 36 dB more dynamic range — weak signals next to a strong neighbour are far easier to see.
+- **Bit depth:** RTL-SDR is 8-bit. The original SDRplay RSP1 is 12-bit (about 24 dB more dynamic range); the RSP1A, RSP1B and later are 14-bit (about 36 dB more). Weak signals next to a strong neighbour are far easier to see.
 - **HF coverage:** Most RTL-SDR dongles need a separate upconverter to receive HF. RSPs cover 1 kHz to 2 GHz natively.
 - **Front-end filtering:** RSPs have selectable bandpass filters; dongles have essentially none. With a kilowatt-class transmitter on the next band, a dongle will overload long before an RSP does.
-- **Clock stability:** RSPs use a TCXO. Cheap dongles drift visibly during warm-up — a spectrum centred on the 9 MHz IF will appear to slide sideways for the first ten minutes after power-on.
+- **Clock stability:** the RSP1A, RSP1B and later use a TCXO (the original RSP1 has a plain crystal, which the *SDR frequency trim* setting corrects). Cheap dongles drift visibly during warm-up — a spectrum centred on the 9 MHz IF will appear to slide sideways for the first ten minutes after power-on.
 
 For casual VHF/UHF listening an RTL-SDR is fine. For a permanent HF-band-monitoring setup the RSP is the better tool.
 
@@ -3249,7 +3278,7 @@ As a safety backstop, YWC (v2.4.2 and later) will force the radio back to receiv
 
 | Topic | What to expect |
 |---|---|
-| Getting the app | Windows: unsigned installer from Releases. macOS: unsigned CAT-only DMG from Releases (Apple Silicon or Intel) — Gatekeeper needs **Open** / **Open Anyway** the first time ([§2.2](#22-macos-dmg)). Linux: build `net10.0` from source, or Docker (`ghcr.io/mm5agm/yaesu_web_control`, amd64 + arm64). |
+| Getting the app | Windows: unsigned installer from Releases. macOS: unsigned DMG from Releases (Apple Silicon or Intel) — Gatekeeper needs **Open** / **Open Anyway** the first time ([§2.2](#22-macos-dmg)). Linux: build `net10.0` from source, or Docker (`ghcr.io/mm5agm/yaesu_web_control`, amd64 + arm64). |
 | Host chrome | Windows tray · macOS menu-bar item · Linux/Docker console only |
 | Serial port | `COMn` on Windows; `/dev/cu.*` on macOS; `/dev/ttyUSB*` / `/dev/ttyACM*` on Linux (pass through with `YWC_SERIAL_DEVICE` in Docker). Always use the **Enhanced** CAT port when two CP210x ports appear. |
 | USB serial driver | **Windows / macOS:** install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** only if ports are missing or CAT never answers ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** skip — in-kernel CP210x is enough. |
@@ -3558,7 +3587,7 @@ Originally requested by Yuri W4YSW. Shipped in v2.3.9.
 
 ## 17. Voice Control
 
-> **Windows host only.** Voice Control uses Windows SAPI 5 (`System.Speech`) and is not available on the macOS/Linux CAT-only host or in Docker. Voice *announcements* (§5.16) still work on every platform — they use the browser's text-to-speech.
+> **Windows host only.** Voice Control uses Windows SAPI 5 (`System.Speech`) and is not available on the macOS and Linux hosts or in Docker. Voice *announcements* (§5.16) still work on every platform — they use the browser's text-to-speech.
 
 > **Not the same as Voice Announcements (§5.16).** Voice *control* (this section) is **you speaking to the app** — a press-and-hold mic button that lets you issue spoken commands. Voice *announcements* (§5.16) is **the app speaking to you** — automatic spoken cues for band, mode, TX state, DX alerts, etc., useful as an accessibility feature. They are independent features with separate on/off switches. If you're looking for the toggle to silence YWC's automatic speech, you want §5.16.
 
@@ -3584,9 +3613,9 @@ Every command below targets whichever VFO's mic button you're holding down — a
 | Set AGC | "set a g c fast" (also mid, slow, auto, off) | Held VFO's AGC speed changes |
 | Set AF gain | "set a f gain fifty" (0–100 in the steps listed in the phrase editor, or "mute"/"maximum") | Held VFO's volume changes |
 | IF filter width | "filter wider" / "filter narrower" | Held VFO's IF (roofing) filter bandwidth nudges one step |
-| Transmit | "key transmitter" / "start transmitting"; "stop transmitting" / "go to receive" | Radio keys up / drops back to receive |
+| Transmit | "start transmitting" / "transmit on"; "stop transmitting" / "go to receive" | Radio keys up once you say "confirm" (see below) / drops back to receive straight away |
 | Split | "split on" / "enable split"; "split off" / "simplex" | Split operation toggles |
-| Antenna tuner | "tuner on" / "tuner off"; "tune antenna" | "tuner on"/"off" engages/bypasses the ATU; "tune antenna" starts the auto-tune cycle. There's deliberately no bare "tune" — that would collide with the "tune up" / "tune down" step commands above |
+| Antenna tuner | "tuner on" / "tuner off"; "tune antenna" | "tuner on"/"off" engages/bypasses the ATU; "tune antenna" starts the auto-tune cycle, and needs a clear match (see below). There's deliberately no bare "tune" — that would collide with the "tune up" / "tune down" step commands above |
 | Status read-back | "what frequency", "what mode", "what band" | YWC speaks the held VFO's current value out loud — no CAT command is sent to the radio |
 | Help | "help", "what can I say" | YWC speaks a short list of the available command categories |
 | Macros | "noise reduction on/off", "noise blanker on/off", "copy a to b" / "copy b to a", "fine step up/down", "roofing three/six/twelve kilohertz" | Runs the matching one-shot CAT command. See the Macros group in the phrase editor for the full list and their exact CAT strings |
@@ -3644,6 +3673,10 @@ If you change your mind mid-phrase, just release the button without speaking. No
 
 **Low-confidence matches are rejected.** If you say something the engine isn't sure about — a phrase outside the grammar, background noise during PTT, an ambient TV in the room — the recognition is dropped rather than fitted to the closest rule. This stops random audio from accidentally firing a "set mode" or "go to band" command that would change the radio's state without you intending it. The "Last heard" hint under the mic button shows what the engine almost picked up; the Diagnostics block on the Settings page logs it as "Low-confidence match".
 
+**Commands that transmit have to be confirmed.** The recogniser always picks its closest phrase, so ordinary speech can be taken for a command: in testing, the word "transmission" matched "transmit on" with a high score. So "transmit on" and the other transmit phrases, "tune antenna", and any custom macro that keys the radio never act straight away. You hear *"Are you sure?"* and the voice status shows that it's waiting. Say **"confirm"** within 6 seconds and the command runs. You can keep holding the button or let go and press it again. If you say any other command, or say nothing, the radio stays on receive and the transmit command is dropped. The question doesn't contain the word "confirm", so that the app can't hear itself through your speakers and answer its own question.
+
+The transmit command and "confirm" must each score 0.85 or better, where other commands need 0.5. Below that the radio stays on receive, and if spoken confirmations are on you hear *"Not transmitting, not heard clearly"*. A distant or low-quality microphone may rarely reach 0.85: if so, those commands will need repeating, or use the button on screen. Commands that stop transmitting aren't affected: "stop transmitting" needs only the normal score and no "confirm".
+
 The Settings page → Voice Control section has a **Diagnostics** block that shows the current state of the engine, the last phrase heard, the last intent matched, and any error message. Open it in another browser tab if you want a live view of what voice control is doing.
 
 ### 17.4 Troubleshooting
@@ -3683,7 +3716,7 @@ The Settings page → Voice Control section has a **Diagnostics** block that sho
 The voice command grammar is **data, not code** — it lives at `%APPDATA%\MM5AGM\Yaesu Web Control\Grammars\<culture>\Commands.<culture>.json` and is edited live from **Settings → Voice Control → Voice Phrases**:
 
 - **Voice Phrases editor.** Every command family from the [§17.1](#171-what-you-can-say) table is listed with its trigger phrases in an editable grid — add, remove, or reword phrases, one or more per row, comma-separated. **Save phrases** writes immediately and takes effect with no restart; **Validate** checks for empty/duplicate entries before you save; **Reset to defaults** restores the built-in English (UK) set.
-- **Test this pack.** A dry-run tester — speak a command and see what's recognised without sending anything to the radio, useful for checking a reworded phrase actually matches before trusting it live.
+- **Test this pack.** A dry-run tester — speak a command and see what's recognised without sending anything to the radio, useful for checking a reworded phrase actually matches before trusting it live. A command that transmits shows **Say confirm** in the Trace and goes no further until you say "confirm", dry run or not.
 - **Version history.** Every save (and every pack import) snapshots the previous version — up to the last 5 — so a bad edit or import can be undone from **Show version history**.
 - **Export / import as a language pack.** **Export language pack** bundles the current phrases, a generated `.srgs` reference copy, and author/description metadata into `YWC-VoicePack-<culture>-vN.zip` — share it on the [GitHub Discussions](https://github.com/mm5agm/Yaesu_Web_Control/discussions) group. **Preview import** lets you inspect another pack's contents before installing it.
 - **Open user grammars folder** jumps straight to the `Grammars\` folder in Explorer if you'd rather hand-edit the JSON or inspect the generated `.srgs` file (a human-readable reference copy, not what the engine actually loads).
@@ -3709,7 +3742,7 @@ Remote Audio is Fabio Valente's (CR7CDC) work (#92, #112); I tested it on my FTd
 
 Remote Audio streams **radio RX → browser speakers** and **browser microphone → radio TX** over a dedicated WebSocket on the YWC host. PTT remains the normal Index **TX** button (or optional TX toggle key). It is intended for **LAN or VPN** use (for example WireGuard) as a simpler alternative to running Mumble or SonoBus alongside YWC.
 
-> **Not supported in Docker for v1.** USB audio device access from containers is host-specific and unreliable; run the native host on Windows, macOS, or Linux instead.
+> **In Docker:** `docker-compose.yml` passes the host's sound devices through by mapping `/dev/snd`. If the radio's USB codec isn't listed, set `YWC_AUDIO_GID` to the host's audio group (`getent group audio`; usually 29 on Debian and Raspberry Pi OS). Then choose the codec in **Settings > Remote Audio**.
 
 ### 18.1 Radio setup
 

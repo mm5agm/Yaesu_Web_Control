@@ -612,6 +612,81 @@ test('/rtty-contest: a typed frequency tunes, and DX SPOTS hides the spot tags',
     } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.spots')`).catch(() => {}); await page.close(); }
 });
 
+// Bruce VK2RT, #250 2026-11-14: a SPOTS window, a 15 kHz span, and a
+// brightness control for the waterfall.
+test('/rtty-contest: SPOTS opens the spots window, SPAN has 15 kHz, and WF BRIGHT is kept', async () => {
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        const saved = await page.eval(`localStorage.getItem('ywc.rttyContest.levels.A')`);
+        await page.eval(`(() => { window.__opened = []; window.open = (u, n) => { window.__opened.push([u, n]); return null; }; window.alert = () => {}; })()`);
+        await page.eval(`document.querySelector('.rc-top .rc-spots-win').click()`);
+        const opened = await page.eval('window.__opened');
+        expect(opened.length === 1 && opened[0][0] === '/DxSpots', `SPOTS opened ${JSON.stringify(opened)}`);
+
+        const spans = await page.eval(`[...document.querySelectorAll('.rc-holder:not([hidden]) select option')].map(o => o.textContent)`);
+        expect(spans.includes('SPAN 15 kHz'), `the SPAN list is ${JSON.stringify(spans)}`);
+
+        await page.eval(`localStorage.setItem('ywc.rttyContest.levels.A', JSON.stringify({ auto: true, ref: null, range: null, bright: 0 }))`);
+        await page.close();
+        const p2 = await open('/rtty-contest', { settleMs: 1500 });
+        try {
+            const s = () => p2.eval(`document.querySelector('.rc-bright .rc-num').textContent`);
+            expect(await s() === 'OFF', `WF BRIGHT starts at ${await s()}`);
+            await p2.eval(`document.querySelector('.rc-bright-up').click(); document.querySelector('.rc-bright-up').click()`);
+            const kept = JSON.parse(await p2.eval(`localStorage.getItem('ywc.rttyContest.levels.A')`));
+            expect(await s() === '+12' && kept.bright === 12, `after two + it shows ${await s()} and keeps ${JSON.stringify(kept)}`);
+            await p2.eval(`document.querySelector('.rc-bright-dn').click()`);
+            expect(await s() === '+6', `after one - it shows ${await s()}`);
+            expect(p2.exceptions.length === 0, `uncaught exceptions:\n${p2.exceptions.join('\n')}`);
+        } finally {
+            await p2.eval(saved == null ? `localStorage.removeItem('ywc.rttyContest.levels.A')`
+                : `localStorage.setItem('ywc.rttyContest.levels.A', ${JSON.stringify(saved)})`).catch(() => {});
+            await p2.close();
+        }
+    } catch (e) { await page.close().catch(() => {}); throw e; }
+});
+
+test('/rtty-contest: a span the server keeps from changing does not stay showing in SPAN', async () => {
+    // Colin 2026-11-14: 15 kHz picked on the ACC scope, which kept 10 kHz,
+    // still read "SPAN 15 kHz". The span write is stubbed, so the frames stay at 10 kHz.
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.state('FrequencyA', 14_080_000);
+        const bins = Array.from({ length: 475 }, () => -110);
+        const frame = () => page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 10_000, rfOrdered: true });
+        await frame();
+        const sel = `document.querySelector('.rc-holder:not([hidden]) .rp-pane-span')`;
+        expect(await page.eval(`${sel}.value`) === '10000', `SPAN starts at ${await page.eval(`${sel}.value`)}`);
+        await page.eval(`(() => { const s = ${sel}; s.focus(); s.value = '15000'; s.dispatchEvent(new Event('change')); })()`);
+        await sleep(200);
+        const w = (await page.writes()).filter(x => x.path.startsWith('/api/sdr/span'));
+        expect(w.length === 1 && w[0].path.includes('hz=15000'), `span wrote ${JSON.stringify(w)}`);
+        await frame();
+        expect(await page.eval(`${sel}.value`) === '10000', `after a 10 kHz frame SPAN shows ${await page.eval(`${sel}.value`)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
+test('ACC scope panels list only the radio spans on RTTY Contest, the Radio panel and its pop-out', async () => {
+    const acc = `__rwcTest.getOverrides['/api/sdr/refine'] = { available: true, source: 'ACC scope', level: 1, max: 8 };`;
+    const views = [
+        ['/rtty-contest', '.rc-holder:not([hidden]) .rp-pane-span'],
+        ['/radio', '.rp-spec-tools select.rp-spec-span:not(.rwc-refine)'],
+        ['/RadioSpectrum', '.rp-spop-span'],
+    ];
+    for (const [path, css] of views) {
+        const page = await open(path, { settleMs: 1500, before: acc });
+        try {
+            const spans = await page.eval(`(() => { const s = document.querySelector(${JSON.stringify(css)}); return s ? [...s.options].map(o => o.value).filter(Boolean) : null; })()`);
+            expect(spans && spans.length === 10 && !spans.includes('15000') && !spans.includes('2000000') && spans.includes('10000'),
+                `${path}: the span list is ${JSON.stringify(spans)}`);
+            expect(page.exceptions.length === 0, `${path}: uncaught exceptions:\n${page.exceptions.join('\n')}`);
+        } finally { await page.close(); }
+    }
+});
+
 test('/rtty-contest: a band key goes to the RTTY spot in RTTY-L, 60 m to the band memory, and the wheel over a digit tunes', async () => {
     const page = await open('/rtty-contest', { settleMs: 1500 });
     try {
@@ -1311,6 +1386,164 @@ test('/rtty-contest: the VFO wheel is one step per 10 degrees turned slowly, mor
         expect(held >= ranTo && still === held, `a click did not stop the run-on: ${held} -> ${still}`);
         await page.eval(`document.querySelector('.rc-wbox .rp-dial').dispatchEvent(new PointerEvent('pointerup', { pointerId: 8, bubbles: true }))`);
         expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally {
+        await page.close();
+    }
+});
+
+// Settings search. Nothing here posts the form or changes a setting.
+const typeSearch = (page, q) => page.eval(`(i => { i.value = ${JSON.stringify(q)}; i.dispatchEvent(new Event('input')); })(document.getElementById('settingsSearchInput'))`);
+const resultNames = page => page.eval(`JSON.stringify(Array.from(document.querySelectorAll('#settingsSearchResults button')).map(b => b.dataset.target))`).then(JSON.parse);
+const sectionState = (page, name) => page.eval(`(s => s.open + ' ' + getComputedStyle(s).display)(document.querySelector('details[data-setting="${name}"]'))`);
+
+test('Settings search finds a setting by a word that is not on the page', async note => {
+    const page = await open('/Settings');
+    try {
+        expect(await page.eval(`JSON.stringify(window.SettingsSearch.unknownKeywords())`) === '[]', `keywords for settings that have gone: ${await page.eval(`JSON.stringify(window.SettingsSearch.unknownKeywords())`)}`);
+        expect(await page.eval(`!document.getElementById('settingsSearchInput').name && !document.getElementById('settingsSearchInput').form`), 'the search box must not be part of the settings form');
+
+        const before = await page.eval(`JSON.stringify(Array.from(document.querySelectorAll('details.settings-section')).map(s => s.open))`);
+        await typeSearch(page, 'debug');
+        const names = await resultNames(page);
+        expect(names[0] === 'detailed-logging', `"debug" found ${names.join(', ')}`);
+        expect((await sectionState(page, 'web-http')).startsWith('true'), 'the section with the result did not open');
+        expect((await sectionState(page, 'radio-cat')).endsWith('none'), 'a section with no result is still showing');
+        expect(await page.eval(`document.querySelector('[data-setting="detailed-logging"]').classList.contains('settings-search-match')`), 'the match is not marked');
+        note(`"debug" -> ${names.join(', ')}`);
+
+        const ptt = (await typeSearch(page, 'PTT'), await resultNames(page));
+        expect(ptt.includes('tx-toggle-key') && ptt.includes('voice-control-enabled'), `"PTT" found ${ptt.join(', ')}`);
+
+        // Dry run is inside the Test this pack window, which the search can't index.
+        const dry = (await typeSearch(page, 'dry run'), await resultNames(page));
+        expect(dry[0] === 'voice-test-pack', `"dry run" found ${dry.join(', ')}`);
+
+        await typeSearch(page, 'zzzqqq');
+        expect((await resultNames(page)).length === 0, 'nonsense found something');
+        expect(await page.eval(`document.getElementById('settingsSearchResults').textContent.includes('No settings match')`), 'no message for no results');
+
+        await typeSearch(page, '');
+        expect(await page.eval(`JSON.stringify(Array.from(document.querySelectorAll('details.settings-section')).map(s => s.open))`) === before, 'clearing did not restore the open sections');
+        expect(await page.eval(`document.querySelectorAll('.settings-search-filtered, .settings-search-match').length`) === 0, 'clearing left sections hidden or marked');
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test('Settings search result and deep link open the setting', async () => {
+    let page = await open('/Settings');
+    try {
+        await typeSearch(page, 'debug');
+        await page.eval(`document.querySelector('#settingsSearchResults button[data-target="detailed-logging"]').click()`);
+        expect(await page.eval(`document.getElementById('settingsSearchResults').hidden`), 'the list stayed open');
+        expect(await page.eval(`document.activeElement.id`) === 'Settings_DetailedLogging', `focus went to ${await page.eval(`document.activeElement.id`)}`);
+        expect(await page.eval(`location.hash`) === '#detailed-logging', 'the address did not become a link to the setting');
+    } finally {
+        await page.close();
+    }
+    page = await open('/Settings#detailed-logging');
+    try {
+        expect((await sectionState(page, 'web-http')).startsWith('true'), 'the deep link did not open the section');
+        expect(await page.eval(`document.querySelector('[data-setting="detailed-logging"]').classList.contains('settings-search-flash')`), 'the deep link did not highlight the setting');
+        expect(await page.eval(`document.activeElement.id`) === 'Settings_DetailedLogging', 'the deep link did not focus the setting');
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test('Saving during a settings search shows every section again', async () => {
+    const page = await open('/Settings');
+    try {
+        await typeSearch(page, 'PTT');
+        // Stopped after the search's own listener, so the form is never posted.
+        await page.eval(`(() => {
+            document.addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); }, true);
+            document.getElementById('settingsForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        })()`);
+        expect(await page.eval(`document.querySelectorAll('.settings-search-filtered').length`) === 0, 'sections stayed hidden, so validation could not reach them');
+    } finally {
+        await page.close();
+    }
+});
+
+test('Test this pack: holding the button starts a dry run, letting go stops it', async () => {
+    const page = await open('/Settings');
+    try {
+        await page.eval(`bootstrap.Modal.getOrCreateInstance(document.getElementById('voiceTestPackModal')).show()`);
+        await page.waitFor(`document.getElementById('voiceTestPackModal').classList.contains('show')`, { what: 'the test window to open' });
+        await sleep(500);
+        expect(await page.eval(`document.getElementById('voiceTestDryRun').checked`), 'dry run should be on when the window opens');
+
+        await page.clearWrites();
+        const { x, y } = await page.pointOf('#voiceTestHoldBtn');
+        await page.mouse('mouseMoved', x, y);
+        await page.mouse('mousePressed', x, y);
+        await page.waitFor(`document.getElementById('voiceTestTrace').textContent.includes('Listening')`, { what: 'the Trace to say Listening' });
+        await page.mouse('mouseReleased', x, y);
+        await sleep(300);
+
+        const paths = (await page.writes()).map(w => w.path);
+        expect(paths.some(p => p.includes('/api/voice/start?dryRun=true')), `no dry run start in: ${paths.join(', ')}`);
+        expect(paths.some(p => p.includes('/api/voice/stop')), `no stop in: ${paths.join(', ')}`);
+        expect(!paths.some(p => p.includes('dryRun=false')), `a live start was sent: ${paths.join(', ')}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test('Every view says when there is a new release', async () => {
+    // Answers as GitHub would, so this needs no network and no real release.
+    const release = `{ tag_name: 'v99.0.0', html_url: 'https://example.invalid/', body: '', prerelease: false }`;
+    const before = `{
+        const real = window.fetch;
+        window.fetch = (url, opts) => String(url).includes('api.github.com')
+            ? Promise.resolve(new Response(JSON.stringify(String(url).includes('per_page') ? [${release}] : ${release}), { status: 200 }))
+            : real(url, opts);
+    }`;
+    for (const path of ['/', '/flexui', '/radio', '/rtty-contest']) {
+        const page = await open(path, { before });
+        try {
+            await page.waitFor(`!!document.getElementById('updateBanner')`, { what: `the update banner on ${path}`, timeoutMs: 10000 });
+            const text = await page.eval(`document.getElementById('updateBanner').textContent`);
+            expect(text.includes('v99.0.0'), `banner on ${path} says: ${text}`);
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test('Test this pack: the Trace says what happened to each phrase', async () => {
+    const page = await open('/Settings');
+    try {
+        await page.eval(`bootstrap.Modal.getOrCreateInstance(document.getElementById('voiceTestPackModal')).show()`);
+        await page.waitFor(`document.getElementById('voiceTestPackModal').classList.contains('show')`, { what: 'the test window to open' });
+        await sleep(500);
+
+        const { x, y } = await page.pointOf('#voiceTestHoldBtn');
+        await page.mouse('mouseMoved', x, y);
+        await page.mouse('mousePressed', x, y);
+        await page.waitFor(`document.getElementById('voiceTestTrace').textContent.includes('Listening')`, { what: 'the test to start' });
+
+        // What the service sends, played straight into the Trace's own handler.
+        const trace = await page.eval(`(() => {
+            const el = document.getElementById('voiceTestTrace');
+            const lineFor = status => { window.voiceTestShowStatus(status); return el.lastElementChild.textContent; };
+            return {
+                heard: lineFor({ state: 'Heard', lastHeard: 'band up', lastIntent: 'BandUp', confidence: 0.91, dryRun: true }),
+                ask: lineFor({ state: 'ConfirmNeeded', lastHeard: 'transmit on', lastIntent: 'TxOn', confidence: 0.92, dryRun: true }),
+                refused: lineFor({ state: 'Unrecognised', lastHeard: 'transmit on', confidence: 0.57, dryRun: true, errorMessage: 'Not transmitting: needs 0.85' }),
+                rejected: lineFor({ state: 'Unrecognised', dryRun: true }),
+            };
+        })()`);
+        await page.mouse('mouseReleased', x, y);
+
+        expect(trace.heard.includes('Heard \u201Cband up\u201D \u2192 BandUp (confidence 0.91)'), `heard line: ${trace.heard}`);
+        expect(!/heard heard/i.test(trace.heard), `doubled word: ${trace.heard}`);
+        expect(trace.ask.includes('Say confirm \u201Ctransmit on\u201D \u2192 TxOn'), `waiting line: ${trace.ask}`);
+        expect(trace.refused.includes('Not transmitting: needs 0.85') && !trace.refused.includes('\u2192'), `refused line: ${trace.refused}`);
+        expect(!trace.rejected.includes('\u2192') && !trace.rejected.includes('confidence') && !trace.rejected.includes('\u201C'), `rejected line: ${trace.rejected}`);
     } finally {
         await page.close();
     }

@@ -15,8 +15,8 @@
 # What it does:
 #   1. Auto-increments the patch version (e.g. v0.7.1 -> v0.7.2), or uses -Version if supplied
 #   2. Commits any pending changes in develop
-#   3. Updates README.md with release notes built from git log
-#   4. Commits the README update in develop and pushes
+#   3. Adds release notes built from git log to RELEASE_HISTORY.md
+#   4. Commits that update in develop and pushes
 #   5. Merges develop -> main and pushes
 #   6. Creates the GitHub release (triggers the build workflow)
 
@@ -88,36 +88,33 @@ if ($pending) {
     git commit -m "Pre-release: pending changes for $newTag"
 }
 
-# Update README.md with release notes
+# Add release notes to RELEASE_HISTORY.md, under the rule below its introduction
 $today      = Get-Date -Format "yyyy-MM-dd"
-$readmePath = (Join-Path $PSScriptRoot "..\README.md" | Resolve-Path).Path
+$historyPath = (Join-Path $PSScriptRoot "..\RELEASE_HISTORY.md" | Resolve-Path).Path
 
-$lines  = [System.IO.File]::ReadAllLines($readmePath)
-$marker = "## Release Notes"
-$match  = $lines | Select-String -SimpleMatch $marker | Select-Object -First 1
+$lines  = [System.IO.File]::ReadAllLines($historyPath)
+$marker = "---"
+$idx    = [array]::IndexOf($lines, $marker)
 
-if ($null -eq $match) {
-    Write-Warning "Could not find '$marker' in README.md - skipping README update."
+if ($idx -lt 0) {
+    Write-Warning "Could not find '$marker' in RELEASE_HISTORY.md - skipping the release notes."
 }
 else {
-    $idx = $match.LineNumber - 1
-
     $newSection = @(
         "",
         "## $today - $newTag",
         "",
         "### Changed",
         "",
-        $commitBlock,
-        ""
+        $commitBlock
     )
 
     $updated = $lines[0..$idx] + $newSection + $lines[($idx + 1)..($lines.Length - 1)]
-    [System.IO.File]::WriteAllLines($readmePath, $updated)
+    [System.IO.File]::WriteAllLines($historyPath, $updated)
 
-    Write-Host "README.md updated." -ForegroundColor Green
+    Write-Host "RELEASE_HISTORY.md updated." -ForegroundColor Green
 
-    git add README.md
+    git add RELEASE_HISTORY.md
     git commit -m "Release notes: $newTag"
 }
 

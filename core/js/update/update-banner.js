@@ -143,6 +143,11 @@
         for (const line of lines) {
             const m = line.match(/^\s{0,3}[-*]\s+(.*\S)/);
             if (!m) continue;                       // headings, blockquotes, prose
+            // "Everything listed for pre1 to pre6 below still needs testing" is
+            // written for RELEASE_HISTORY.md, where those sections do sit below.
+            // A release body has only its own section, so in the banner it
+            // would point at nothing (IWC v1.7.0-pre7). Leave it out.
+            if (/\bbelow\b/i.test(m[1]) && /\bneeds? testing\b/i.test(m[1])) continue;
             const lead = _leadSentence(m[1]);
             if (lead) items.push(lead);
         }
