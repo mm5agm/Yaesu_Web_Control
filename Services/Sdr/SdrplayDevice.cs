@@ -1038,6 +1038,23 @@ namespace Yaesu_Web_Control.Services.Sdr
             return $"SDRplay ({serial})";
         }
 
+        /// <summary>
+        /// For an RSPduo key, the key of its other tuner; null for anything
+        /// else. When one tuner is streaming the SDRplay API hides the whole
+        /// box from GetDevices, so the scan uses this to keep the other
+        /// tuner in the list (#165).
+        /// </summary>
+        public static string? OtherRspDuoTunerKey(string key)
+        {
+            if (string.IsNullOrEmpty(key) || !key.StartsWith(KeyPrefix, StringComparison.OrdinalIgnoreCase))
+                return null;
+            var (hw, serial, tuner) = ParseKey(key);
+            if (hw != HwVerRspDuo)
+                return null;
+            string baseKey = $"{KeyPrefix}hw{hw}-{serial}";
+            return tuner == 2 ? baseKey : baseKey + Tuner2KeySuffix;
+        }
+
         private static void WriteDouble(IntPtr ptr, int offset, double value)
         {
             Marshal.WriteInt64(ptr, offset, BitConverter.DoubleToInt64Bits(value));
