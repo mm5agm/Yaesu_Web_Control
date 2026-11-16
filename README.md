@@ -15,7 +15,7 @@ Yaesu Web Control (YWC) runs a Yaesu HF transceiver from a browser on your PC, t
 
 I wrote YWC because I can't see the FTdx101MP's controls without using a magnifying glass. The Classic page was written specifically with partially sighted operators in mind, so that they can operate the radio with a screen reader and voice control. Everything else has grown from there.
 
-![The Classic page: meters, the radio's screen over HDMI with its scope controls, an SDR spectrum for each receiver, and a card for each VFO](pictures/Classic.png)
+![The Classic page: meters, the radio's screen over HDMI with its scope controls and each receiver's audio scope from the ACC board, a spectrum and waterfall for each receiver with the FT8 signals, and a card for each VFO](pictures/Classic.png)
 
 ## What it does
 
@@ -43,7 +43,7 @@ I wrote YWC because I can't see the FTdx101MP's controls without using a magnify
 - **[Memory banks](USER_MANUAL.md#8-radio-memories)** with ADIF import, **[pop-out windows](USER_MANUAL.md#521-pop-out-windows)** for a second monitor, and **[WSJT-X, Log4OM, JTAlert and GridTracker](USER_MANUAL.md#9-external-applications)** alongside.
 
 
-![The Radio Display: the radio's TFT captured over HDMI, with the scope controls docked beside it](pictures/Radio_Display_Docked.png)
+![The Radio Display: the radio's TFT captured over HDMI, with the scope controls docked beside it. Open in their MULTI group are the Main and Sub audio scopes from the ACC board: the AF-FFT from 0 to 4 kHz above an audio waterfall of the FT8 signals.](pictures/Radio_Display_Docked.png)
 
 ## Release Notes
 

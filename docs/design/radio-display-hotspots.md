@@ -186,7 +186,7 @@ inside the overlay, under the zone, and the radio's picture changes once
 ## The layout table
 
 `LAYOUTS.FTdx101` in `radio-display-hotspots.js` was measured from
-`pictures/Radio_Display_Docked.png` — a downscaled screenshot of the MONO
+`pictures/Radio_Display_Docked.png` (its September 2026 version, in git history) — a downscaled screenshot of the MONO
 W/F layout — and then nudged on the bench. `LAYOUTS.FTdx10` is from
 Fabio's pixel boxes. Tools for the next radio, or for a layout that has
 drifted:
