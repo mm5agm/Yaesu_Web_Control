@@ -22,7 +22,7 @@ a different and much older format.
 - Tick **Oscilloscope in place of the waterfall** for the radio's oscilloscope instead. YWC remembers your choice.
 - It's taken before AF GAIN, so the volume doesn't change it. For the best picture, turn the AGC on (SLOW was best on FT8) and set the filter width to 4000 Hz.
 - YWC reads the board only while the group is open and on screen.
-- Tested on one FTdx101MP so far. I haven't checked whether the radio needs MULTI showing on its own screen to send the audio scope. Please say on GitHub how it goes on yours.
+- Tested on one FTdx101MP so far. The radio sends the audio scope whatever its own screen shows, so MULTI doesn't need to be showing there. Please say on GitHub how it goes on yours.
 
 **Fixes**
 

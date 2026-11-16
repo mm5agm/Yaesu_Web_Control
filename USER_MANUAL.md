@@ -1319,7 +1319,7 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 **For the best audio scope, turn the AGC on and open the filter.** With the AGC off, the oscilloscope fills its box on a busy band and the AF-FFT shows less: on FT8, the tones stood 42–63 steps above the floor with the AGC off and 71–77 with it on. SLOW was best, by a little. The AF-FFT shows only what the receive filter lets through, so set the width to 4000 Hz to see the whole 0–4 kHz. The measurements are in [Getting the best picture](https://github.com/mm5agm/Yaesu_ACC_Spectrum/blob/main/docs/best-picture.md#5-for-the-audio-scope-turn-the-agc-on-and-open-the-filter).
 
-> I've checked the audio scope on my FTdx101MP on receive, with test tones on Main and Sub. I haven't checked whether the radio needs MULTI showing on its screen to send it.
+> I've checked the audio scope on my FTdx101MP on receive, with test tones on Main and Sub. The radio sends it whatever its own screen shows: it came through with the radio's scope in MONO, with MULTI not showing.
 
 #### Two behaviours that look like bugs and are not
 
