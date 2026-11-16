@@ -16,6 +16,9 @@
     var hasMulti     = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeMulti(radioModel);
     var hasNbColor   = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeNarrowBandColor(radioModel);
     var hasHold      = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeHold(radioModel);
+    // The FTdx101 also sends its audio scope from the ACC socket, through the
+    // ACC board: drawn here by js/ui/acc-audio-scope.js while the group is open.
+    var hasAccAudio  = Yaesu_Web_Control.Services.Sdr.AccScope.ModelHasAcc(radioModel);
     var spans = new (string Value, string Label)[]
     {
         ("0", "1k"), ("1", "2k"), ("2", "5k"), ("3", "10k"), ("4", "20k"),
@@ -182,6 +185,26 @@
                 Press MULTI on the radio's TFT — there is no CAT command for it.
                 AF-FFT and OSC apply once that layout is showing.
             </div>
+            @if (hasAccAudio)
+            {
+                @* Needs the ACC board (Yaesu ACC Spectrum) on this PC. Subscribed
+                   only while this group is open and on screen. *@
+                <div class="acc-audio" role="group" aria-label="Audio scope from the ACC board">
+                    <div class="acc-audio-panes">
+                        <figure class="acc-audio-pane" data-receiver="main">
+                            <figcaption>Main audio</figcaption>
+                            <canvas class="acc-audio-canvas" role="img"
+                                    aria-label="Main receiver: AF-FFT 0 to 4 kHz above the oscilloscope"></canvas>
+                        </figure>
+                        <figure class="acc-audio-pane" data-receiver="sub">
+                            <figcaption>Sub audio</figcaption>
+                            <canvas class="acc-audio-canvas" role="img"
+                                    aria-label="Sub receiver: AF-FFT 0 to 4 kHz above the oscilloscope"></canvas>
+                        </figure>
+                    </div>
+                    <div class="acc-audio-status form-text">Audio scope from the ACC board.</div>
+                </div>
+            }
             @if (hasMulti)
             {
                 <div class="radio-scope-row">

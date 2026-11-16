@@ -94,6 +94,7 @@ export class RadioScopeControl {
 
         if (this.toggle) this._wireExpand();
         this._wireMultiGroup();
+        this._wireAccAudio();
         this._wireControls();
         this._initTooltips();
 
@@ -165,6 +166,18 @@ export class RadioScopeControl {
                 localStorage.setItem('ywc.radioScopeMultiOpen', el.open ? '1' : '0');
             });
         });
+    }
+
+    // The FTdx101's audio scope from the ACC board, in the MULTI group (only
+    // rendered for radios with an ACC socket that sends it). Loaded with this
+    // file's ?v= so a new release is never drawn by a cached old module.
+    _wireAccAudio() {
+        if (!this.card.querySelector('.acc-audio')) return;
+        const url = new URL('./acc-audio-scope.js', import.meta.url);
+        url.search = new URL(import.meta.url).search;
+        import(url.href)
+            .then(m => m.attachAccAudio(this.card))
+            .catch(err => console.warn('ACC audio scope did not load', err));
     }
 
     // ── control wiring ───────────────────────────────────────────────────────

@@ -1576,6 +1576,35 @@ dialog[open]:not(:modal) {
 .radio-scope-controls .radio-scope-multi-body {
     padding-top: 0.4rem;
 }
+/* The FTdx101's audio scope from the ACC board (acc-audio-scope.js). */
+.radio-scope-controls .acc-audio {
+    margin-bottom: 0.5rem;
+}
+.radio-scope-controls .acc-audio-panes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.radio-scope-controls .acc-audio-pane {
+    flex: 1 1 14rem;
+    min-width: 0;
+    margin: 0;
+}
+.radio-scope-controls .acc-audio-pane figcaption {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+}
+.radio-scope-controls .acc-audio-canvas {
+    display: block;
+    width: 100%;
+    height: 9rem;
+    background: #000;
+    border-radius: 4px;
+}
+.radio-scope-controls .acc-audio-status {
+    margin-top: 0.25rem;
+}
 .radio-scope-controls .radio-scope-label {
     flex: 0 0 4.4em;
     font-size: 0.8rem;
