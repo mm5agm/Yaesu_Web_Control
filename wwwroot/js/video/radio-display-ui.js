@@ -124,19 +124,18 @@ function syncFpsSelect(fps) {
 }
 
 /**
- * Rebuild the capture-size list. Hidden entirely when the host reports no
- * sizes — macOS and the OpenCV fallback cannot enumerate pins, and an
- * Auto-only dropdown is just a control that does nothing.
+ * Rebuild the capture-size list. When the host reports no sizes (macOS,
+ * the OpenCV fallback, or a device that has never streamed) it offers
+ * Auto only. It stays visible: the pages keep it showing on purpose, so
+ * the Radio Display settings look the same everywhere (#175).
  */
 function applyDeviceSizes(sizes, selected) {
-  const wrap = document.getElementById('radioDisplaySizeWrap');
   const sel = document.getElementById('radioDisplaySizeSelect');
   if (Array.isArray(sizes)) deviceSizes = sizes.slice();
   const want = deviceSizes.includes(selected ?? currentCaptureSize)
     ? (selected ?? currentCaptureSize)
     : '';
   currentCaptureSize = want;
-  if (wrap) wrap.hidden = deviceSizes.length === 0;
   if (!sel) return;
 
   const signature = deviceSizes.join(',');
