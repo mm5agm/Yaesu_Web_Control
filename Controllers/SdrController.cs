@@ -200,6 +200,24 @@ namespace Yaesu_Web_Control.Controllers
                 _logger.LogDebug("SDR: surfaced active worker device {Key} (VFO {Vfo}) — direct enumeration hid it", key, vfo);
             }
 
+            // An RSPduo is listed once per tuner, but while one tuner streams
+            // the API hides the whole box, so its other tuner vanished from
+            // the list too (#165, Bruce VK2RT on #161). Put it back, so a
+            // receiver can be switched to the other socket, and say why the
+            // two can't run at once: YWC runs an RSPduo on one tuner at a
+            // time (USER_MANUAL 15.3).
+            foreach (var key in inUseKeys.ToList())
+            {
+                var other = SdrplayDevice.OtherRspDuoTunerKey(key);
+                if (other == null || inUseKeys.Contains(other))
+                    continue;
+                if (!all.Any(d => string.Equals(d.Key, other, StringComparison.OrdinalIgnoreCase)))
+                    all.Add(new SdrDeviceInfo(other, SdrplayDevice.LabelForKey(other), "sdrplay"));
+                notes.Add($"{SdrplayDevice.LabelForKey(key)} is streaming now. To use the RSPduo's other " +
+                          "socket, choose its other tuner for the same receiver. YWC runs an RSPduo on " +
+                          "one tuner at a time, so it can't feed both VFO A and VFO B yet.");
+            }
+
             // Only surface the "no SDRplay devices found" / "no devices detected"
             // notes if the device list is STILL empty after the worker-held merge.
             // If workers are holding devices, those messages are misleading —
