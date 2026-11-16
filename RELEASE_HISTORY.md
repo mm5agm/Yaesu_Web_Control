@@ -12,6 +12,29 @@ a different and much older format.
 
 ---
 
+## 2026-11-16 - v2.5.6-pre1 (pre-release)
+
+*The FTdx101's audio scope from the ACC board, and fixes. Everything in v2.5.5 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**The FTdx101's audio scope** *(experimental, Windows only)* [§5.20](USER_MANUAL.md#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
+
+- With the [ACC board](https://github.com/mm5agm/Yaesu_ACC_Spectrum) plugged in, the **MULTI** group of the Radio Scope controls shows the radio's own audio scope for Main and Sub: the AF-FFT from 0 to 4 kHz, with an audio waterfall under it. The waterfall shows about 16 seconds, so a whole FT8 cycle fits: each station is a stripe, and the gaps between cycles are dark lines across it.
+- Tick **Oscilloscope in place of the waterfall** for the radio's oscilloscope instead. YWC remembers your choice.
+- It's taken before AF GAIN, so the volume doesn't change it. For the best picture, turn the AGC on (SLOW was best on FT8) and set the filter width to 4000 Hz.
+- YWC reads the board only while the group is open and on screen.
+- Tested on one FTdx101MP so far. I haven't checked whether the radio needs MULTI showing on its own screen to send the audio scope. Please say on GitHub how it goes on yours.
+
+**Fixes**
+
+- **Band names for Region 2 and 3.** YWC always used the Region 1 band plan, whatever the Band Plan setting said, so a US operator on 3.9 MHz saw the band as "Unknown". It now reads the setting.
+- **Radio Display capture size** ([#175](https://github.com/mm5agm/Yaesu_Web_Control/issues/175)). After a restart, the Capture size list offered only Auto size until the stream had run once. YWC now remembers each capture device's sizes, so you can choose one straight away.
+- **SDRplay RSPduo** ([#165](https://github.com/mm5agm/Yaesu_Web_Control/issues/165)). While one tuner was streaming, Scan dropped the RSPduo's other tuner from the list. It now stays, marked "(in use)", with a note. YWC still runs an RSPduo on one tuner at a time, so it can't feed both VFO A and VFO B yet.
+- **Voice control.** If Windows resets the microphone, YWC now opens it again, instead of hearing nothing until a restart.
+
+**Other changes**
+
+- The manual's name for the About page button is now **Report a bug**, and the DVI-D videos are credited to the M8KHC channel.
+
 ## 2026-11-15 - v2.5.5
 
 *The FTdx101's own scope from its ACC socket, no SDR needed, and a much better SDR spectrum. Everything in the v2.5.5 pre-releases is included; their notes are in [RELEASE_HISTORY.md](RELEASE_HISTORY.md). Install it over v2.5.4 or any pre-release; your settings are kept.*
