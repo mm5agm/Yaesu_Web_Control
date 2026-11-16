@@ -3853,7 +3853,7 @@ Radio Display captures the radio's **external video output** (or any USB UVC web
 - **DVI-D to HDMI cable:** <https://www.amazon.co.uk/dp/B0002GRUIC?th=1>
 - **HDMI to USB capture card:** <https://www.amazon.co.uk/dp/B0C4STMPS2?th=1>
 
-![The Radio Display card on the main page with the radio's screen showing, and the scope Controls column docked beside it](pictures/Radio_Display_Docked.png)
+![The Radio Display card on the main page with the radio's screen showing, and the scope Controls column docked beside it, its MULTI group open with the Main and Sub audio scopes from the ACC board](pictures/Radio_Display_Docked.png)
 
 ### 19.1 Hardware chain
 

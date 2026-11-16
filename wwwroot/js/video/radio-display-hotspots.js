@@ -179,7 +179,8 @@ const FREQ_MAX_HZ = 75_000_000;
 
 const LAYOUTS = {
     // FTdx101MP / FTdx101D, MONO layout, W/F display. Measured from
-    // pictures/Radio_Display_Docked.png and bench-confirmed 2026-09-12.
+    // pictures/Radio_Display_Docked.png as it was then (git history) and
+    // bench-confirmed 2026-09-12.
     // MONO / MULTI / EXPAND have no CAT command on this radio —
     // EXPAND here is the vertical expand, not L/N/S.
     FTdx101: {
