@@ -27,7 +27,7 @@ a different and much older format.
 **Fixes**
 
 - **Band names for Region 2 and 3.** YWC always used the Region 1 band plan, whatever the Band Plan setting said, so a US operator on 3.9 MHz saw the band as "Unknown". It now reads the setting.
-- **Radio Display capture size** ([#175](https://github.com/mm5agm/Yaesu_Web_Control/issues/175)). After a restart, the Capture size list offered only Auto size until the stream had run once. YWC now remembers each capture device's sizes, so you can choose one straight away.
+- **Radio Display capture size** ([#175](https://github.com/mm5agm/Yaesu_Web_Control/issues/175)). After a restart, the Capture size list offered only Auto size until the stream had run once. YWC now remembers the sizes each device offered last time, so you can choose one straight away.
 - **SDRplay RSPduo** ([#165](https://github.com/mm5agm/Yaesu_Web_Control/issues/165)). While one tuner was streaming, Scan dropped the RSPduo's other tuner from the list. It now stays, marked "(in use)", with a note. YWC still runs an RSPduo on one tuner at a time, so it can't feed both VFO A and VFO B yet.
 - **Voice control.** If Windows resets the microphone, YWC now opens it again, instead of hearing nothing until a restart.
 
