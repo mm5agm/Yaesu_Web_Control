@@ -15,6 +15,8 @@ namespace Yaesu_Web_Control.Hubs
         private readonly FilterSpectrumService _filterSpectrum;
         private readonly BrowserPresence _presence;
         private readonly Services.Cw.CwKeyingService _cwKeying;
+        // Registered on Windows only, with the ACC board's reader; null elsewhere.
+        private readonly Services.Sdr.AccAudioService? _accAudio;
 
         // Every currently open SignalR connection, and the whole of what the
         // host means by "a browser is watching". Presence used to mean a
@@ -40,8 +42,10 @@ namespace Yaesu_Web_Control.Hubs
             ISettingsService settings,
             FilterSpectrumService filterSpectrum,
             BrowserPresence presence,
-            Services.Cw.CwKeyingService cwKeying)
+            Services.Cw.CwKeyingService cwKeying,
+            IServiceProvider services)
         {
+            _accAudio = services.GetService<Services.Sdr.AccAudioService>();
             _presence = presence;
             _cwKeying = cwKeying;
             _logger   = logger;
@@ -93,6 +97,27 @@ namespace Yaesu_Web_Control.Hubs
             return await _filterSpectrum.SubscribeAsync(Context.ConnectionId);
         }
 
+        /// <summary>
+        /// Ask for the FTdx101's audio scope from the ACC board (the MULTI
+        /// group's AF-FFT and oscilloscope). Returns null when frames will
+        /// follow on RadioStateUpdate as property "AccAudio", or the reason
+        /// they will not. The board is let go when the last page leaves.
+        /// </summary>
+        public async Task<string?> SubscribeAccAudio()
+        {
+            if (_accAudio is null)
+                return "The ACC audio scope needs YWC on Windows.";
+            await Groups.AddToGroupAsync(Context.ConnectionId, Services.Sdr.AccAudioService.GroupName);
+            return _accAudio.Subscribe(Context.ConnectionId);
+        }
+
+        /// <summary>The page has closed its MULTI group, or it's off screen.</summary>
+        public async Task UnsubscribeAccAudio()
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, Services.Sdr.AccAudioService.GroupName);
+            _accAudio?.Unsubscribe(Context.ConnectionId);
+        }
+
         public override async Task OnConnectedAsync()
         {
             _connections.TryAdd(Context.ConnectionId, 0);
@@ -133,6 +158,7 @@ namespace Yaesu_Web_Control.Hubs
         {
             _connections.TryRemove(Context.ConnectionId, out _);
             _filterSpectrum.Unsubscribe(Context.ConnectionId);
+            _accAudio?.Unsubscribe(Context.ConnectionId);
             _cwKeying.Disconnected(Context.ConnectionId);
 
             // A navigation or a closed tab arrives with no exception. A

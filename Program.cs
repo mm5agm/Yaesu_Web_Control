@@ -592,6 +592,8 @@ builder.Services.AddHostedService<MeterPollingService>();
 // Registered as singleton so the span-change API endpoint can call RequestRestart().
 // AccScopeService owns the ACC board's port for both panels (FTdx101 ACC scope).
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.AccScopeService>();
+// AccAudioService sends the ACC audio scope (AF-FFT and oscilloscope) to the pages showing it.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.AccAudioService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.SdrManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Sdr.SdrManager>());
 #endif
