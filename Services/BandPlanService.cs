@@ -65,7 +65,14 @@ namespace Yaesu_Web_Control.Services
 
         private Dictionary<string, List<BandEdge>>? _edgesByRegion;
         private string _region = DefaultRegion;
-        private long _regionCheckedAt = long.MinValue;
+        // "Never checked" has to make the first now - _regionCheckedAt come out
+        // at RegionTtlMs or more. It was long.MinValue, and now - long.MinValue
+        // overflows to a negative number, which is "checked a moment ago": the
+        // setting was never read and every region acted as Region 1 (found in
+        // IWC #137, a Region 2 IC-9700 showing out of band above 146 MHz; YWC
+        // had the same line). TickCount64 is never negative, so -RegionTtlMs is
+        // always far enough back.
+        private long _regionCheckedAt = -RegionTtlMs;
 
         public BandPlanService(
             IWebHostEnvironment env,
