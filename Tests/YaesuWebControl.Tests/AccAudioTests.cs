@@ -153,6 +153,37 @@ public class AccAudioTests
         Assert.Contains("_accAudio?.Unsubscribe(Context.ConnectionId)", disconnected.Groups["body"].Value);
     }
 
+    [Fact]
+    public void The_audio_waterfall_holds_a_whole_ft8_cycle_in_100_pixels()
+    {
+        // The board sends 25 frames a second; the service passes on every SendEvery'th.
+        var service = Read("Services/Sdr/AccAudioService.cs");
+        int sendEvery = int.Parse(Regex.Match(service, @"const int SendEvery = (\d+);").Groups[1].Value);
+        var js = Read("wwwroot/js/ui/acc-audio-scope.js");
+        int framesPerRow = int.Parse(Regex.Match(js, @"export const FRAMES_PER_ROW = (\d+);").Groups[1].Value);
+
+        double secondsIn100Rows = 100.0 * framesPerRow / (25.0 / sendEvery);
+
+        Assert.InRange(secondsIn100Rows, 15, 30);   // an FT8 cycle is 15 seconds
+    }
+
+    [Fact]
+    public void The_panes_show_the_waterfall_unless_the_oscilloscope_box_is_ticked()
+    {
+        var partial = Read("Pages/Shared/_RadioScopeButtonsPartial.cshtml");
+        Assert.Matches(@"<input type=""checkbox"" class=""acc-audio-osc[ ""]", partial);
+
+        var js = Read("wwwroot/js/ui/acc-audio-scope.js");
+        Assert.Contains("querySelector('.acc-audio-osc')", js);
+        Assert.Contains("let showOsc = false;", js);
+        Assert.Contains("localStorage.getItem(OSC_KEY) === '1'", js);
+        Assert.Matches(@"if \(showOsc\) this\._drawOsc\(.*\);\s*else this\._drawFall\(", js);
+        // The waterfall gets more of the height than the oscilloscope.
+        double fall = double.Parse(Regex.Match(js, @"FFT_SHARE_FALL = ([\d.]+);").Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        double osc = double.Parse(Regex.Match(js, @"FFT_SHARE_OSC = ([\d.]+);").Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.True(fall < osc);
+    }
+
     private static string Read(string path) => File.ReadAllText(Path.Combine(RepoRoot(), path));
 
     private static string RepoRoot()

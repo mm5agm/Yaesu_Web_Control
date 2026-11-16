@@ -1,7 +1,8 @@
 // Yaesu Web Control — the FTdx101's audio scope, from the ACC board.
 //
-// Draws each receiver's AF-FFT (0 to 4 kHz) above its oscilloscope, inside the
-// MULTI group of the Radio Scope controls. The host sends them on
+// Draws each receiver's AF-FFT (0 to 4 kHz) above an audio waterfall made from
+// it, or above the radio's oscilloscope when the Oscilloscope box is ticked,
+// inside the MULTI group of the Radio Scope controls. The host sends them on
 // RadioStateUpdate as property "AccAudio" (AccAudioService) only while a page
 // has asked: this subscribes when a MULTI group with the panes is open and on
 // screen, and unsubscribes when none is, so the ACC board's port is let go.
@@ -17,6 +18,17 @@ const FLOOR_FOLLOW = 0.05;         // how fast the floor follows
 const TOP_FALL = 0.02;             // how fast the top comes down after a loud signal
 const MIN_RANGE = 20;              // the least the trace is stretched over
 const STALE_MS = 1500;             // frames older than this are not drawn
+// The audio waterfall. Frames come about 12.5 a second, so 2 a row puts about
+// 16 seconds in 100 rows: a whole FT8 cycle. Point 0 (DC) is left out.
+export const FRAMES_PER_ROW = 2;
+export const FALL_POINTS = FFT_POINTS - 1;
+const FALL_ROWS = 600;             // more than the tallest pane, in device pixels
+const FALL_FOLLOW = 0.15;          // how fast the colours follow the levels
+const FFT_SHARE_FALL = 0.45;       // the AF-FFT's share of the height over the waterfall
+const FFT_SHARE_OSC = 0.6;         // and over the oscilloscope
+const OSC_KEY = 'ywc.accAudioOsc';
+// Black, blue, cyan, yellow, red, white: weak to strong, as in the ACC viewer.
+const FALL_STOPS = [[0, 0x000000], [60, 0x00008C], [120, 0x00AADC], [170, 0xF0E600], [215, 0xE61E00], [255, 0xFFFFFF]];
 const ATT_DB = ['0 dB', '10 dB', '20 dB'];
 const OSC_TIMES = ['1 ms', '3 ms', '10 ms', '30 ms', '100 ms', '300 ms'];
 
@@ -48,6 +60,49 @@ export function fftRange(fft) {
     return { low: sorted[Math.floor(sorted.length / 10)], peak: sorted[sorted.length - 1] };
 }
 
+/** One waterfall row: the sums of its frames, averaged and rounded, 0 to 255. */
+export function averageRow(sum, frames) {
+    const row = new Uint8Array(sum.length);
+    const n = Math.max(1, frames);
+    for (let i = 0; i < sum.length; i++) row[i] = Math.max(0, Math.min(255, Math.floor((sum[i] + n / 2) / n)));
+    return row;
+}
+
+/**
+ * Where a row's colours start and end: black at its median, about the noise
+ * floor, so weak signals such as FT8 show against it, and white at its peak.
+ */
+export function rowStretch(row) {
+    const sorted = Array.from(row).sort((a, b) => a - b);
+    if (!sorted.length) return { low: 0, high: 255 };
+    return { low: sorted[Math.floor(sorted.length / 2)], high: sorted[sorted.length - 1] };
+}
+
+/** 256 colours, [r, g, b] each, for the waterfall. */
+export function fallPalette() {
+    const p = new Uint8ClampedArray(256 * 3);
+    for (let v = 0; v < 256; v++) {
+        let s = 0;
+        while (s < FALL_STOPS.length - 2 && v > FALL_STOPS[s + 1][0]) s++;
+        const [a, ca] = FALL_STOPS[s], [b, cb] = FALL_STOPS[s + 1];
+        const t = (v - a) / (b - a);
+        for (let k = 0; k < 3; k++) {
+            const shift = 16 - 8 * k, from = (ca >> shift) & 255, to = (cb >> shift) & 255;
+            p[v * 3 + k] = Math.round(from + (to - from) * t);
+        }
+    }
+    return p;
+}
+
+/** The AF-FFT's share of the pane's height: more room for the waterfall. */
+export function fftShare(oscilloscope) {
+    return oscilloscope ? FFT_SHARE_OSC : FFT_SHARE_FALL;
+}
+
+let showOsc = false;
+try { showOsc = localStorage.getItem(OSC_KEY) === '1'; } catch { /* storage blocked */ }
+const PALETTE = fallPalette();
+
 /** The radio's audio scope settings, shared by both receivers. */
 export function settingsText(fftAtt, oscAtt, oscTime) {
     const att = a => ATT_DB[a] ?? `step ${a}`;
@@ -67,6 +122,15 @@ class Pane {
         this.has = false;
         this.low = null;
         this.top = null;
+        this.fall = document.createElement('canvas');
+        this.fall.width = FALL_POINTS;
+        this.fall.height = FALL_ROWS;
+        this.fallCtx = this.fall.getContext('2d');
+        this.fallCtx.fillStyle = '#000';
+        this.fallCtx.fillRect(0, 0, FALL_POINTS, FALL_ROWS);
+        this.rowSum = new Float64Array(FALL_POINTS);
+        this.rowFrames = 0;
+        this.stretch = null;
     }
 
     add(data) {
@@ -74,6 +138,7 @@ class Pane {
         const osc = decodeBytes(data.osc);
         if (fft.length < FFT_POINTS || osc.length < OSC_COLUMNS * 2) return;
         smooth(this.fft, fft, this.has ? FFT_FOLLOW : 1);
+        this._addToRow(fft);
         this.osc.set(osc.subarray(0, OSC_COLUMNS * 2));
         const { low, peak } = fftRange(this.fft);
         this.low = this.low === null ? low : this.low + (low - this.low) * FLOOR_FOLLOW;
@@ -85,6 +150,39 @@ class Pane {
         this.has = false;
         this.low = this.top = null;
         this.fft.fill(0);
+        this.rowSum.fill(0);
+        this.rowFrames = 0;
+    }
+
+    // Raw frames, not the smoothed trace, so the waterfall stays sharp in time.
+    _addToRow(fft) {
+        for (let i = 0; i < FALL_POINTS; i++) this.rowSum[i] += fft[i + 1];
+        if (++this.rowFrames < FRAMES_PER_ROW) return;
+        const row = averageRow(this.rowSum, this.rowFrames);
+        this.rowSum.fill(0);
+        this.rowFrames = 0;
+
+        const target = rowStretch(row);
+        if (!this.stretch) this.stretch = { ...target };
+        else {
+            this.stretch.low += (target.low - this.stretch.low) * FALL_FOLLOW;
+            this.stretch.high += (target.high - this.stretch.high) * FALL_FOLLOW;
+        }
+        const low = Math.round(this.stretch.low);
+        const high = Math.max(Math.round(this.stretch.high), low + 1);
+
+        // Newest row at the top: move the rest down one.
+        const g = this.fallCtx;
+        g.drawImage(this.fall, 0, 0, FALL_POINTS, FALL_ROWS - 1, 0, 1, FALL_POINTS, FALL_ROWS - 1);
+        const img = g.createImageData(FALL_POINTS, 1);
+        for (let i = 0; i < FALL_POINTS; i++) {
+            const v = row[i] <= low ? 0 : row[i] >= high ? 255 : Math.round((row[i] - low) * 255 / (high - low));
+            img.data[i * 4] = PALETTE[v * 3];
+            img.data[i * 4 + 1] = PALETTE[v * 3 + 1];
+            img.data[i * 4 + 2] = PALETTE[v * 3 + 2];
+            img.data[i * 4 + 3] = 255;
+        }
+        g.putImageData(img, 0, 0);
     }
 
     draw() {
@@ -99,9 +197,20 @@ class Pane {
         g.fillRect(0, 0, w, h);
 
         const gap = Math.round(4 * dpr);
-        const fftH = Math.round(h * 0.6);
+        const fftH = Math.round(h * fftShare(showOsc));
         this._drawFft(g, 0, 0, w, fftH, dpr);
-        this._drawOsc(g, 0, fftH + gap, w, h - fftH - gap);
+        if (showOsc) this._drawOsc(g, 0, fftH + gap, w, h - fftH - gap);
+        else this._drawFall(g, 0, fftH + gap, w, h - fftH - gap);
+    }
+
+    // One row a device pixel, under the AF-FFT's points 1 to 199.
+    _drawFall(g, x, y, w, h) {
+        if (h < 2) return;
+        const rows = Math.min(h, FALL_ROWS);
+        const left = x + w / FFT_POINTS;
+        g.imageSmoothingEnabled = false;
+        g.drawImage(this.fall, 0, 0, FALL_POINTS, rows, left, y, x + w - left, rows);
+        g.imageSmoothingEnabled = true;
     }
 
     _drawFft(g, x, y, w, h, dpr) {
@@ -171,6 +280,11 @@ class Panel {
         this.details = root.closest('details');
         this.status = root.querySelector('.acc-audio-status');
         this.panes = Array.from(root.querySelectorAll('.acc-audio-pane')).map(f => new Pane(f));
+        this.osc = root.querySelector('.acc-audio-osc');
+        if (this.osc) {
+            this.osc.checked = showOsc;
+            this.osc.addEventListener('change', () => setShowOsc(this.osc.checked));
+        }
         this.visible = false;
         this.lastAt = 0;
         this.message = '';
@@ -221,6 +335,16 @@ class Panel {
 // ── the page's subscription ──────────────────────────────────────────────────
 
 const panels = [];
+
+/** The Oscilloscope box: one choice for every panel on the page, remembered. */
+function setShowOsc(on) {
+    showOsc = on;
+    try { localStorage.setItem(OSC_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
+    panels.forEach(p => {
+        if (p.osc) p.osc.checked = on;
+        if (p.wanted) p.draw();
+    });
+}
 let connection = null;
 let started = null;
 let subscribed = false;
