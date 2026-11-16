@@ -186,6 +186,18 @@ namespace Yaesu_Web_Control.Services.Voice
         private float _gain = 3f;
         private float _env;                     // peak-hold envelope of the raw input
 
+        // Liveness. WinMM does not tell us when Windows re-initialises the
+        // endpoint underneath an open handle (toggling an audio enhancement
+        // such as Voice Clarity, a sample-rate change, the mic unplugged and
+        // plugged back): at best RecordingStopped fires with an MmException,
+        // at worst DataAvailable simply never fires again. Either way the
+        // stream looks open, SAPI keeps waiting on Read, and every PTT press
+        // hears nothing. _lastDataTicks lets the owner notice before it binds
+        // the recogniser to a dead handle. Ported from IWC cf009a7d.
+        private long _startTicks;
+        private long _lastDataTicks;
+        private const int DeadAfterMs = 1500;   // WinMM delivers 50 ms buffers; 1.5 s of nothing is a dead handle
+
         public MicrophoneStream(int deviceNumber, ILogger? logger = null)
         {
             _logger = logger;
@@ -205,15 +217,34 @@ namespace Yaesu_Web_Control.Services.Voice
             _capacityBytes = MicrophoneCapture.SampleRate * (MicrophoneCapture.Bits / 8) * MicrophoneCapture.Channels * 2;
 
             _waveIn.DataAvailable += OnDataAvailable;
-            _waveIn.RecordingStopped += (_, _) =>
+            _waveIn.RecordingStopped += (_, e) =>
             {
+                if (e.Exception != null)
+                    _logger?.LogWarning(e.Exception, "[Voice] Mic capture stopped by the audio device (WaveIn #{Index}) — it will be reopened on the next PTT", deviceNumber);
                 lock (_lock) { _stopped = true; Monitor.PulseAll(_lock); }
             };
+            _startTicks = _lastDataTicks = Environment.TickCount64;
             _waveIn.StartRecording();
+        }
+
+        /// <summary>
+        /// True once the capture has stopped, or has delivered nothing for
+        /// longer than a live WinMM handle ever goes quiet. The owner checks
+        /// this before each recognition and replaces the stream if so.
+        /// </summary>
+        public bool IsDead
+        {
+            get
+            {
+                if (_stopped) return true;
+                long last = Math.Max(Volatile.Read(ref _lastDataTicks), _startTicks);
+                return Environment.TickCount64 - last > DeadAfterMs;
+            }
         }
 
         private void OnDataAvailable(object? sender, WaveInEventArgs e)
         {
+            Volatile.Write(ref _lastDataTicks, Environment.TickCount64);
             if (e.BytesRecorded <= 0) return;
 
             // Raw (pre-gain) peak: shows whether the mic is actually picking up

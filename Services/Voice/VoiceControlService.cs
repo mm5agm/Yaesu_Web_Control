@@ -257,7 +257,15 @@ namespace Yaesu_Web_Control.Services.Voice
                 return;
             }
 
-            if (_micStream == null || _boundMicIndex != index)
+            // A bound stream whose device has gone quiet underneath it (Windows
+            // re-initialised the endpoint: an enhancement toggled, the mic
+            // re-plugged) is replaced, not reused: SAPI would otherwise sit on
+            // a Read that never returns and every PTT would hear nothing.
+            bool dead = _micStream != null && _micStream.IsDead;
+            if (dead)
+                _logger.LogWarning("[Voice] Microphone '{Name}' stopped delivering audio — reopening it", _configuredMicName);
+
+            if (_micStream == null || _boundMicIndex != index || dead)
             {
                 DisposeMicStream();
                 var stream = new MicrophoneStream(index, _logger);
@@ -291,7 +299,7 @@ namespace Yaesu_Web_Control.Services.Voice
                 return;
             }
 
-            if (_micStream == null || _boundMicIndex != index)
+            if (_micStream == null || _boundMicIndex != index || _micStream.IsDead)
                 EnsureAudioInput();          // fresh bind -> already clean
             else
                 _micStream.DiscardBuffered();

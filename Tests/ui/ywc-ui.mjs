@@ -614,8 +614,12 @@ test('/rtty-contest: a typed frequency tunes, and DX SPOTS hides the spot tags',
 
 // Bruce VK2RT, #250 2026-11-14: a SPOTS window, a 15 kHz span, and a
 // brightness control for the waterfall.
+// The SDR's span list. Without this the list follows the app's own setup: an ACC
+// scope has only the radio's spans, so no 15 kHz (spectrum-refine.js).
+const SDR_SOURCE = `__rwcTest.getOverrides['/api/sdr/refine'] = { available: true, source: 'SDRplay RSP1B', level: 0, max: 8 };`;
+
 test('/rtty-contest: SPOTS opens the spots window, SPAN has 15 kHz, and WF BRIGHT is kept', async () => {
-    const page = await open('/rtty-contest', { settleMs: 1500 });
+    const page = await open('/rtty-contest', { settleMs: 1500, before: SDR_SOURCE });
     try {
         await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
         const saved = await page.eval(`localStorage.getItem('ywc.rttyContest.levels.A')`);
@@ -650,7 +654,7 @@ test('/rtty-contest: SPOTS opens the spots window, SPAN has 15 kHz, and WF BRIGH
 test('/rtty-contest: a span the server keeps from changing does not stay showing in SPAN', async () => {
     // Colin 2026-11-14: 15 kHz picked on the ACC scope, which kept 10 kHz,
     // still read "SPAN 15 kHz". The span write is stubbed, so the frames stay at 10 kHz.
-    const page = await open('/rtty-contest', { settleMs: 1500 });
+    const page = await open('/rtty-contest', { settleMs: 1500, before: SDR_SOURCE });
     try {
         await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
         await page.state('FrequencyA', 14_080_000);
@@ -1141,7 +1145,9 @@ test('/rtty-contest: a part in its own window leaves the page, and comes back wh
         wins.push(await open('/RttyTuner?contest=true', { settleMs: 1500 }));
         await main.waitFor(`!document.querySelector('.rc-tnote').hidden`, { what: 'the tuner note' });
         expect(await main.eval(`document.getElementById('rttyTunerDialog').hidden`), 'the docked tuner is still showing');
-        expect(await text(main, '.rc-pop-tuner') === 'DOCK', 'the tuner key does not say DOCK');
+        // Out, the page keeps no DOCK of its own: the tuner's POP OUT hides and
+        // the window has the DOCK (Bruce VK2RT, #250 2026-11-01).
+        expect(!(await visible(main, '.rc-pop-tuner')), 'the POP OUT key of the tuner still shows while the tuner is out');
         expect(await wins.at(-1).eval(`document.getElementById('rttyTunerDialog').classList.contains('rtty-contest')`), 'the tuner window shows more than the Tune section');
         const w = await main.writes();
         expect(w.some(x => x.path.startsWith('/api/rtty/tuner/stop')), `the docked tuner was not stopped: ${JSON.stringify(w.map(x => x.path))}`);
@@ -1263,15 +1269,15 @@ test('/rtty-contest: DECODE swaps the VFO wheel for the decoded text and starts 
         // The text pops out by itself: the tuner stays, the window has the
         // text and no tuner.
         wins.push(await open('/RttyTuner?contest=true&decode=true', { settleMs: 1500 }));
-        await page.waitFor(`document.querySelector('.rc-pop-decode').textContent === 'DOCK'`, { what: 'the decode key to say DOCK' });
+        await page.waitFor(`document.querySelector('.rc-pop-decode').hidden`, { what: 'the decode POP OUT key to hide' });
         expect(await page.eval(`document.querySelector('.rtty-decode').hidden && !document.querySelector('.rc-dbox .rc-tnote').hidden && !document.getElementById('rttyTunerDialog').hidden`),
             'with the text out the page still shows it, has no note, or lost the tuner');
-        expect(await page.eval(`document.querySelector('.rc-pop-tuner').textContent`) === 'POP OUT', 'the tuner went out with the text');
+        expect(await visible(page, '.rc-pop-tuner'), 'the tuner went out with the text');
         expect(await wins[0].eval(`(e => !!e && e.offsetParent !== null)(document.getElementById('rttyReaderOut')) && document.getElementById('rttyTunerCanvas').offsetParent === null`),
             'the decode window does not show the text alone');
         expect(!(await wins[0].writes()).some(x => x.path.startsWith('/api/rtty/tuner/start')), 'the decode window started a tuner');
         await wins.pop().close();
-        await page.waitFor(`document.querySelector('.rc-pop-decode').textContent === 'POP OUT'`, { what: 'the text to come back', timeoutMs: 5000 });
+        await page.waitFor(`!document.querySelector('.rc-pop-decode').hidden`, { what: 'the text to come back', timeoutMs: 5000 });
         expect(await shown(), 'the text did not come back when its window went');
 
         await page.clearWrites();
@@ -1286,7 +1292,7 @@ test('/rtty-contest: DECODE swaps the VFO wheel for the decoded text and starts 
         // until its window goes.
         await page.click('.rc-decode');
         wins.push(await open('/RttyTuner?contest=true&decode=true', { settleMs: 1500 }));
-        await page.waitFor(`document.querySelector('.rc-pop-decode').textContent === 'DOCK'`, { what: 'the decode key to say DOCK' });
+        await page.waitFor(`document.querySelector('.rc-pop-decode').hidden`, { what: 'the decode POP OUT key to hide' });
         await page.clearWrites();
         await page.click('.rc-decode');
         await sleep(300);
@@ -1294,7 +1300,7 @@ test('/rtty-contest: DECODE swaps the VFO wheel for the decoded text and starts 
         expect(await posts('stop') === 0, 'VFO WHEEL stopped the decoder with the text in its window');
         expect(await wins[0].eval(`(e => !!e && e.offsetParent !== null)(document.getElementById('rttyReaderOut'))`), 'the decode window went with VFO WHEEL');
         await wins.pop().close();
-        await page.waitFor(`document.querySelector('.rc-pop-decode').textContent === 'POP OUT'`, { what: 'the decode window to close', timeoutMs: 5000 });
+        await page.waitFor(`!document.querySelector('.rc-pop-decode').hidden`, { what: 'the decode window to close', timeoutMs: 5000 });
         await sleep(300);
         expect(await posts('stop') === 1, 'the decoder did not stop when its window went with the wheel showing');
         expect(!(await shown()) && await wheel(), 'closing the decode window did not leave the wheel');
@@ -1312,7 +1318,7 @@ test('/rtty-contest: the VFO wheel pops out to a window of its own that tunes, a
     try {
         wins.push(await open('/rtty-contest/window?p=wheel', { settleMs: 1500 }));
         const win = wins[0];
-        await page.waitFor(`document.querySelector('.rc-pop-wheel').textContent === 'DOCK'`, { what: 'the wheel key to say DOCK' });
+        await page.waitFor(`document.querySelector('.rc-pop-wheel').hidden`, { what: 'the wheel POP OUT key to hide' });
         expect(!(await visible(page, '.rc-wbox .rp-dial')) && await visible(page, '.rc-wnote'), 'with the wheel out the page still shows it, or has no note');
         expect(await visible(win, '.rc-wbox .rp-dial') && !(await visible(win, '.rc-stack')) && !(await visible(win, '.rc-scope')),
             'the wheel window does not show the wheel alone');
@@ -1336,7 +1342,7 @@ test('/rtty-contest: the VFO wheel pops out to a window of its own that tunes, a
         await sleep(300);
         expect(await visible(page, '.rc-wnote'), 'VFO WHEEL with the wheel out has no note');
         await wins.pop().close();
-        await page.waitFor(`document.querySelector('.rc-pop-wheel').textContent === 'POP OUT'`, { what: 'the wheel to come back', timeoutMs: 5000 });
+        await page.waitFor(`!document.querySelector('.rc-pop-wheel').hidden`, { what: 'the wheel to come back', timeoutMs: 5000 });
         expect(await visible(page, '.rc-wbox .rp-dial'), 'the wheel did not come back when its window went');
         for (const p of [page, ...wins]) expect(p.exceptions.length === 0, `uncaught exceptions:\n${p.exceptions.join('\n')}`);
     } finally {
