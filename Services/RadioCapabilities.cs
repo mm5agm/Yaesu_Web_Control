@@ -52,8 +52,19 @@ public static class RadioCapabilities
     {
         // RX 30 kHz - 56 MHz, 118 - 164 MHz and 420 - 470 MHz.
         "FT-991A" => (30_000, 470_000_000),
+        // FT-847 RX 100 kHz - 76 MHz, 108 - 174 MHz and 420 - 512 MHz
+        // (FT-847 Operating Manual, Specifications).
+        "FT-847" => (100_000, 512_000_000),
         _ => (30_000, 75_000_000)
     };
+
+    /// <summary>
+    /// True when the radio has the 2 m and 70 cm bands, so the band keys swap
+    /// 4 m for 2 m and 70 cm. The FT-991A (CAT manual, BS table) and the
+    /// FT-847 (100 W on 160 - 6 m, 50 W on 2 m and 70 cm, no 4 m).
+    /// </summary>
+    public static bool HasTwoMetresAndSeventyCm(string radioModel) =>
+        radioModel is "FT-991A" or "FT-847";
 
     /// <summary>
     /// True when <paramref name="hz"/> is within the model's tunable range.
@@ -116,7 +127,7 @@ public static class RadioCapabilities
     public static int MaxPowerWatts(string radioModel) => radioModel switch
     {
         "FTdx101MP" or "FTDX5000MP" or "FTDX5000D" => 200,
-        "FTdx101D" or "FTdx10" or "FT-710" or "FTDX3000" or "FT-991A" => 100,
+        "FTdx101D" or "FTdx10" or "FT-710" or "FTDX3000" or "FT-991A" or "FT-847" => 100,
         _ => 200
     };
 
@@ -124,11 +135,12 @@ public static class RadioCapabilities
     /// The highest power the radio will put out at <paramref name="hz"/>.
     /// The same as <see cref="MaxPowerWatts"/> except on the FT-991A, which
     /// is a 100 W radio on HF and 6 m but 50 W on 2 m and 70 cm (FT-991A CAT
-    /// manual, EX139 / EX140 "144M / 430M TX MAX POWER", 5 ~ 50). PC still
+    /// manual, EX139 / EX140 "144M / 430M TX MAX POWER", 5 ~ 50) and the
+    /// FT-847 (Operating Manual: "2m/70cm: 50 Watts"). PC still
     /// takes watts there, so the slider is capped rather than rescaled.
     /// </summary>
     public static int MaxPowerWattsAt(string radioModel, long hz) =>
-        radioModel == "FT-991A" && hz >= 100_000_000 ? 50 : MaxPowerWatts(radioModel);
+        HasTwoMetresAndSeventyCm(radioModel) && hz >= 100_000_000 ? 50 : MaxPowerWatts(radioModel);
 
     /// <summary>
     /// True when the radio has a PA temperature meter, read with RM9. The
@@ -139,7 +151,7 @@ public static class RadioCapabilities
     /// </summary>
     public static bool HasPaTemperatureMeter(string radioModel) => radioModel switch
     {
-        "FTdx10" or "FT-710" or "FTDX5000MP" or "FTDX5000D" or "FT-991A" => false,
+        "FTdx10" or "FT-710" or "FTDX5000MP" or "FTDX5000D" or "FT-991A" or "FT-847" => false,
         _ => true
     };
 
@@ -148,7 +160,7 @@ public static class RadioCapabilities
     /// excluded; see <see cref="HasPaTemperatureMeter"/> for why the others
     /// still poll.
     /// </summary>
-    public static bool PollsTemperature(string radioModel) => radioModel != "FT-991A";
+    public static bool PollsTemperature(string radioModel) => radioModel is not ("FT-991A" or "FT-847");
 
     /// <summary>
     /// True when the roofing filter can be chosen over CAT (the RF command).
@@ -156,7 +168,7 @@ public static class RadioCapabilities
     /// roofing filter themselves.
     /// </summary>
     public static bool HasRoofingFilterCat(string radioModel) =>
-        radioModel is not ("FT-710" or "FT-991A");
+        radioModel is not ("FT-710" or "FT-991A" or "FT-847");
 
     /// <summary>
     /// True when split is driven by FT alone (FT2 = TX on A, FT3 = TX on B),
@@ -173,7 +185,8 @@ public static class RadioCapabilities
     /// FT-991A has neither (its CAT command list has no FR and no VS); its
     /// only way to listen on B is to swap the VFOs with SV.
     /// </summary>
-    public static bool CanSelectRxVfo(string radioModel) => radioModel != "FT-991A";
+    /// The FT-847's CAT reaches the main VFO only.
+    public static bool CanSelectRxVfo(string radioModel) => radioModel is not ("FT-991A" or "FT-847");
 
     /// <summary>
     /// Nominal PA supply voltage — what the radio's own VDD meter is aligned
@@ -211,7 +224,9 @@ public static class RadioCapabilities
     /// </summary>
     public static bool HasAntennaSelector(string radioModel) => radioModel switch
     {
-        "FTdx10" or "FT-710" or "FT-991A" => false,
+        // The FT-847 has four antenna jacks, but one per band, chosen by the
+        // radio; there is nothing to select.
+        "FTdx10" or "FT-710" or "FT-991A" or "FT-847" => false,
         _                     => true
     };
 

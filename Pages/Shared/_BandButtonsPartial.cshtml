@@ -1,8 +1,9 @@
 ﻿@model Tuple<string, string, string>
 @{
-    // Item1 is the radio model. The FT-991A has 2 m and 70 cm and no 4 m
-    // (FT-991A CAT manual, BS table); every other model stops at 4 m.
-    var bands = Model.Item1 == "FT-991A"
+    // Item1 is the radio model. The FT-991A and FT-847 have 2 m and 70 cm and
+    // no 4 m (RadioCapabilities.HasTwoMetresAndSeventyCm); every other model
+    // stops at 4 m.
+    var bands = Yaesu_Web_Control.Services.RadioCapabilities.HasTwoMetresAndSeventyCm(Model.Item1)
         ? new[] { "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm" }
         : new[] { "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "4m" };
     var bandLabels = new Dictionary<string, string>
