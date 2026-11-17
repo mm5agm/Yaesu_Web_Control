@@ -93,6 +93,13 @@ export function startYaesuRadioPanel(root, cfg) {
     const antennas = Array.isArray(cfg.antennas) ? cfg.antennas.map(String) : [];
     const roofing = Array.isArray(cfg.roofing) ? cfg.roofing.filter(o => o?.code) : [];
     const roofLabel = code => roofing.find(o => o.code === String(code))?.label ?? '';
+    // The FT-847's older CAT reaches frequency, mode, the S-meter, the PO
+    // meter and PTT, nothing else (RadioCapabilities.HasLimitedCat). The board
+    // leaves out every key and knob it cannot drive; limited-cat.css hides
+    // the clarifier, which the board always draws, and the windows it has no
+    // CAT for (the windows code expects all of them, so they are hidden).
+    const limitedCat = !!cfg.limitedCat;
+    const bands = ['FT-991A', 'FT-847'].includes(model) ? [...BANDS, '2m', '70cm'] : BANDS;
 
     let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
     let win = null;             // likewise: windows restored from last time report during mount
@@ -107,14 +114,16 @@ export function startYaesuRadioPanel(root, cfg) {
         menu: cfg.menu ?? [],
         lamps: [{ id: 'cat', label: 'CAT', click: true, title: "The radio's CAT link: click to disconnect or connect, as Classic's Connect key" }, { id: 'sdr', label: 'SDR' }, { id: 'dx', label: 'DX' }],
         statusChips: [{ id: 'wsjtx', label: 'WSJT-X TX', title: 'Lit while WSJT-X is transmitting through YWC' }],
-        keys: [
+        keys: limitedCat ? [] : [
             { id: 'mainsub', label: dual ? 'MAIN / SUB' : 'VFO A / B', title: dual ? 'Select MAIN or SUB: the keys, knobs and rows act on the selected receiver' : 'Select VFO A or VFO B' },
             { id: 'proc', label: 'PROC', title: 'Speech processor on / off (transmit audio only)' },
             { id: 'vox', label: 'VOX', title: 'VOX on / off: while on, your microphone keys the transmitter. Gain and delay are in TX SETUP' },
             { id: 'tune', label: 'TUNE', title: 'ATU TUNE - transmits a carrier: press twice. Pressed while tuning, it stops' },
             { id: 'moni', label: 'MONI', title: 'Monitor on / off: hear your own transmit audio. It does not transmit' },
         ],
-        rxGroups: {
+        // With no groups the board draws its plain knob row, here empty.
+        knobs: [],
+        rxGroups: limitedCat ? undefined : {
             knobs: [
                 { id: 'afrf', label: 'AF / RF·SQL', turn: true, title: 'Inner: AF gain (volume). Outer: RF gain' + U },
                 { id: 'shiftwidth', label: 'SHIFT / WIDTH', turn: true, title: 'Inner: IF shift. Outer: IF width' + U },
@@ -140,11 +149,11 @@ export function startYaesuRadioPanel(root, cfg) {
         // The dial: on the FTdx101 the outer ring tunes MAIN and the inner
         // knob SUB, as on the radio.
         dualDial: true,
-        clarTurn: true,
-        meters: ['PO', 'SWR', 'ALC', 'COMP', 'IDD', ...(vddDial ? ['VDD'] : []), ...(paTemp ? ['TEMP'] : [])],
+        clarTurn: !limitedCat,
+        meters: limitedCat ? ['PO'] : ['PO', 'SWR', 'ALC', 'COMP', 'IDD', ...(vddDial ? ['VDD'] : []), ...(paTemp ? ['TEMP'] : [])],
         meterScales: vddDial ? { VDD: rangeLegends(vddDial.min, vddDial.max) } : {},
         liveMeters: ['VDD', 'TEMP'],
-        vfoKeys: [
+        vfoKeys: limitedCat ? [] : [
             { id: 'ab', label: 'A▸B', title: 'Copy VFO A to VFO B' }, { id: 'ba', label: 'B▸A', title: 'Copy VFO B to VFO A' },
             { id: 'swap', label: 'A⇄B', title: 'Swap VFO A and VFO B' },
             { id: 'split', label: 'SPLIT', title: 'Split on / off: receive on A, transmit on B' },
@@ -157,21 +166,21 @@ export function startYaesuRadioPanel(root, cfg) {
         // M▸VFO and VFO▸M act on the radio's current memory channel (MC).
         // VFO▸M overwrites it, so it takes a second press, naming the channel.
         memKeys: [
-            { id: 'vm', label: 'V/M', title: 'Switch between VFO and memory' },
+            ...(limitedCat ? [] : [{ id: 'vm', label: 'V/M', title: 'Switch between VFO and memory' },
             { id: 'mtovfo', label: 'M▸VFO', title: "Copy the radio's current memory channel to the selected receiver" },
             { id: 'vfotom', label: 'VFO▸M', title: "Write VFO-A over the radio's own current memory channel (not YWC's Memories) - press twice" },
             { id: 'qmbsto', label: 'QMB STO', title: 'Quick memory bank: store the current frequency and mode' },
-            { id: 'qmbrcl', label: 'QMB RCL', title: 'Quick memory bank: recall; each press steps to the next stored one' },
+            { id: 'qmbrcl', label: 'QMB RCL', title: 'Quick memory bank: recall; each press steps to the next stored one' }]),
             { id: 'mstore', label: 'M.STORE', sub: 'bank', title: "Save the selected receiver into one of YWC's memory banks: press, then click the bank" },
         ],
         // CLR zeroes the offset and leaves RX / TX clarifier as they are, as the
         // radio's CLEAR does.
-        clarKeys: [
+        clarKeys: limitedCat ? [] : [
             { id: 'rxclar', label: 'RX', title: 'RX clarifier on / off: offsets the receive frequency' },
             { id: 'txclar', label: 'TX', title: 'TX clarifier on / off: offsets the transmit frequency' },
             { id: 'clrclar', label: 'CLR', title: 'Clear the clarifier offset to zero' },
         ],
-        bands: BANDS.map(b => ({ id: b, label: b.replace('m', '') })),
+        bands: bands.map(b => ({ id: b, label: b.replace(/c?m$/, '') })),
         modes: MODES.map(m => ({ id: m, label: m })),
         // One spectrum per SDR, as on Classic and the pop-out: SDR A follows
         // VFO-A (MAIN), SDR B follows VFO-B (SUB).

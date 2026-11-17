@@ -61,6 +61,7 @@ I wrote YWC because I can't see the FTdx101MP's controls without using a magnify
 | FT-710 | 100 W | Single | Two VFOs; no rear-panel IF output, but can show its own scope over USB with no SDR (experimental) |
 | FTDX3000 | 100 W | Single | Two VFOs; no memory tag (MT) command |
 | FT-991A | 100 W (50 W on 2 m / 70 cm) | Single | HF + 6 m + 2 m + 70 cm; C4FM; new in v2.5.3 — built from the 991A's CAT manual and still being tested on a real radio |
+| FT-847 | 100 W (50 W on 2 m / 70 cm) | Single | HF + 6 m + 2 m + 70 cm; its older CAT reaches frequency, mode, the S-meter and the power meter only, so YWC hides the other controls. New, built from the FT-847 manual and not yet tested on a real radio — see [the FT-847 notes](USER_MANUAL.md#the-ft-847) |
 | FTDX5000MP | 200 W | Dual | New — available to test; power meter calibration still being refined |
 | FTDX5000D | 200 W | Dual | New — available to test; power meter calibration still being refined |
 

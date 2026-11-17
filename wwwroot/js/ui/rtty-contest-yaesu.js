@@ -41,7 +41,7 @@ const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 15e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e
 
 // The bands, as the band keys on the radio panel and Classic have them.
 const HF_BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
-const bandsFor = model => model === 'FT-991A' ? [...HF_BANDS, '2m', '70cm'] : [...HF_BANDS, '4m'];
+const bandsFor = model => (model === 'FT-991A' || model === 'FT-847') ? [...HF_BANDS, '2m', '70cm'] : [...HF_BANDS, '4m'];
 
 // Where RTTY is found on bands whose band plan has no RTTY segment.
 const RTTY_SPOTS = {
@@ -71,6 +71,9 @@ export function startYaesuRttyContest(root, cfg) {
         : [{ id: 'A', tab: dual ? 'Main' : 'VFO-A', name: dual ? 'MAIN · SDR A' : 'VFO-A · SDR A' }];
 
     const bandPlan = cfg.bandPlan || 'Region1';
+    // The FT-847's older CAT has no power, monitor, width or shift, and no
+    // SWR or ALC meter (RadioCapabilities.HasLimitedCat): leave them out.
+    const limitedCat = !!cfg.limitedCat;
     const bands = bandsFor(cfg.model);
     const bandRows = dual ? [{ id: 'A', label: 'MAIN' }, { id: 'B', label: 'SUB' }] : [{ id: 'A', label: 'BAND' }];
 
@@ -89,7 +92,7 @@ export function startYaesuRttyContest(root, cfg) {
         modes: Object.keys(RTTY_MODES).map(m => ({ id: m, label: m })),
         onMode: (vfo, mode) => chooseMode(vfo, mode),
         modeTitle: 'The mode of the receiver on screen. What you pick is also kept, in Settings, as the mode the band keys and the RTTY tuner use',
-        controls: [
+        controls: limitedCat ? [] : [
             { id: 'power', label: 'PWR', kind: 'range', min: 5, max: maxPowerW, step: 1, unit: ' W',
               title: 'RF power. Drag and let go, or turn the mouse wheel over it' },
             // MONI under PWR, the other transmit control (Bruce VK2RT, #250 2026-11-02/03).
@@ -104,7 +107,8 @@ export function startYaesuRttyContest(root, cfg) {
               title: 'IF shift of the receiver on screen. Double-click to centre it' },
         ],
         onControl: (id, value, vfo) => setControl(id, value, vfo),
-        meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
+        meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' },
+            ...(limitedCat ? [] : [{ id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }])],
         views: cfg.views ?? [],
         menu: cfg.menu ?? [],
         // The same window as the DX Spots pop-out on Classic and the Radio panel.

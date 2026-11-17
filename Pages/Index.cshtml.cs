@@ -100,6 +100,9 @@ namespace Yaesu_Web_Control.Pages
         /// Settings &gt; Band Plan; discussion #169.</summary>
         public bool AutoModeChangeOnTune { get; set; } = true;
         public string RadioModel { get; set; } = "FTdx101MP";
+
+        /// <summary>The older Yaesu CAT (the FT-847): the pages hide what it cannot reach.</summary>
+        public bool LimitedCat => RadioCapabilities.HasLimitedCat(RadioModel);
         public List<string> InstalledRoofingFilters { get; set; } = new() { "6", "7", "8", "9", "A" };
 
         // Accessibility — show ▲/▼ arrow buttons beside each VFO's frequency

@@ -150,7 +150,30 @@ namespace Yaesu_Web_Control.Services
                     await CloseSerialPortAsync();
                 }
 
-                if (StubRadio.Enabled)
+                if (_radioStateService.RadioModel == "FT-847")
+                {
+                    // The FT-847 speaks the older binary CAT, so a translator
+                    // sits between its port and the text CAT everything here uses.
+                    IFt847Port ft847Port;
+                    if (StubRadio.Enabled)
+                    {
+                        ft847Port = new Ft847Simulator(portName, baudRate);
+                        _logger.LogWarning("STUB RADIO: {Variable}=1, so CAT goes to a simulated FT-847, not {PortName}",
+                            StubRadio.EnvironmentVariable, portName);
+                    }
+                    else
+                    {
+                        var ports = SerialPort.GetPortNames();
+                        if (!ports.Contains(portName))
+                        {
+                            _logger.LogError("Port {PortName} not found", portName);
+                            return false;
+                        }
+                        ft847Port = new SerialFt847Port(portName, baudRate);
+                    }
+                    _link = new Ft847CatTransport(ft847Port, _logger);
+                }
+                else if (StubRadio.Enabled)
                 {
                     // No COM port is opened at all, so the configured one may
                     // be missing or belong to another program.

@@ -32,11 +32,14 @@ const YWC_FLEX_CONFIG = {
     fallbackPanel: 'vfoA',
     panels: [
         { id: 'linearMeters', name: 'Linear Meters', component: 'linearMeters', template: 'tpl-linear-meters' },
-        { id: 'levels', name: 'Levels', component: 'levels', template: 'tpl-levels' },
-        { id: 'vfoActions', name: 'VFO Actions', component: 'vfoActions', template: 'tpl-vfo-actions' },
+        // Levels, VFO Actions, Clarifier and VFO B are flag-gated so a radio with
+        // the older CAT (the FT-847) drops them: it has
+        // no CAT for any control in them. FlexUi.cshtml sets the flags.
+        { id: 'levels', name: 'Levels', component: 'levels', template: 'tpl-levels', flag: 'levels' },
+        { id: 'vfoActions', name: 'VFO Actions', component: 'vfoActions', template: 'tpl-vfo-actions', flag: 'vfoActions' },
         { id: 'buttons', name: 'Buttons', component: 'buttons', template: 'tpl-buttons' },
         { id: 'remoteAudio', name: 'Remote Audio', component: 'remoteAudio', template: 'tpl-remote-audio', flag: 'remoteAudio', menu: 'always' },
-        { id: 'clarifier', name: 'Clarifier', component: 'clarifier', template: 'tpl-clarifier' },
+        { id: 'clarifier', name: 'Clarifier', component: 'clarifier', template: 'tpl-clarifier', flag: 'clarifier' },
         // Mounting Radio Display probes the capture device and (with Auto on)
         // starts the stream, so it renders only once its tab is selected.
         { id: 'radioDisplay', name: 'Radio Display', component: 'radioDisplay', template: 'tpl-radio-display', flag: 'radioDisplay', lazy: true },

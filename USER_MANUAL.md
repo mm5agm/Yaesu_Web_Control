@@ -208,6 +208,7 @@ Supported radios:
 | FTdx10 | 100 W | Single |
 | FT-710 | 100 W | Single |
 | FT-991A | 100 W (50 W on 2 m and 70 cm) | Single |
+| FT-847 | 100 W (50 W on 2 m and 70 cm) | Single (see below) |
 
 The app runs as a small host process and is accessed through any web browser — on the same machine, a tablet, or any device on your home network.
 
@@ -241,6 +242,23 @@ The application was written for operators who want a large, clean, touchscreen-f
 - Full screen reader support — compatible with NVDA and Windows Narrator
 - Windows High Contrast mode support for all gauge displays
 - Customisable accessible labels (band names, meter names, control names) for any language
+
+### The FT-847
+
+*New, and not yet tested on a real FT-847.* It was built from the FT-847 operating manual. If you have one, please try it and tell me on the [Discussions tab](https://github.com/mm5agm/Yaesu_Web_Control/discussions).
+
+The FT-847 is older than the other radios here. Its CAT can set and read the main VFO's frequency and mode, read the S-meter and the power meter, and see whether the radio is transmitting. It can't read or set anything else: no AF or RF gain, AGC, filters, noise blanker, clarifier, split, power, keyer or memories over CAT. So when **Radio Model** is **FT-847**, YWC hides those controls on every page (Classic, Flex UI, the Radio panel and RTTY Contest) and shows only what works.
+
+What still works in full is everything YWC does on the computer itself: the spectrum and waterfall from an SDR, the CW reader, the RTTY tuner, DX spots, voice control and YWC's own memories. **VFO B** is kept in YWC only, because the radio's sub VFO isn't on its CAT.
+
+**Setting it up**
+
+- Use the radio's **CAT** socket on the back, with a **null-modem** serial cable (or a USB serial adapter and a null-modem cable).
+- Set **Baud Rate** in YWC to match the radio's **menu 37 (CAT RATE)**. The radio's default is 4800.
+- YWC never raises DTR or RTS on the FT-847's port.
+- YWC does not key the FT-847 over CAT. Key it as you do now, with your PTT switch, footswitch or VOX.
+
+The FT-847 doesn't tell the computer when you turn the knob, so YWC asks it for the frequency and mode a few times a second. Some very early FT-847s don't answer these questions at all; if the frequency never appears in YWC, please say so on Discussions with your serial number.
 
 ---
 
@@ -393,7 +411,7 @@ Before the app can communicate with your radio you need to tell it which serial 
    - **macOS:** use the menu-bar status item (Open), or check the console log.
    - **Linux / Docker:** use the URL printed at startup, or `http://<host>:8080` from another device on the LAN.
 2. Click the **Settings** link in the navigation bar.
-3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), **FT-710** (100 W, single receiver), or **FT-991A** (100 W, 50 W on 2 m and 70 cm, single receiver).
+3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), **FT-710** (100 W, single receiver), **FT-991A** (100 W, 50 W on 2 m and 70 cm, single receiver), or **FT-847** (100 W, 50 W on 2 m and 70 cm, frequency, mode and meters only; see [The FT-847](#the-ft-847)).
 4. Set **Serial Port** to the radio's **Enhanced** (CAT) virtual port — not the Standard / TX-control port if two appear:
    - **Windows:** a COM port (e.g. `COM3`). Use **Diagnostics → Ports** or Device Manager (*Silicon Labs Dual CP210x… Enhanced COM Port*).
    - **macOS:** prefer a `/dev/cu.*` device (e.g. `ls /dev/cu.usbserial-*` in Terminal). Try the other `cu.usbserial-…` node if Test Connection fails.
@@ -1586,7 +1604,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 
 | Setting | Description |
 |---------|-------------|
-| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), **FT-710** (100 W, single RX), or **FT-991A** (100 W, 50 W on 2 m / 70 cm, single RX) |
+| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), **FT-710** (100 W, single RX), **FT-991A** (100 W, 50 W on 2 m / 70 cm, single RX), or **FT-847** (100 W, 50 W on 2 m / 70 cm; frequency, mode and meters only) |
 | Serial Port | Path to the radio's **Enhanced** (CAT) USB/serial port. **Windows:** `COM3`, `COM4`, … (Device Manager: *Enhanced COM Port*). **macOS:** `/dev/cu.usbserial-…` (prefer `cu.*` over `tty.*`). **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or `/dev/serial/by-id/…`. If ports are missing or CAT never answers on Windows/macOS, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot — [§2.4](#24-usb-serial-driver-windows--macos--linux). Linux can normally skip that. |
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
 | Turn the radio off when Yaesu Web Control closes | Off by default. Switches the radio off when YWC closes, whether you choose **Exit** from the tray icon or YWC exits by itself after the last browser has gone. **Restart Now** leaves the radio on. YWC always switches the radio on when it starts, so you don't need a setting for that. *New in v2.5.4.* |
