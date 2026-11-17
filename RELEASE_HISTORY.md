@@ -12,6 +12,18 @@ a different and much older format.
 
 ---
 
+## 2026-11-17 - v2.5.6-pre2 (pre-release)
+
+*The Yaesu FT-847, for testing. Everything in v2.5.6-pre1 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**The FT-847** *(new, and not yet tested on a real FT-847)* [The FT-847](USER_MANUAL.md#the-ft-847)
+
+- Choose **FT-847** under **Radio Model** in Settings. Asked for by Laurent F1MCO in [#362](https://github.com/mm5agm/Yaesu_Web_Control/discussions/362).
+- The FT-847's CAT is older than the other radios', and much smaller. It can set and read the main VFO's frequency and mode and read the S-meter and the power meter, and that's all. So with the FT-847 chosen, YWC hides every control it can't reach, on the Classic page, the Flex UI, the Radio panel and RTTY Contest. What's left is the frequency, mode, band keys (2 m and 70 cm included), the two meters, and everything YWC does on the computer: SDR spectrum, CW reader, RTTY tuner, DX spots, voice and YWC's own memories.
+- Use the CAT socket with a null-modem cable, and set the baud rate to match the radio's menu 37 (CAT RATE, 4800 by default).
+- YWC doesn't key the FT-847 over CAT, and never raises DTR or RTS on its port. Key it as you do now.
+- It was built from the FT-847 manual, because I don't have one to test on. **If you have an FT-847, please try it and post screenshots on [#362](https://github.com/mm5agm/Yaesu_Web_Control/discussions/362)**: of the Classic page, the Radio panel and the Flex UI, and of anything that looks wrong or is missing.
+
 ## 2026-11-16 - v2.5.6-pre1 (pre-release)
 
 *The FTdx101's audio scope from the ACC board, and fixes. Everything in v2.5.5 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
