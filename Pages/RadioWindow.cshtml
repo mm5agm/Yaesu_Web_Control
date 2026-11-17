@@ -13,10 +13,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Yaesu Web Control</title>
     <link rel="icon" href="~/favicon.ico" />
+    <link rel="stylesheet" href="~/css/limited-cat.css" asp-append-version="true" />
     <style>html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
     </style>
 </head>
-<body>
+<body class="@(Model.LimitedCat ? "ywc-limited-cat" : null)">
     <div id="radioWindow"></div>
 
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>

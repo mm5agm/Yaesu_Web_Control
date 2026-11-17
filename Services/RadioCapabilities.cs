@@ -59,6 +59,16 @@ public static class RadioCapabilities
     };
 
     /// <summary>
+    /// True when the radio has the older Yaesu CAT, which reaches frequency,
+    /// mode, the S-meter, the PO meter and PTT, and nothing else: no AGC, DSP,
+    /// filters, gains, memories, split or menus. The layouts put the
+    /// ywc-limited-cat class on the page body for these radios, and
+    /// wwwroot/css/limited-cat.css hides every control they cannot reach.
+    /// Hidden, not removed, so the page scripts still find their elements.
+    /// </summary>
+    public static bool HasLimitedCat(string radioModel) => radioModel == "FT-847";
+
+    /// <summary>
     /// True when the radio has the 2 m and 70 cm bands, so the band keys swap
     /// 4 m for 2 m and 70 cm. The FT-991A (CAT manual, BS table) and the
     /// FT-847 (100 W on 160 - 6 m, 50 W on 2 m and 70 cm, no 4 m).

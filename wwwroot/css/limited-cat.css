@@ -1,0 +1,145 @@
+/*
+ * Radios with the older Yaesu CAT (the FT-847).
+ *
+ * Their CAT reaches the main VFO's frequency and mode, the S-meter, the PO
+ * meter and PTT, and nothing else. The layouts put ywc-limited-cat on <body>
+ * for these radios (RadioCapabilities.HasLimitedCat), and this file hides
+ * every control they cannot reach, so the page shows only what works.
+ *
+ * Hidden, not removed: the page scripts look these elements up by id, and
+ * they keep working against hidden elements. !important because some of
+ * them set display themselves (VFO B, squelch row, split buttons).
+ *
+ * What stays: frequency, mode, band buttons, AF-side tools that run on the
+ * computer (spectrum, CW reader, RTTY tuner, DX spots, voice, app memories),
+ * the S-meter and the power meter.
+ */
+
+/* ── Classic page: the receiver card ── */
+
+/* AGC, IPO, ATT, DNR, NB, notches, RF gain, squelch */
+.ywc-limited-cat .vfo-controls-column,
+/* the IF passband picture: it would show a filter the app cannot read */
+.ywc-limited-cat #filterScopeCanvasA,
+.ywc-limited-cat #filterScopeCanvasB,
+/* contour and APF; the segment selector beside them stays */
+.ywc-limited-cat [id^="contourBtn"],
+.ywc-limited-cat [id^="contourFreqSlider"],
+.ywc-limited-cat [id^="contourFreqValue"],
+.ywc-limited-cat [id^="apfBtn"],
+.ywc-limited-cat [id^="apfFreqSlider"],
+.ywc-limited-cat [id^="apfFreqValue"],
+/* AF gain: the FT-847 has no CAT for it */
+.ywc-limited-cat label:has(> [id^="afGainValue"]),
+.ywc-limited-cat [id^="afGainSlider"],
+/* IF width, audio filter and IF shift: the whole row */
+.ywc-limited-cat div:has(> #ifWidthWrapA),
+.ywc-limited-cat div:has(> #ifWidthWrapB),
+/* clarifier (RIT/XIT) */
+.ywc-limited-cat #clarifierRow {
+    display: none !important;
+}
+
+/* ── Classic page: VFO B, split and the VFO buttons ──
+ * VFO B is kept in the app only; the radio's sub VFO and split are not on
+ * its CAT. VFO A takes the full width, as it does when B is hidden. */
+.ywc-limited-cat #vfoBCol,
+.ywc-limited-cat #vfoBToggleBtn,
+.ywc-limited-cat #swapVfoBtn,
+.ywc-limited-cat #copyBtoABtn,
+.ywc-limited-cat #copyAtoBBtn,
+.ywc-limited-cat #splitBtn,
+.ywc-limited-cat #quickSplitBtn,
+.ywc-limited-cat #rxTxSplitGroup,
+/* the radio's power switch: no CAT for it */
+.ywc-limited-cat #radioPowerBtn {
+    display: none !important;
+}
+
+.ywc-limited-cat #vfoACol {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+}
+
+/* ── Classic page: meters ──
+ * The S-meter (E7) and the power meter (F7) stay. SWR, ALC, compression,
+ * PA temperature, current and voltage are not on its CAT. */
+.ywc-limited-cat #meterGaugesRow > div:has(#swrMeterCanvas),
+.ywc-limited-cat #meterGaugesRow > div:has(#alcMeterCanvas),
+.ywc-limited-cat #meterGaugesRow > div:has(#compressionMeterCanvas),
+.ywc-limited-cat #meterGaugesRow > div:has(#tempMeterCanvas),
+.ywc-limited-cat #meterGaugesRow > div:has(#iddMeterCanvas),
+.ywc-limited-cat #meterGaugesRow > div:has(#vddMeterCanvas) {
+    display: none !important;
+}
+
+/* ── Classic page: the transmit row under the meters ──
+ * Power, MIC gain, processor, ATU, monitor and VOX are menu or front-panel
+ * settings on the FT-847, and the keyer, CW send and FM repeater panels
+ * need commands it does not have. */
+.ywc-limited-cat label:has(> #powerValue),
+.ywc-limited-cat #powerSlider,
+.ywc-limited-cat label:has(> #micGainLabel),
+.ywc-limited-cat #micGainSlider,
+.ywc-limited-cat #procBtn,
+.ywc-limited-cat label:has(> #procLevelValue),
+.ywc-limited-cat #procLevelSlider,
+.ywc-limited-cat #atuBtn,
+.ywc-limited-cat #atuTuneBtn,
+.ywc-limited-cat #monitorOnBtn,
+.ywc-limited-cat label:has(> #monLevelValue),
+.ywc-limited-cat #monLevelSlider,
+.ywc-limited-cat #voxBtn,
+.ywc-limited-cat button[onclick*="'cwDialog'"],
+.ywc-limited-cat button[onclick*="'fmDialog'"],
+.ywc-limited-cat #cwSendOpenBtn {
+    display: none !important;
+}
+
+/* ── Flex UI ──
+ * The Levels, VFO Actions, Clarifier and VFO B panels are dropped whole by
+ * their flags in FlexUi.cshtml. These rules thin the panels that stay. */
+
+/* VFO A: RF gain, AF gain and squelch; the filter column (passband picture,
+   roofing, IF width, IF shift, audio filter); the DSP keys. The voice mic
+   in the keys column stays. */
+.ywc-limited-cat .vfo-gain-stack,
+.ywc-limited-cat .vfo-col--band,
+/* Buttons panel: the QMB (also gated in the markup) */
+.ywc-limited-cat #qmbControls,
+/* Linear meters: power stays */
+.ywc-limited-cat .linear-meter-row:has(#swrLinearCanvas),
+.ywc-limited-cat .linear-meter-row:has(#compressionLinearCanvas),
+.ywc-limited-cat .linear-meter-row:has(#alcLinearCanvas),
+.ywc-limited-cat .linear-meter-row:has(#tempLinearCanvas),
+.ywc-limited-cat .linear-meter-row:has(#iddLinearCanvas),
+.ywc-limited-cat .linear-meter-row:has(#vddLinearCanvas) {
+    display: none !important;
+}
+
+/* ── Radio panel (/radio) and its windows ──
+ * radio-panel-yaesu.js already leaves out the keys and knobs (cfg.limitedCat).
+ * The board always draws the clarifier and VFO-B, and the windows code
+ * expects every window, so these are hidden here. */
+.ywc-limited-cat .rp-clar,
+.ywc-limited-cat .rp-subvfo,
+/* RX SETUP, TX SETUP and the radio's scope: launcher keys and windows */
+.ywc-limited-cat .rp-pop-keys [data-group="rx"],
+.ywc-limited-cat .rp-pop-keys [data-group="tx"],
+.ywc-limited-cat .rp-pop-keys [data-group="scope"],
+.ywc-limited-cat .rp-win[data-win="rx"],
+.ywc-limited-cat .rp-win[data-win^="rx/"],
+.ywc-limited-cat .rp-win[data-win="tx"],
+.ywc-limited-cat .rp-win[data-win^="tx/"],
+.ywc-limited-cat .rp-win[data-win="scope"],
+.ywc-limited-cat .rp-win[data-win^="scope/"],
+/* the CW window keeps its reader; the keyer, its memories and send need
+   commands the radio does not have */
+.ywc-limited-cat .rp-wpanel[data-panel="keyer"],
+.ywc-limited-cat .rp-wpanel[data-panel="cwMem"],
+.ywc-limited-cat .rp-wpanel[data-panel="cwSend"],
+.ywc-limited-cat .rp-win[data-win="cw/keyer"],
+.ywc-limited-cat .rp-win[data-win="cw/cwMem"],
+.ywc-limited-cat .rp-win[data-win="cw/cwSend"] {
+    display: none !important;
+}

@@ -63,6 +63,7 @@
         startYaesuRttyContest(document.getElementById('rttyContest'), {
             conn,
             model: '@Model.RadioModel',
+            limitedCat: @(Model.LimitedCat ? "true" : "false"),
             dual: @(Model.IsDual ? "true" : "false"),
             sdrB: @(sdrB ? "true" : "false"),
             maxPowerW: @Model.MaxPower,

@@ -1,3 +1,4 @@
+@inject Yaesu_Web_Control.Services.RadioStateService LayoutRadioState
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
 <head>
@@ -11,6 +12,7 @@
     <script type="importmap">{}</script>
 
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/limited-cat.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/theme-yaesu.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/gauge-debug.css" />
     <link rel="stylesheet" href="~/css/closer-to-raw-power.css" asp-append-version="true" />
@@ -39,7 +41,7 @@
         window.MeterFormatters = MeterFormatters;
     </script>
 </head>
-<body class="ywc-flex-body">
+<body class="ywc-flex-body@(Yaesu_Web_Control.Services.RadioCapabilities.HasLimitedCat(LayoutRadioState.RadioModel) ? " ywc-limited-cat" : "")">
     <header class="ywc-flex-nav sticky-top">
         <a class="ywc-flex-brand" asp-area="" asp-page="/FlexUi">Yaesu Web Control
             <small class="text-muted fw-normal" style="font-size:0.6em;">v@(AppVersion.Display)</small>

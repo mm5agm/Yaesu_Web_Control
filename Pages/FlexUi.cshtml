@@ -49,12 +49,18 @@
 @await Html.PartialAsync("FlexPartials/_FlexDialogs", Model)
 
 @section Scripts {
+@{ var fullCat = !Yaesu_Web_Control.Services.RadioCapabilities.HasLimitedCat(Model.RadioModel); }
 <script>
 window.ywcFlexFlags = {
     remoteAudio: true,
+    // false on a radio with the older CAT (the FT-847): it has no CAT for
+    // the controls in these panels, so they are dropped, not shown dead.
+    levels: @fullCat.ToString().ToLower(),
+    vfoActions: @fullCat.ToString().ToLower(),
+    clarifier: @fullCat.ToString().ToLower(),
     spectrumA: @Model.View.IsWindowsHost.ToString().ToLower(),
     spectrumB: @Model.View.IsWindowsHost.ToString().ToLower(),
-    vfoB: true,
+    vfoB: @fullCat.ToString().ToLower(),
     radioDisplay: @Model.View.VideoDisplayEnabled.ToString().ToLower(),
     // Available independently of Radio Display: the Radio Display dialog keeps
     // its own copy of the same controls, and this panel is a second host.
