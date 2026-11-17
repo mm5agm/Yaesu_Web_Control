@@ -160,6 +160,7 @@ docs/VoiceControl/*
 !docs/design/
 docs/design/*
 !docs/design/*.md
+!docs/design/*.png
 # …and the developer guide for adding a new radio.
 !docs/adding-a-radio.md
 # …and the Raspberry Pi Docker testing runbook.
