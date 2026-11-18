@@ -224,6 +224,40 @@ public sealed class WsjtxBigTileTests
         Assert.Null(WsjtxBands.BandOf(144_174_000));
     }
 
+    // The page asks WSJT-Z to transmit, so nobody gets it without turning it on.
+    [Fact]
+    public void Ft8TilesIsOffByDefault()
+    {
+        Assert.False(new Yaesu_Web_Control.Models.ApplicationSettings().Ft8TilesEnabled);
+    }
+
+    // While off, every action but Stop is refused, and the menu item is hidden.
+    [Fact]
+    public void Ft8TilesOffIsEnforcedByTheServerAndTheMenu()
+    {
+        string root = FindRepoRoot();
+        string controller = File.ReadAllText(Path.Combine(root, "Controllers", "WsjtxController.cs"));
+        foreach (string action in new[] { "Reply(", "AutoCall(", "Band(" })
+        {
+            int at = controller.IndexOf("public async Task<IActionResult> " + action, StringComparison.Ordinal);
+            Assert.True(at >= 0, action);
+            int body = controller.IndexOf('{', at);
+            string firstLine = controller.Substring(body, 120);
+            Assert.Contains("if (!TilesEnabled) return Conflict", firstLine);
+        }
+        string layout = File.ReadAllText(Path.Combine(root, "Pages", "Shared", "_Layout.cshtml"));
+        int link = layout.IndexOf("asp-page=\"/Ft8Tiles\"", StringComparison.Ordinal);
+        int gate = layout.LastIndexOf("@if (layoutFt8Tiles)", link, StringComparison.Ordinal);
+        Assert.True(link > 0 && gate > 0 && link - gate < 200);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "Yaesu_Web_Control.csproj"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new DirectoryNotFoundException("repo root");
+    }
+
     private static WsjtxDecode Decode(string message, int snr) =>
         new("WSJT-X - Z", true, 1000, snr, 0.1, 1500, "~", message, false, false);
 }

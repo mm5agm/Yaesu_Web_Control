@@ -46,7 +46,7 @@
             grid-template-columns: repeat(4, 1fr);
             grid-template-rows: repeat(4, 1fr);
         }
-        main[hidden], #ftBands[hidden] { display: none; }
+        main[hidden], #ftBands[hidden], .ft-sub[hidden] { display: none; }
 
         .ft-tile {
             position: relative; display: flex; flex-direction: column; justify-content: center;
@@ -88,6 +88,10 @@
         .ft-band { align-items: center; font-size: clamp(1.6rem, 5vh, 2.8rem); font-weight: 700; border-color: var(--ft-blue); }
         .ft-band.ft-current { background: #dce8f8; }
         #ftBandBack { border-color: #6b7685; }
+        #ftOff { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center;
+                 align-items: center; gap: 1rem; padding: 2rem; text-align: center; font-size: 1.5rem; }
+        #ftOff[hidden] { display: none; }
+        #ftOff a { color: var(--ft-blue); font-weight: 600; }
     </style>
 </head>
 <body>
@@ -101,6 +105,12 @@
         <strong>Stations to call: click one to call</strong>
         <span id="ftSummary"></span>
         <span id="ftMessage" aria-live="assertive"></span>
+    </div>
+
+    <div id="ftOff" hidden>
+        <strong>FT8 Tiles is turned off.</strong>
+        <span>To use it, tick <em>Show the FT8 Tiles page</em> in YWC's Settings, Application Setup, and save.</span>
+        <a href="/ApplicationSetup">Open Application Setup</a>
     </div>
 
     <main id="ftMain">

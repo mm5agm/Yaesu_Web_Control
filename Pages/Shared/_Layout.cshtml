@@ -1,4 +1,10 @@
 @inject Yaesu_Web_Control.Services.RadioStateService LayoutRadioState
+@inject Yaesu_Web_Control.Services.ISettingsService LayoutSettings
+@{
+    // FT8 Tiles (#332) is opt-in: its menu item shows only when turned on.
+    bool layoutFt8Tiles = false;
+    try { layoutFt8Tiles = LayoutSettings.GetCachedSettings().Ft8TilesEnabled; } catch { }
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -97,11 +103,14 @@
                                 <i class="bi bi-soundwave" aria-hidden="true"></i> CW Paddle
                             </a>
                         </li>
+                        @if (layoutFt8Tiles)
+                        {
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-page="/Ft8Tiles" title="FT8 Tiles - big one-click tiles to call stations from WSJT-Z">
                                 <i class="bi bi-grid-3x3-gap-fill" aria-hidden="true"></i> FT8 Tiles
                             </a>
                         </li>
+                        }
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-page="/Settings">
                                 <i class="bi bi-gear-fill" aria-hidden="true"></i> Settings

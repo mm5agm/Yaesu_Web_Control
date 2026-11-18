@@ -73,6 +73,9 @@ namespace Yaesu_Web_Control.Pages
         [BindProperty]
         public bool WsjtxIntegrationEnabled { get; set; } = true;
 
+        [BindProperty]
+        public bool Ft8TilesEnabled { get; set; }
+
         public async Task OnGetAsync()
         {
             var settings = await _settingsService.GetSettingsAsync();
@@ -106,6 +109,7 @@ namespace Yaesu_Web_Control.Pages
             WsjtxUdpAddress = settings.WsjtxUdpAddress;
             WsjtxUdpPort = settings.WsjtxUdpPort;
             WsjtxIntegrationEnabled = settings.WsjtxIntegrationEnabled;
+            Ft8TilesEnabled = settings.Ft8TilesEnabled;
         }
 
         public async Task<IActionResult> OnPostAsync()
@@ -141,6 +145,7 @@ namespace Yaesu_Web_Control.Pages
             settings.WsjtxUdpAddress = WsjtxUdpAddress;
             settings.WsjtxUdpPort = WsjtxUdpPort;
             settings.WsjtxIntegrationEnabled = WsjtxIntegrationEnabled;
+            settings.Ft8TilesEnabled = Ft8TilesEnabled;
 
             await _settingsService.SaveSettingsAsync(settings);
 

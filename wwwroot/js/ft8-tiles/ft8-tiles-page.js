@@ -134,7 +134,10 @@ async function poll() {
     try {
         const r = await fetch("/api/wsjtx/calls", { cache: "no-store" });
         if (r.ok) {
-            lastData = await r.json();
+            const data = await r.json();
+            showOff(!data.enabled);
+            if (!data.enabled) { setTimeout(poll, POLL_MS); return; }
+            lastData = data;
             renderHeader(lastData);
             renderTiles(lastData);
             renderBands(lastData);
@@ -156,6 +159,20 @@ async function chooseBand(name) {
     slots.clear();
     pageIndex = 0;
     if (await post("/api/wsjtx/band", { band: name })) showMessage(`Changing to ${name}`);
+}
+
+// Turned off in Settings: hide the tiles and say how to turn it on.
+function showOff(off) {
+    el("ftOff").hidden = !off;
+    document.querySelector(".ft-sub").hidden = off;
+    if (off) {
+        el("ftMain").hidden = true;
+        el("ftBands").hidden = true;
+        el("ftState").textContent = "FT8 Tiles off";
+        el("ftState").className = "ft-state ft-off";
+    } else if (el("ftBands").hidden) {
+        el("ftMain").hidden = false;
+    }
 }
 
 function openBands() {

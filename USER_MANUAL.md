@@ -4699,9 +4699,9 @@ To go on the air:
 
 ## 24. FT8 Tiles
 
-*New in v2.5.6-pre3, for testing.*
+*New in v2.5.6-pre3, for testing. Off unless you turn it on (from v2.5.6-pre4).*
 
-**FT8 Tiles** (`/ft8-tiles`, or **FT8 Tiles** in the menu bar) is a page of large tiles for working FT8 and FT4 with a switch, an eye-gaze tablet or Windows Voice Access instead of a mouse and keyboard. Every tile is one click. Nothing needs holding down, typing or double-clicking. It was made for an operator in [#332](https://github.com/mm5agm/Yaesu_Web_Control/issues/332).
+**FT8 Tiles** (`/ft8-tiles`, or **FT8 Tiles** in the menu bar once it's turned on) is a page of large tiles for working FT8 and FT4 with a switch, an eye-gaze tablet or Windows Voice Access instead of a mouse and keyboard. Every tile is one click. Nothing needs holding down, typing or double-clicking. It was made for an operator in [#332](https://github.com/mm5agm/Yaesu_Web_Control/issues/332).
 
 The stations you can call come from WSJT-Z's decodes:
 
@@ -4721,7 +4721,7 @@ WSJT-Z is set up the same way as WSJT-X in [§9.1](#91-wsjt-x): **Rig** set to *
 - Tick **Accept UDP requests**. Without it, WSJT-Z ignores every tile.
 - Untick **Accepted UDP request restores window**, or WSJT-Z jumps in front of everything on the shack PC each time you click a tile.
 
-In YWC's Settings, **WSJT-X integration** must be on (it is by default).
+In YWC's **Settings → Application Setup**, tick **Show the FT8 Tiles page** and save. It's off until you do: the **FT8 Tiles** menu item is hidden, the page says it's turned off, and YWC refuses its tile clicks from any browser, apart from **Stop transmit**. **Enable WSJT-X integration**, on the same page, must be on too (it is by default).
 
 ### 24.2 Using the tiles
 

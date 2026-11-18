@@ -156,6 +156,19 @@
                 </div>
             </div>
 
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" asp-for="Ft8TilesEnabled" id="ft8TilesEnabled" />
+                <label class="form-check-label" for="ft8TilesEnabled">
+                    <strong>Show the FT8 Tiles page</strong>
+                </label>
+                <div class="form-text">
+                    Big one-click tiles for calling stations from WSJT-Z, for operators using a switch, eye gaze or
+                    Windows Voice Access (<a href="https://github.com/mm5agm/Yaesu_Web_Control/blob/main/USER_MANUAL.md#24-ft8-tiles" target="_blank" rel="noopener">manual §24</a>).
+                    When on, <strong>FT8 Tiles</strong> appears in the menu bar. Needs WSJT-X integration on, and
+                    <strong>Accept UDP requests</strong> ticked in WSJT-Z.
+                </div>
+            </div>
+
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label">UDP Address:</label>
