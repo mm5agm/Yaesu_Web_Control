@@ -12,6 +12,12 @@ a different and much older format.
 
 ---
 
+## Unreleased
+
+**Spectrum: an Audio look** [§5.23](USER_MANUAL.md#523-radio-panel)
+
+- **Look** in each spectrum's SCOPE panel: **Classic** or **Audio**. Audio draws the SDR or ACC spectrum like the audio waterfall: a sharp thin line, dB labels, and the audio waterfall's colours, spread over the same levels as the trace. Classic is the default, so nothing changes until you pick it.
+
 ## 2026-11-18 - v2.5.6-pre7 (pre-release)
 
 *The audio waterfall gets a fixed level scale, so you can see how strong things are. Everything in v2.5.6-pre6 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
