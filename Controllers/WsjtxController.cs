@@ -181,10 +181,17 @@ namespace Yaesu_Web_Control.Controllers
 
         // --- The big-tile page (issue #332) ---
 
+        // The page is opt-in (Settings, ApplicationSettings.Ft8TilesEnabled).
+        // While it's off, nothing here asks WSJT-Z or the radio to do anything,
+        // whoever calls it. Stop transmit is the exception: stopping is never refused.
+        private const string TilesOffError = "FT8 Tiles is off. Turn it on in Settings, Application Setup.";
+        private bool TilesEnabled => _settingsService.GetCachedSettings().Ft8TilesEnabled;
+
         // GET api/wsjtx/calls: everything the page shows, polled about once a second.
         [HttpGet("calls")]
         public IActionResult Calls()
         {
+            if (!TilesEnabled) return Ok(new { enabled = false });
             var now = DateTime.UtcNow;
             var mode = _udpService.WsjtxMode;
             double period = WsjtxCallList.PeriodSeconds(mode);
@@ -195,6 +202,7 @@ namespace Yaesu_Web_Control.Controllers
             var current = WsjtxBands.BandOf(dial);
             return Ok(new
             {
+                enabled = true,
                 connected = _udpService.IsConnected,
                 transmitting = _udpService.IsTransmitting,
                 txEnabled = _udpService.TxEnabled,
@@ -225,6 +233,7 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("reply")]
         public async Task<IActionResult> Reply([FromBody] CallRequest request)
         {
+            if (!TilesEnabled) return Conflict(new { error = TilesOffError });
             if (string.IsNullOrWhiteSpace(request.Call)) return BadRequest(new { error = "No callsign" });
             var (ok, error) = await _udpService.SendReplyAsync(request.Call.Trim());
             return ok ? Ok(new { sent = true }) : Conflict(new { error });
@@ -242,6 +251,7 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("autocall")]
         public async Task<IActionResult> AutoCall([FromBody] AutoCallRequest request)
         {
+            if (!TilesEnabled) return Conflict(new { error = TilesOffError });
             var (ok, error) = await _udpService.SendAutoCallAsync(request.On);
             return ok ? Ok(new { sent = true }) : Conflict(new { error });
         }
@@ -251,6 +261,7 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("band")]
         public async Task<IActionResult> Band([FromBody] BandRequest request)
         {
+            if (!TilesEnabled) return Conflict(new { error = TilesOffError });
             var band = WsjtxBands.All.FirstOrDefault(b => string.Equals(b.Name, request.Band, StringComparison.OrdinalIgnoreCase));
             if (band is null) return BadRequest(new { error = $"Unknown band {request.Band}" });
             if (_udpService.IsTransmitting) return Conflict(new { error = "Transmitting: stop first" });

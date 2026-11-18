@@ -105,6 +105,12 @@
         // see WsjtxUdpService, which returns early when this is off.
         public bool WsjtxIntegrationEnabled { get; set; } = true;
 
+        // FT8 Tiles (#332): the big one-click page for WSJT-Z. Off by default:
+        // its tiles ask WSJT-Z to answer stations, so an operator turns it on
+        // knowingly. While off, the menu item is hidden and the page's actions
+        // are refused.
+        public bool Ft8TilesEnabled { get; set; } = false;
+
         // Last Radio State (persisted between sessions)
         public RadioState LastRadioState { get; set; } = new();
 
