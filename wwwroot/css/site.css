@@ -1584,6 +1584,20 @@ dialog[open]:not(:modal) {
     background: #000;
     border-radius: 4px;
 }
+.radio-audio-fall .radio-audio-fall-ref {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.25rem 0;
+}
+.radio-audio-fall .radio-audio-fall-ref .btn {
+    padding: 0 0.5rem;
+    line-height: 1.4;
+}
+.radio-audio-fall .radio-audio-fall-ref-value {
+    min-width: 3.5rem;
+    text-align: center;
+}
 .radio-audio-fall .radio-audio-fall-modes {
     margin-top: 0.25rem;
     font-variant-numeric: tabular-nums;

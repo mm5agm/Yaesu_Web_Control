@@ -12,6 +12,17 @@ a different and much older format.
 
 ---
 
+## 2026-11-18 - v2.5.6-pre7 (pre-release)
+
+*The audio waterfall gets a fixed level scale, so you can see how strong things are. Everything in v2.5.6-pre6 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Audio waterfall: a fixed level scale** [§5.20](USER_MANUAL.md#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
+
+- The spectrum line and the waterfall now use a fixed scale in dB, like the radio's own scope, so you can see the level. Before, each moment was stretched to fill the display, so hiss with no aerial looked just like a live band.
+- **REF** under the waterfall sets the top of the scale (‑30 dB to start; the bottom is 60 dB lower). Press **+** if everything looks too bright, **−** if it looks too dim. Your USB audio level setting on the radio decides where signals sit. REF is remembered in each browser.
+- When the radio's IF width is under 1 kHz, the line under the waterfall says so. The waterfall only shows what gets through the radio's filter, so in RTTY-L at 300 Hz you see one 300 Hz slice and the rest stays dark, whatever the band is doing. Open **WIDTH** to 2.4 or 3 kHz to see the whole band.
+- Fixed: the waterfall could sit on "Waiting for the radio's audio..." for good while audio was coming in. It now recovers within 2 seconds.
+
 ## 2026-11-18 - v2.5.6-pre6 (pre-release)
 
 *The audio waterfall on the RTTY Contest page. Everything in v2.5.6-pre5 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

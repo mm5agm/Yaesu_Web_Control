@@ -8,6 +8,12 @@
     <canvas class="radio-audio-fall-canvas" role="img"
             title="Click a signal to tune it onto the orange line"
             aria-label="Audio spectrum 0 to 4 kHz above its waterfall, with the guessed mode of each signal. Click a signal to tune it onto the orange line."></canvas>
+    <div class="radio-audio-fall-ref small" role="group" aria-label="Top of the level scale">
+        <span title="The top of the scale, in dB below the sound card's full scale. The bottom is 60 dB lower.">REF</span>
+        <button type="button" class="btn btn-sm btn-outline-light" data-ref-step="-1" title="Lower the top of the scale: weak audio drawn higher and brighter" aria-label="Lower REF by 5 dB">&minus;</button>
+        <span class="radio-audio-fall-ref-value">-30 dB</span>
+        <button type="button" class="btn btn-sm btn-outline-light" data-ref-step="1" title="Raise the top of the scale: loud audio drawn lower and darker" aria-label="Raise REF by 5 dB">+</button>
+    </div>
     <ul class="radio-audio-fall-modes list-unstyled small mb-0" aria-live="polite"></ul>
     <div class="radio-audio-fall-status form-text">The radio's USB audio, 0 to 4 kHz. Modes are guesses unless WSJT-X decoded them. Click a signal to tune it onto the orange line.</div>
 </div>

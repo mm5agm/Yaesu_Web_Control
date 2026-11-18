@@ -19,7 +19,7 @@
 // middle of the bracket, so an RTTY pair lands centred. Receive only: YWC
 // refuses while transmitting and never keys the radio.
 
-import { decodeBytes, averageRow, rowStretch, fallPalette } from './acc-audio-scope.js';
+import { decodeBytes, averageRow, fallPalette } from './acc-audio-scope.js';
 import { loadRttySettings, afskMidpointAudioHz } from '../rtty/rtty-settings.js';
 
 const MAX_HZ = 4000;
@@ -27,7 +27,18 @@ const MAX_HZ = 4000;
 // rows: more than a whole FT8 cycle.
 export const FRAMES_PER_ROW = 2;
 const FALL_ROWS = 600;             // more than the tallest pane, in device pixels
-const FALL_FOLLOW = 0.15;          // how fast the colours follow the levels
+// A fixed scale, like the radio's own scope, so the level shows: REF is the
+// top in dBFS and the bottom is SPAN_DB below it. Each frame used to be
+// stretched from its own median to its own peak, so hiss with no aerial looked
+// just like a live band. Measured on the FTdx101MP in RTTY-L, 2026-11-18: the
+// sound card's floor -120, hiss in the filter -97 to -65 with no aerial, band
+// noise -83 to -52 with it, so -90 to -30 puts hiss low and the band higher.
+export const REF_DEFAULT_DB = -30;
+export const SPAN_DB = 60;
+export const REF_MIN_DB = -80;
+export const REF_MAX_DB = -20;
+const REF_STEP_DB = 5;
+const REF_KEY = 'ywc.radioAudioFallRef';
 const LINE_FOLLOW = 0.4;           // how much of each frame goes into the line
 const SPECTRUM_SHARE = 0.3;        // the line's share of the height
 const LABEL_STRIP = 16;            // CSS pixels for the mode labels
@@ -69,6 +80,38 @@ export function labelText(g) {
     return g.fromWsjtx || g.mode.endsWith('?') ? g.mode : `${g.mode}?`;
 }
 
+// Under this the radio's own filter hides most of the band: in RTTY-L at
+// 300 Hz the waterfall is one slice of hiss (Colin, 2026-11-18).
+export const NARROW_FILTER_HZ = 1000;
+
+/** What the status says about the radio's IF width, or null when it is wide or not known. */
+export function filterNote(filterHz) {
+    if (!(filterHz > 0) || filterHz >= NARROW_FILTER_HZ) return null;
+    return `The radio's filter is ${filterHz} Hz wide, so only that slice shows here. Open WIDTH to see the band.`;
+}
+
+/** A level in dBFS as the host's byte: 0 at -140 dBFS, 255 at -20 (AudioWaterfallAnalyser.ToByte). */
+export function dbToByte(db) {
+    return (db + 140) * 255 / 120;
+}
+
+/** The bottom and top of the scale, in the host's bytes, for a REF in dBFS. */
+export function scaleFor(refDb) {
+    return { low: dbToByte(refDb - SPAN_DB), high: dbToByte(refDb) };
+}
+
+/** A REF kept in range and on a 5 dB step. */
+export function clampRef(refDb) {
+    const n = Number(refDb);
+    if (!Number.isFinite(n)) return REF_DEFAULT_DB;
+    return Math.min(REF_MAX_DB, Math.max(REF_MIN_DB, Math.round(n / REF_STEP_DB) * REF_STEP_DB));
+}
+
+function loadRef() {
+    try { const v = localStorage.getItem(REF_KEY); return v === null ? REF_DEFAULT_DB : clampRef(v); }
+    catch { return REF_DEFAULT_DB; }
+}
+
 // ── one panel ────────────────────────────────────────────────────────────────
 
 class Panel {
@@ -88,7 +131,8 @@ class Panel {
         this.fall = null;
         this.rowSum = null;
         this.rowFrames = 0;
-        this.stretch = null;
+        this.ref = loadRef();
+        this.refText = root.querySelector('.radio-audio-fall-ref-value');
         this.targetHz = centreTargetHz();
         this.noteUntil = 0;
         this.busy = false;
@@ -97,6 +141,9 @@ class Panel {
             this.canvas.style.cursor = 'crosshair';
             this.canvas.addEventListener('click', e => this._centre(e));
         }
+        root.querySelectorAll('[data-ref-step]').forEach(btn =>
+            btn.addEventListener('click', () => this.setRef(this.ref + Number(btn.dataset.refStep) * REF_STEP_DB)));
+        this._showRef();
         if (this.details) {
             try { this.details.open = localStorage.getItem(OPEN_KEY) === '1'; } catch { /* storage blocked */ }
             this.details.addEventListener('toggle', () => {
@@ -114,6 +161,16 @@ class Panel {
         }
     }
 
+    setRef(refDb) {
+        this.ref = clampRef(refDb);
+        try { localStorage.setItem(REF_KEY, String(this.ref)); } catch { /* storage blocked */ }
+        this._showRef();
+    }
+
+    _showRef() {
+        if (this.refText) this.refText.textContent = `${this.ref} dB`;
+    }
+
     get wanted() {
         return this.visible && (!this.details || this.details.open);
     }
@@ -123,7 +180,6 @@ class Panel {
         this.line = new Float64Array(bins);
         this.rowSum = new Float64Array(bins);
         this.rowFrames = 0;
-        this.stretch = null;
         this.fall = document.createElement('canvas');
         this.fall.width = bins;
         this.fall.height = FALL_ROWS;
@@ -146,6 +202,8 @@ class Panel {
         this.lastAt = Date.now();
         const listening = this.lastAt - this.firstAt < GUESS_AFTER_MS;
         if (Date.now() < this.noteUntil) return;   // a centre result is showing
+        const narrow = filterNote(value.filterHz);
+        if (narrow) { this.setStatus(narrow); return; }
         this.setStatus('The radio\'s USB audio, 0 to 4 kHz. ' + (listening
             ? 'Mode guesses start after 16 s of listening.'
             : 'Modes with a ? are guesses; WSJT-X decodes have none.'));
@@ -220,14 +278,8 @@ class Panel {
         this.rowSum.fill(0);
         this.rowFrames = 0;
 
-        const target = rowStretch(row);
-        if (!this.stretch) this.stretch = { ...target };
-        else {
-            this.stretch.low += (target.low - this.stretch.low) * FALL_FOLLOW;
-            this.stretch.high += (target.high - this.stretch.high) * FALL_FOLLOW;
-        }
-        const low = Math.round(this.stretch.low);
-        const high = Math.max(Math.round(this.stretch.high), low + 1);
+        // Rows keep the scale they were drawn with; REF changes the new ones.
+        const { low, high } = scaleFor(this.ref);
 
         // Newest row at the top: move the rest down one.
         const g = this.fallCtx, n = this.bins;
@@ -290,12 +342,17 @@ class Panel {
             g.beginPath(); g.moveTo(px, y); g.lineTo(px, y + h); g.stroke();
             if (hz % 1000 === 0) g.fillText(`${hz / 1000} kHz`, px, y + 2 * dpr);
         }
+        // The same fixed scale as the waterfall, with a dB mark every 20 dB.
+        const { low, high } = scaleFor(this.ref);
+        const range = high - low;
+        g.textAlign = 'left';
+        for (let db = this.ref - 20; db > this.ref - SPAN_DB; db -= 20) {
+            const py = Math.round(y + h - 1 - (dbToByte(db) - low) * (h - 2) / range) + 0.5;
+            g.beginPath(); g.moveTo(0, py); g.lineTo(w, py); g.stroke();
+            g.fillText(`${db}`, 3 * dpr, py + 2 * dpr);
+        }
         if (!this.lastAt || !this.line) return;
 
-        // From the median (about the noise) to the peak, like the waterfall.
-        const sorted = Array.from(this.line).sort((a, b) => a - b);
-        const low = sorted[Math.floor(sorted.length / 2)] - 4;
-        const range = Math.max(sorted[sorted.length - 1] - low, 20) * 1.1;
         const yAt = v => Math.min(y + h - 1, Math.max(y, y + h - 1 - (v - low) * (h - 2) / range));
         g.beginPath();
         for (let i = 1; i < this.bins; i++) {
