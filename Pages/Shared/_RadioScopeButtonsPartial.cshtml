@@ -1,4 +1,5 @@
 @model string
+@inject Yaesu_Web_Control.Services.ISettingsService AccAudioSettings
 @{
     // Shared CAT scope buttons: span, display type/placement/size, speed,
     // Level, Peak, Marker, Color, MULTI (disabled until a CAT command exists),
@@ -18,7 +19,10 @@
     var hasHold      = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeHold(radioModel);
     // The FTdx101 also sends its audio scope from the ACC socket, through the
     // ACC board: drawn here by js/ui/acc-audio-scope.js while the group is open.
-    var hasAccAudio  = Yaesu_Web_Control.Services.Sdr.AccScope.ModelHasAcc(radioModel);
+    // Only when the ACC scope is a spectrum source; the panes stay hidden
+    // until the board sends frames, so no board means no audio scope.
+    var accAudioCfg  = AccAudioSettings.GetCachedSettings();
+    var hasAccAudio  = Yaesu_Web_Control.Services.Sdr.AccScope.AudioScopeWanted(radioModel, accAudioCfg.SdrDeviceKeyA, accAudioCfg.SdrDeviceKeyB);
     var spans = new (string Value, string Label)[]
     {
         ("0", "1k"), ("1", "2k"), ("2", "5k"), ("3", "10k"), ("4", "20k"),
@@ -190,7 +194,7 @@
                 @* Needs the ACC board (Yaesu ACC Spectrum) on this PC. Subscribed
                    only while this group is open and on screen. *@
                 <div class="acc-audio" role="group" aria-label="Audio scope from the ACC board">
-                    <div class="acc-audio-panes">
+                    <div class="acc-audio-panes" hidden>
                         <figure class="acc-audio-pane" data-receiver="main">
                             <figcaption>Main audio</figcaption>
                             <canvas class="acc-audio-canvas" role="img"
@@ -202,7 +206,7 @@
                                     aria-label="Sub receiver: AF-FFT 0 to 4 kHz above its audio waterfall or the oscilloscope"></canvas>
                         </figure>
                     </div>
-                    <label class="acc-audio-osc-label form-check small mb-0" title="Show the radio's oscilloscope under each AF-FFT, in place of the audio waterfall"><input type="checkbox" class="acc-audio-osc form-check-input"> Oscilloscope in place of the waterfall</label>
+                    <label class="acc-audio-osc-label form-check small mb-0" hidden title="Show the radio's oscilloscope under each AF-FFT, in place of the audio waterfall"><input type="checkbox" class="acc-audio-osc form-check-input"> Oscilloscope in place of the waterfall</label>
                     <div class="acc-audio-status form-text">Audio scope from the ACC board.</div>
                 </div>
             }

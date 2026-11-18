@@ -127,13 +127,36 @@ public class AccAudioTests
     {
         var partial = Read("Pages/Shared/_RadioScopeButtonsPartial.cshtml");
 
-        Assert.Matches(@"hasAccAudio\s*=\s*Yaesu_Web_Control\.Services\.Sdr\.AccScope\.ModelHasAcc\(radioModel\)", partial);
+        Assert.Matches(@"hasAccAudio\s*=\s*Yaesu_Web_Control\.Services\.Sdr\.AccScope\.AudioScopeWanted\(radioModel, accAudioCfg\.SdrDeviceKeyA, accAudioCfg\.SdrDeviceKeyB\)", partial);
         var gated = Regex.Match(partial, @"@if \(hasAccAudio\)\s*\{(?<body>.*?)</figure>\s*</div>", RegexOptions.Singleline);
         Assert.True(gated.Success, "the ACC audio panes are not inside @if (hasAccAudio)");
         Assert.Contains("data-receiver=\"main\"", gated.Groups["body"].Value);
         Assert.Contains("data-receiver=\"sub\"", partial);
         // Found by class, never id: the card and the dialog can share a page.
         Assert.DoesNotMatch(@"<[^>]*acc-audio[^>]*\sid=", partial);
+    }
+
+    [Theory]
+    [InlineData("FTdx101MP", AccScope.MainKey, "", true)]
+    [InlineData("FTdx101D", "sdrplay:123", AccScope.SubKey, true)]
+    [InlineData("FTdx101MP", "sdrplay:123", "sdrplay:456", false)]   // SDRs on both: no audio scope
+    [InlineData("FTdx101MP", "", "", false)]
+    [InlineData("FTdx10", AccScope.MainKey, "", false)]              // no ACC scope on this radio
+    public void The_audio_scope_is_offered_only_with_the_acc_scope_as_a_source(string model, string keyA, string keyB, bool wanted)
+    {
+        Assert.Equal(wanted, AccScope.AudioScopeWanted(model, keyA, keyB));
+    }
+
+    [Fact]
+    public void The_panes_stay_hidden_until_the_board_sends_frames()
+    {
+        var partial = Read("Pages/Shared/_RadioScopeButtonsPartial.cshtml");
+        Assert.Contains("<div class=\"acc-audio-panes\" hidden>", partial);
+        var js = Read("wwwroot/js/ui/acc-audio-scope.js");
+        Assert.Contains("this.show(false)", js);
+        Assert.Contains("this.show(true)", js);
+        // And the service won't open the board when no spectrum uses it.
+        Assert.Contains("AccScope.AudioScopeWanted(", Read("Services/Sdr/AccAudioService.cs"));
     }
 
     [Fact]

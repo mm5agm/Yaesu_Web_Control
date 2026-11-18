@@ -64,6 +64,18 @@ public static class AccScope
         string.Equals(model, "FTdx101D", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The audio scope (Main and Sub audio) comes from the ACC board, so the
+    /// pages offer it only when a spectrum's source is the ACC scope, on a
+    /// radio that has one (Colin, 2026-11-18). With an SDR picked for both
+    /// spectrums it isn't shown, and the board's port is never opened for it.
+    /// </summary>
+    public static bool AudioScopeWanted(string? model, string? keyA, string? keyB) =>
+        ModelHasAcc(model) && (IsAccKey(keyA) || IsAccKey(keyB));
+
+    public const string AudioScopeNotPicked =
+        "The audio scope needs the ACC scope picked as a spectrum source in Settings.";
+
+    /// <summary>
     /// The row's points that fall inside the span. The radio sends 850 points
     /// with about 30 beyond each edge of the span; the middle 791, centred on
     /// point 425, are the span itself (ReceiverScope.SpanPoints).
