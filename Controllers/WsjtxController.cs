@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Yaesu_Web_Control.Services;
+using Yaesu_Web_Control.Services.Wsjtx;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -40,9 +41,14 @@ namespace Yaesu_Web_Control.Controllers
         // Logger removed as part of cleanup
         private readonly WsjtxUdpService _udpService;
         private readonly ProcessStatusCacheService _processStatusCache;
+        private readonly ICatClient _catClient;
+        private readonly RadioStateService _radioState;
 
-        public WsjtxController(ISettingsService settingsService, ILogger<WsjtxController> logger, WsjtxUdpService udpService, ProcessStatusCacheService processStatusCache)
+        public WsjtxController(ISettingsService settingsService, ILogger<WsjtxController> logger, WsjtxUdpService udpService, ProcessStatusCacheService processStatusCache,
+            ICatClient catClient, RadioStateService radioState)
         {
+            _catClient = catClient;
+            _radioState = radioState;
             _settingsService = settingsService;
             // Logger removed
             _udpService = udpService;
@@ -171,6 +177,95 @@ namespace Yaesu_Web_Control.Controllers
                 transmitting = _udpService.IsTransmitting,
                 mode = _udpService.WsjtxMode
             });
+        }
+
+        // --- The big-tile page (issue #332) ---
+
+        // GET api/wsjtx/calls: everything the page shows, polled about once a second.
+        [HttpGet("calls")]
+        public IActionResult Calls()
+        {
+            var now = DateTime.UtcNow;
+            var mode = _udpService.WsjtxMode;
+            double period = WsjtxCallList.PeriodSeconds(mode);
+            // Two periods plus a margin: a station heard last period is still shown.
+            var stations = _udpService.CallList.Snapshot(now, TimeSpan.FromSeconds(period * 2 + 3));
+            long dial = _udpService.DialFrequency;
+            if (dial == 0) dial = _radioState.FrequencyA;
+            var current = WsjtxBands.BandOf(dial);
+            return Ok(new
+            {
+                connected = _udpService.IsConnected,
+                transmitting = _udpService.IsTransmitting,
+                txEnabled = _udpService.TxEnabled,
+                mode,
+                dialFrequency = dial,
+                dxCall = _udpService.DxCall,
+                myCall = _udpService.DeCall,
+                periodSeconds = period,
+                stations = stations.Select(e => new
+                {
+                    call = e.Call,
+                    kind = e.Kind switch { CallKind.CallingYou => "you", CallKind.Finished => "finished", _ => "cq" },
+                    grid = e.Grid,
+                    snr = e.Decode.Snr,
+                    ageSeconds = Math.Round((now - e.ReceivedUtc).TotalSeconds, 1),
+                }),
+                bands = WsjtxBands.All
+                    .Where(b => RadioCapabilities.IsTunableFrequency(_radioState.RadioModel, b.Ft8Hz))
+                    .Select(b => new { name = b.Name, current = b == current }),
+            });
+        }
+
+        public record CallRequest(string Call);
+        public record AutoCallRequest(bool On);
+        public record BandRequest(string Band);
+
+        // POST api/wsjtx/reply: answer a station, as a double-click in WSJT-Z would.
+        [HttpPost("reply")]
+        public async Task<IActionResult> Reply([FromBody] CallRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Call)) return BadRequest(new { error = "No callsign" });
+            var (ok, error) = await _udpService.SendReplyAsync(request.Call.Trim());
+            return ok ? Ok(new { sent = true }) : Conflict(new { error });
+        }
+
+        // POST api/wsjtx/halt: stop transmitting now.
+        [HttpPost("halt")]
+        public async Task<IActionResult> Halt()
+        {
+            var (ok, error) = await _udpService.SendHaltTxAsync(autoTxOnly: false);
+            return ok ? Ok(new { sent = true }) : Conflict(new { error });
+        }
+
+        // POST api/wsjtx/autocall: WSJT-Z's Auto Call on or off (Auto CQ goes off too).
+        [HttpPost("autocall")]
+        public async Task<IActionResult> AutoCall([FromBody] AutoCallRequest request)
+        {
+            var (ok, error) = await _udpService.SendAutoCallAsync(request.On);
+            return ok ? Ok(new { sent = true }) : Conflict(new { error });
+        }
+
+        // POST api/wsjtx/band: put the radio on a band's FT8 (or FT4) frequency.
+        // WSJT-X follows when it next reads the radio's frequency.
+        [HttpPost("band")]
+        public async Task<IActionResult> Band([FromBody] BandRequest request)
+        {
+            var band = WsjtxBands.All.FirstOrDefault(b => string.Equals(b.Name, request.Band, StringComparison.OrdinalIgnoreCase));
+            if (band is null) return BadRequest(new { error = $"Unknown band {request.Band}" });
+            if (_udpService.IsTransmitting) return Conflict(new { error = "Transmitting: stop first" });
+            long hz = WsjtxBands.DialFor(band, _udpService.WsjtxMode);
+            if (!RadioCapabilities.IsTunableFrequency(_radioState.RadioModel, hz))
+                return BadRequest(new { error = $"This radio can't tune {band.Name}" });
+
+            // WSJT-X goes on broadcasting the old band until it reads the radio
+            // again; don't let that pull the radio back.
+            _udpService.PauseDialSync(TimeSpan.FromSeconds(10));
+            if (!await _catClient.SetFrequencyAAsync(hz)) return StatusCode(503, new { error = "The radio didn't take the frequency" });
+            _radioState.FrequencyA = hz;
+            _radioState.MarkUserFrequencyWrite();
+            _udpService.CallList.Clear();
+            return Ok(new { band = band.Name, frequency = hz });
         }
     }
 }
