@@ -51,7 +51,11 @@ namespace Yaesu_Web_Control.Services.Audio
         private bool _holdingCapture;
         private bool _listening;
         private int _frameCounter;
-        private int _sendInFlight;
+        // Environment.TickCount64 when the frame send in flight began; 0 when
+        // none is. A send that never finished (or threw before it started)
+        // used to hold a flag forever, and the page waited for audio for good.
+        private long _sendStartedMs;
+        private static readonly long StuckSendMs = 2000;
         private int _classifying;
         private string? _lastError;
         private CancellationTokenSource? _releaseCts;
@@ -180,8 +184,20 @@ namespace Yaesu_Web_Control.Services.Audio
 
             if (++_frameCounter % SendEvery != 0)
                 return;
-            if (Interlocked.CompareExchange(ref _sendInFlight, 1, 0) != 0)
+            long now = Environment.TickCount64;
+            long started = Interlocked.Read(ref _sendStartedMs);
+            if (started != 0)
+            {
+                if (now - started < StuckSendMs)
+                    return;
+                if (Interlocked.CompareExchange(ref _sendStartedMs, now, started) != started)
+                    return;
+                _logger.LogWarning("Audio waterfall: a frame send has not finished after {Ms} ms; sending again", now - started);
+            }
+            else if (Interlocked.CompareExchange(ref _sendStartedMs, now, 0) != 0)
+            {
                 return;
+            }
 
             var bins = new byte[levels.Length];
             for (int i = 0; i < levels.Length; i++)
@@ -197,14 +213,23 @@ namespace Yaesu_Web_Control.Services.Audio
                 },
             };
 
-            _ = _hub.Clients.Group(GroupName)
-                .SendAsync("RadioStateUpdate", payload)
-                .ContinueWith(t =>
-                {
-                    Interlocked.Exchange(ref _sendInFlight, 0);
-                    if (t.IsFaulted)
-                        _logger.LogDebug(t.Exception, "Audio waterfall send failed");
-                }, TaskScheduler.Default);
+            Task send;
+            try
+            {
+                send = _hub.Clients.Group(GroupName).SendAsync("RadioStateUpdate", payload);
+            }
+            catch (Exception ex)
+            {
+                Interlocked.CompareExchange(ref _sendStartedMs, 0, now);
+                _logger.LogWarning(ex, "Audio waterfall send threw");
+                return;
+            }
+            _ = send.ContinueWith(t =>
+            {
+                Interlocked.CompareExchange(ref _sendStartedMs, 0, now);
+                if (t.IsFaulted)
+                    _logger.LogWarning(t.Exception, "Audio waterfall send failed");
+            }, TaskScheduler.Default);
         }
 
         // Timer thread. A classification looks back 32 s and takes a few tens

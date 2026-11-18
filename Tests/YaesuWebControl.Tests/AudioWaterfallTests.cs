@@ -36,6 +36,37 @@ public class AudioWaterfallTests
     }
 
     [Fact]
+    public void The_waterfall_has_a_fixed_level_scale_with_ref()
+    {
+        // Colin, 2026-11-18: with the aerial out it looked just the same,
+        // because each row was stretched from its own median to its own peak.
+        var js = Read("wwwroot/js/ui/radio-audio-waterfall.js");
+        Assert.DoesNotContain("rowStretch", js);
+        Assert.Contains("export const REF_DEFAULT_DB = -30;", js);
+        Assert.Contains("export const SPAN_DB = 60;", js);
+        Assert.Contains("const { low, high } = scaleFor(this.ref);", js);
+        Assert.Contains("'ywc.radioAudioFallRef'", js);
+        // dbToByte must match the host's ToByte: 0 at -140 dBFS, 255 at -20.
+        Assert.Contains("return (db + 140) * 255 / 120;", js);
+        Assert.Equal(0, AudioWaterfallAnalyser.ToByte(-140f));
+        Assert.Equal(255, AudioWaterfallAnalyser.ToByte(-20f));
+
+        var partial = Read("Pages/Shared/_AudioWaterfallPartial.cshtml");
+        Assert.Contains("radio-audio-fall-ref-value", partial);
+        Assert.Contains("data-ref-step=\"-1\"", partial);
+        Assert.Contains("data-ref-step=\"1\"", partial);
+    }
+
+    [Fact]
+    public void A_frame_send_that_never_finishes_does_not_stop_the_waterfall()
+    {
+        var service = Read("Services/Audio/AudioWaterfallService.cs");
+        Assert.DoesNotContain("_sendInFlight", service);
+        Assert.Contains("StuckSendMs = 2000", service);
+        Assert.Contains("catch (Exception ex)", service);
+    }
+
+    [Fact]
     public void The_audio_group_needs_no_acc_board_and_is_found_by_class()
     {
         var partial = Read("Pages/Shared/_RadioScopeButtonsPartial.cshtml");
