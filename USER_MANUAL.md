@@ -4721,7 +4721,7 @@ WSJT-Z is set up the same way as WSJT-X in [§9.1](#91-wsjt-x): **Rig** set to *
 - Tick **Accept UDP requests**. Without it, WSJT-Z ignores every tile.
 - Untick **Accepted UDP request restores window**, or WSJT-Z jumps in front of everything on the shack PC each time you click a tile.
 
-In YWC's **Settings → Application Setup**, tick **Show the FT8 Tiles page** and save. It's off until you do: the **FT8 Tiles** menu item is hidden, the page says it's turned off, and YWC refuses its tile clicks from any browser, apart from **Stop transmit**. **Enable WSJT-X integration**, on the same page, must be on too (it is by default).
+Click **Application Setup** in YWC's menu bar. Under **WSJT-X UDP Settings**, tick **Show the FT8 Tiles page**, then click **Save All Settings**. It's off until you do: the **FT8 Tiles** menu item is hidden, the page says it's turned off, and YWC refuses its tile clicks from any browser, apart from **Stop transmit**. **Enable WSJT-X integration**, on the same page, must be on too (it is by default).
 
 ### 24.2 Using the tiles
 
@@ -4738,7 +4738,7 @@ The bar at the top shows the frequency, band and mode, who WSJT-Z is working, an
 
 A station keeps its tile from one cycle to the next, so it's still there when you reach it. A station that goes quiet fades after one cycle and its tile empties after two. A station that starts a QSO with someone else goes at once.
 
-You can open the page on the tablet's own browser, at `http://` and the shack PC's address, port 8080, followed by `/ft8-tiles`. That works better than a remote-desktop view of the shack PC, because WSJT-Z can't cover it.
+You can open the page on the tablet's own browser. Use the address in the **Network Access (Tablets/Phones)** line at the top of YWC's **Settings** page ([§6](#6-settings-page)), with `/ft8-tiles` on the end, for example `http://192.168.1.20:8080/ft8-tiles`. Go by the port that line shows: YWC uses 8080 unless another program has it, and then takes the next free port up to 8089, so a saved shortcut can stop working if that changes. A browser on the tablet works better than a remote-desktop view of the shack PC, because WSJT-Z can't cover it.
 
 ### 24.3 Voice Access and switches
 

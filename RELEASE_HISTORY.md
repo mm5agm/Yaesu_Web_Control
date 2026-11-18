@@ -18,7 +18,7 @@ a different and much older format.
 
 **FT8 Tiles is opt-in** [§24.1](USER_MANUAL.md#241-setting-up-wsjt-z)
 
-- To use FT8 Tiles, tick **Show the FT8 Tiles page** in **Settings → Application Setup** and save. Until then, the **FT8 Tiles** menu item is hidden, and YWC refuses the page's tile clicks from any browser, apart from **Stop transmit**. If you don't use WSJT-Z, nothing changes for you.
+- To use FT8 Tiles, click **Application Setup** in the menu bar, tick **Show the FT8 Tiles page** under **WSJT-X UDP Settings**, and click **Save All Settings**. Until then, the **FT8 Tiles** menu item is hidden, and YWC refuses the page's tile clicks from any browser, apart from **Stop transmit**. If you don't use WSJT-Z, nothing changes for you.
 
 ## 2026-11-18 - v2.5.6-pre3 (pre-release)
 

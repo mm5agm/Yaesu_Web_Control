@@ -184,7 +184,7 @@ namespace Yaesu_Web_Control.Controllers
         // The page is opt-in (Settings, ApplicationSettings.Ft8TilesEnabled).
         // While it's off, nothing here asks WSJT-Z or the radio to do anything,
         // whoever calls it. Stop transmit is the exception: stopping is never refused.
-        private const string TilesOffError = "FT8 Tiles is off. Turn it on in Settings, Application Setup.";
+        private const string TilesOffError = "FT8 Tiles is off. Turn it on in Application Setup: tick Show the FT8 Tiles page.";
         private bool TilesEnabled => _settingsService.GetCachedSettings().Ft8TilesEnabled;
 
         // GET api/wsjtx/calls: everything the page shows, polled about once a second.
