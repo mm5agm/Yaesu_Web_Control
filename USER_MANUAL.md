@@ -1344,6 +1344,22 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 > I've checked the audio scope on my FTdx101MP on receive, with test tones on Main and Sub. The radio sends it whatever its own screen shows: it came through with the radio's scope in MONO, with MULTI not showing.
 
+**AUDIO (the radio's USB audio, with mode guesses)** *(new in v2.5.6-pre5, for testing)* — the **AUDIO** group under MULTI shows a waterfall of the radio's USB receive audio: the same audio WSJT-X decodes, from 0 to 4 kHz. It needs no ACC board, only the radio's **RX device** set in Settings > Remote Audio. A spectrum line sits above the waterfall, which shows about 17 seconds. The bins are 5.9 Hz wide, so FT8's tones and Piccolo's 20 Hz comb show as separate lines.
+
+Over each signal is a label saying what mode it looks like, and the list under the waterfall gives each signal's frequencies and the reason for the guess. YWC looks at the last 32 seconds and updates the guesses every 2 seconds. It can name:
+
+- **FT8** and **FT4**, by their bursts on the 15 s and 7.5 s clock
+- **RTTY**, by two tones 85, 170, 200, 425, 450 or 850 Hz apart
+- **CW**, keyed, and **Carrier**, steady
+- **PSK31**, **PSK63** and **PSK125**, by their width
+- **Piccolo** (6 or 12 tones 20 Hz apart), **MFSK16** (16 tones 15.6 Hz apart), and **Olivia** or **Contestia** (tones 31.25 or 62.5 Hz apart)
+- **Voice?**, for anything 300 Hz wide or more that's none of these
+- **Multi-tone**, for evenly spaced tones that match none of the modes above, and **Unknown** for the rest
+
+A label with **?** is a guess. When WSJT-X has decoded something at a signal's frequency in the last 30 seconds, the label is green and has no **?**, because WSJT-X knows. The guesses come from measuring the signal, not from decoding it, so they can be wrong, especially on weak or fading signals and where two signals overlap. If the group says why it can't start, the reason is the same as the Remote Audio bar would give: usually no RX device set. YWC only listens while the group is open and on screen.
+
+> The guesses have only been tested with made-up signals so far, not on the air.
+
 #### Two behaviours that look like bugs and are not
 
 **The span button can change on its own when you switch display mode.** The radio stores a *separate span for each display mode*. I confirmed this over ten consecutive mode changes: W/F held 20 kHz and 3DSS held 1 MHz, each returning reliably. So the highlight moving is the radio reporting its own setting, and YWC deliberately does not "correct" it — re-sending the old span would overwrite a choice you made.

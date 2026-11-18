@@ -17,6 +17,7 @@ namespace Yaesu_Web_Control.Hubs
         private readonly Services.Cw.CwKeyingService _cwKeying;
         // Registered on Windows only, with the ACC board's reader; null elsewhere.
         private readonly Services.Sdr.AccAudioService? _accAudio;
+        private readonly AudioWaterfallService? _audioWaterfall;
 
         // Every currently open SignalR connection, and the whole of what the
         // host means by "a browser is watching". Presence used to mean a
@@ -46,6 +47,7 @@ namespace Yaesu_Web_Control.Hubs
             IServiceProvider services)
         {
             _accAudio = services.GetService<Services.Sdr.AccAudioService>();
+            _audioWaterfall = services.GetService<AudioWaterfallService>();
             _presence = presence;
             _cwKeying = cwKeying;
             _logger   = logger;
@@ -118,6 +120,27 @@ namespace Yaesu_Web_Control.Hubs
             _accAudio?.Unsubscribe(Context.ConnectionId);
         }
 
+        /// <summary>
+        /// Ask for the radio audio waterfall: the USB RX audio WSJT-X decodes,
+        /// 0 to 4 kHz, with a mode guess for each signal. Returns null when
+        /// frames will follow on RadioStateUpdate as "AudioWaterfall" (and the
+        /// guesses as "AudioWaterfallModes"), or the reason they won't.
+        /// </summary>
+        public async Task<string?> SubscribeAudioWaterfall()
+        {
+            if (_audioWaterfall is null)
+                return "The audio waterfall isn't available.";
+            await Groups.AddToGroupAsync(Context.ConnectionId, AudioWaterfallService.GroupName);
+            return await _audioWaterfall.SubscribeAsync(Context.ConnectionId);
+        }
+
+        /// <summary>The page has closed its audio waterfall, or it's off screen.</summary>
+        public async Task UnsubscribeAudioWaterfall()
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, AudioWaterfallService.GroupName);
+            _audioWaterfall?.Unsubscribe(Context.ConnectionId);
+        }
+
         public override async Task OnConnectedAsync()
         {
             _connections.TryAdd(Context.ConnectionId, 0);
@@ -159,6 +182,7 @@ namespace Yaesu_Web_Control.Hubs
             _connections.TryRemove(Context.ConnectionId, out _);
             _filterSpectrum.Unsubscribe(Context.ConnectionId);
             _accAudio?.Unsubscribe(Context.ConnectionId);
+            _audioWaterfall?.Unsubscribe(Context.ConnectionId);
             _cwKeying.Disconnected(Context.ConnectionId);
 
             // A navigation or a closed tab arrives with no exception. A
