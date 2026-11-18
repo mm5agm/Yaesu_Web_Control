@@ -32,6 +32,10 @@ import { AUDIO_WATERFALL_STOPS, binsToColumns, percentile, waterfallColour } fro
 
 const WATERFALL_DB = 60;
 const FLOOR_MARGIN_DB = 6;
+// The Sharp waterfall: black this far under the noise floor, and never
+// fewer than SHARP_MIN_DB of colour from there to white.
+const SHARP_UNDER_DB = 3;
+const SHARP_MIN_DB = 20;
 const FLOOR_ALPHA = 0.08;
 const PEAK_FRAMES = 40;
 const HIDDEN_COLUMNS = 1000;
@@ -85,6 +89,7 @@ export class SpectrumView {
         this._sctx = this._spec.getContext('2d');
         this._wctx = this._wf.getContext('2d', { willReadFrequently: false });
         this._floor = null;
+        this._wfFloor = null;
         this._auto = true;
         this._ref = null;
         this._peaks = [];
@@ -118,6 +123,7 @@ export class SpectrumView {
     // stops, so the old band's levels do not linger.
     clear() {
         this._floor = null;
+        this._wfFloor = null;
         this._peaks = [];
         this._last = null;
         this._wctx.fillStyle = this._colours.bg || '#000';
@@ -197,6 +203,8 @@ export class SpectrumView {
         const f = percentile(cols, 0.25);
         if (this._floor == null) this._floor = f;
         else if (this._auto) this._floor += (f - this._floor) * FLOOR_ALPHA;
+        // The Sharp waterfall's floor follows the band even with AUTO off.
+        this._wfFloor = this._wfFloor == null ? f : this._wfFloor + (f - this._wfFloor) * FLOOR_ALPHA;
         this._peaks.push(Math.max(...cols));
         if (this._peaks.length > PEAK_FRAMES) this._peaks.shift();
         this._last = cols;
@@ -304,11 +312,13 @@ export class SpectrumView {
         const rowH = Math.max(1, Math.round(window.devicePixelRatio || 1));
         this._wctx.drawImage(this._wf, 0, 0, w, h - rowH, 0, rowH, w, h - rowH);
         const cols = binsToColumns(bins, w);
-        // Classic: a fixed 60 dB of colour from just under the floor. Audio:
-        // the trace's own window, so a signal's colour matches its height.
+        // Classic: a fixed 60 dB of colour from just under the floor. Sharp
+        // ('audio'): black just under the noise floor, as the audio waterfall
+        // does, and white at the top of the trace's window. The floor, not the
+        // window's bottom, so REF or a narrow RANGE can't turn the noise red.
         let lo, hi;
         if (this._audio) {
-            ({ lo, hi } = this._range());
+            ({ lo, hi } = sharpWaterfallSpan(this._wfFloor, this._range()));
             lo -= this._set.bright; hi -= this._set.bright;
         } else {
             lo = (this._floor ?? -100) - FLOOR_MARGIN_DB - this._set.bright; hi = lo + WATERFALL_DB;
@@ -326,6 +336,12 @@ export class SpectrumView {
     }
 
     destroy() { this._ro.disconnect(); }
+}
+
+/** The Sharp waterfall's colour span: from just under the floor to the window's top. */
+export function sharpWaterfallSpan(floor, range) {
+    const lo = (floor ?? range.lo) - SHARP_UNDER_DB;
+    return { lo, hi: Math.max(range.hi, lo + SHARP_MIN_DB) };
 }
 
 function buildPalette(stops) {

@@ -1105,6 +1105,13 @@
                     label.textContent = formatSmooth(r);
                     panel.setSpectrumSmooth(r);
                 });
+
+                // Look: Classic or Sharp. Sharp never smooths, so Smooth rests.
+                const look = document.querySelector(`.spectrum-look-select[data-vfo="${vfo}"]`);
+                if (!look) return;
+                const showLook = () => { look.value = panel.getLook(); slider.disabled = look.value === "audio"; };
+                showLook();
+                look.addEventListener('change', () => { panel.setLook(look.value); showLook(); });
             });
 
             // Refine — how much the FTdx101's ACC scope is averaged before it
