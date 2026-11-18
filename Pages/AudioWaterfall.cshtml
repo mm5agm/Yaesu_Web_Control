@@ -1,0 +1,53 @@
+@page "/audio-waterfall"
+@model Yaesu_Web_Control.Pages.AudioWaterfallModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>Audio Waterfall - Yaesu Web Control</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <style>
+        body { background: #222; color: #eee; padding: 1rem; font-size: 0.95rem; }
+        h1 { font-size: 1.3rem; margin: 0; }
+        .aw-head { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; align-items: baseline; margin-bottom: 0.6rem; }
+        .aw-head nav a { color: #9cf; }
+        .aw-note { font-size: 0.85rem; color: #bbb; margin-top: 0.6rem; max-width: 60rem; }
+        .radio-audio-fall .radio-audio-fall-canvas { height: calc(100vh - 14rem); min-height: 16rem; }
+        .radio-audio-fall .radio-audio-fall-status, .radio-audio-fall .radio-audio-fall-modes { color: #ccc; }
+        .radio-audio-fall .radio-audio-fall-modes .radio-audio-fall-wsjtx { color: #81c784; }
+    </style>
+</head>
+<body>
+    <div class="aw-head">
+        <h1>Audio Waterfall</h1>
+        <nav><a href="/">Home</a> &middot; <a href="/radio">Radio</a> &middot; <a href="/rtty-contest">RTTY Contest</a> &middot; <a href="/UserManual#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10">Help</a></nav>
+    </div>
+
+    <partial name="_AudioWaterfallPartial" />
+
+    <p class="aw-note">
+        Click a signal to tune it onto the orange line: the RTTY tuner's mark-space midpoint,
+        or the CW pitch in CW. A click on or near a bracketed signal takes the middle of the bracket.
+        Works in SSB, CW, RTTY and DATA-L/U. Moving the VFO moves your transmit frequency too
+        unless you are working split. YWC never transmits from this page.
+    </p>
+
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    @* No _Layout, so this page holds the host up itself: it may be the only YWC tab open. *@
+    <script type="module">
+        import { keepHostAlive } from "/js/ui/host-presence.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        keepHostAlive();
+    </script>
+    <script type="module">
+        import { attachRadioAudioWaterfall } from '@Url.Content("~/js/ui/radio-audio-waterfall.js")?v=@Yaesu_Web_Control.AppVersion.Current';
+        attachRadioAudioWaterfall(document);
+    </script>
+</body>
+</html>

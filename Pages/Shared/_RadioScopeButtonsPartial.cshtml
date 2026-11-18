@@ -255,14 +255,9 @@
 <details class="radio-scope-multi radio-audio-fall-group">
     <summary class="radio-scope-multi-toggle"
              data-bs-toggle="tooltip" data-bs-placement="top"
-             data-bs-title="A waterfall of the radio's USB audio, the same audio WSJT-X decodes, with a guess at the mode of each signal in it.">AUDIO</summary>
+             data-bs-title="A waterfall of the radio's USB audio, the same audio WSJT-X decodes, with a guess at the mode of each signal in it. Click a signal to tune it onto the orange line.">AUDIO</summary>
     <div class="radio-scope-multi-body">
-        <div class="radio-audio-fall" role="group" aria-label="Waterfall of the radio's USB audio with mode guesses">
-            <canvas class="radio-audio-fall-canvas" role="img"
-                    aria-label="Audio spectrum 0 to 4 kHz above its waterfall, with the guessed mode of each signal"></canvas>
-            <ul class="radio-audio-fall-modes list-unstyled small mb-0" aria-live="polite"></ul>
-            <div class="radio-audio-fall-status form-text">The radio's USB audio, 0 to 4 kHz. Modes are guesses unless WSJT-X decoded them.</div>
-        </div>
+        <partial name="_AudioWaterfallPartial" />
     </div>
 </details>
 </div>
