@@ -1594,6 +1594,11 @@ dialog[open]:not(:modal) {
 .radio-audio-fall .radio-audio-fall-status {
     margin-top: 0.25rem;
 }
+/* A refused click (AM, transmitting...): the reason in amber, readable on light and dark. */
+.radio-audio-fall .radio-audio-fall-status.radio-audio-fall-refused {
+    color: #f57c00;
+    font-weight: 600;
+}
 /* The FTdx101's audio scope from the ACC board (acc-audio-scope.js). */
 .radio-scope-controls .acc-audio {
     margin-bottom: 0.5rem;

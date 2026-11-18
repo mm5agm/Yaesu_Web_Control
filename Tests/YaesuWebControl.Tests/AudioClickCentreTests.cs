@@ -134,6 +134,36 @@ public class AudioClickCentreTests
         Assert.DoesNotContain(".radio-scope-controls .radio-audio-fall-canvas", css);
     }
 
+    [Fact]
+    public void The_rtty_contest_page_pops_the_audio_waterfall_out()
+    {
+        // The page names it, the YWC wrapper passes it on, and the core view
+        // builds AUDIO on the POP OUT bar from it.
+        Assert.Contains("audioUrl: '/audio-waterfall',", Read("Pages/RttyContest.cshtml"));
+        Assert.Contains("audioUrl: cfg.audioUrl,", Read("wwwroot/js/ui/rtty-contest-yaesu.js"));
+        var view = Read("core/js/rtty-contest/contest-view.js");
+        Assert.Contains("'wheel', 'audio'];", view);
+        Assert.Contains("if (p === 'audio' && !opts.audioUrl) continue;", view);
+        Assert.Contains("'window=' + encodeURIComponent(winName + p)", view);
+
+        // Opened that way, the page answers as the pop-out of the same name,
+        // so the key lights while it is open and goes out when it closes.
+        var page = Read("Pages/AudioWaterfall.cshtml");
+        Assert.Contains("new URLSearchParams(location.search).get('window')", page);
+        Assert.Contains("new PopoutChild({ name, fallbackUrl: '/rtty-contest' })", page);
+        Assert.Contains("popout.reattach()", page);
+    }
+
+    [Fact]
+    public void A_refused_click_stands_out_and_is_logged()
+    {
+        var js = Read("wwwroot/js/ui/radio-audio-waterfall.js");
+        Assert.Contains("radio-audio-fall-refused", js);
+        Assert.Contains("body.moved === false && body.offsetHz !== 0", js);
+        Assert.Contains(".radio-audio-fall .radio-audio-fall-status.radio-audio-fall-refused {", Read("wwwroot/css/site.css"));
+        Assert.Contains("click at {From:0} Hz refused", Read("Controllers/AudioWaterfallController.cs"));
+    }
+
     private static string Read(string path) => File.ReadAllText(Path.Combine(RepoRoot(), path));
 
     private static string RepoRoot()

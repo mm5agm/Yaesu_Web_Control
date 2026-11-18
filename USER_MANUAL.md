@@ -1358,14 +1358,14 @@ Over each signal is a label saying what mode it looks like, and the list under t
 
 Nothing is labelled past the edge of the radio's receive filter, where the noise drops away.
 
-**Every radio: the Audio Waterfall page** *(new in v2.5.6-pre5)* — the AUDIO group is only on the radios with a CAT scope, but the same waterfall is on a page of its own for every radio: click **Audio Waterfall** in the menu bar (or in the **MENU** on the Radio and RTTY Contest pages), or open `/audio-waterfall`. It needs only the radio's **RX device** set in Settings > Remote Audio.
+**Every radio: the Audio Waterfall page** *(new in v2.5.6-pre5)* — the AUDIO group is only on the radios with a CAT scope, but the same waterfall is on a page of its own for every radio: click **Audio Waterfall** in the menu bar (or in the **MENU** on the Radio and RTTY Contest pages), or open `/audio-waterfall`. On the RTTY Contest page, **AUDIO** on the POP OUT bar opens it in a window of its own *(new in v2.5.6-pre6)*. It needs only the radio's **RX device** set in Settings > Remote Audio.
 
 **Click a signal to tune to it** *(new in v2.5.6-pre5)* — click a signal in the waterfall or the spectrum line and YWC moves the dial so the signal sits on the dashed orange line.
 
 - In RTTY, DATA and SSB the orange line is the RTTY tuner's mark-space midpoint: 2210 Hz with the usual 2125 Hz mark and 170 Hz shift. Change the mark or shift in the RTTY tuner and the line follows.
 - In CW it's your CW pitch, and the signal lands on it.
 - A click on or within 25 Hz of a bracketed signal takes the middle of the bracket, so an RTTY pair lands centred on the line even if you click one of its tones.
-- It works in LSB, USB, CW-L, CW-U, RTTY-L, RTTY-U, DATA-L and DATA-U. In other modes the status line says so and the dial is left alone.
+- It works in LSB, USB, CW-L, CW-U, RTTY-L, RTTY-U, DATA-L and DATA-U. In other modes the status line says so in amber and the dial is left alone.
 - It moves the VFO you're listening to: VFO A, or VFO B on a single-receiver radio when B is in use.
 - **Moving the VFO moves your transmit frequency too**, unless you're working split. That's what you want for search and pounce, not when you're running a frequency.
 - YWC never transmits from here, and it won't move the dial while the radio is transmitting.
@@ -1548,6 +1548,7 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 - **BANDS** chooses the band keys and whether SUB shows (above).
 - **MEM** lists your memories, to tune to one (above).
 - **POP OUT** opens the spectrum, the waterfall, or both, in a window of their own.
+- **AUDIO**, on the same bar, opens the Audio Waterfall ([§5.20](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)) in a window of its own: the radio's receive audio with a guess at each signal's mode. Click a signal there to tune it onto the orange line. The key lights while the window is open; click it again, or **CLOSE** in the window, to close it. Layouts remember it like the other windows. *New in v2.5.6-pre6.*
 
 **Tuning**
 

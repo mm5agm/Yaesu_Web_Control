@@ -12,6 +12,23 @@ a different and much older format.
 
 ---
 
+## 2026-11-18 - v2.5.6-pre6 (pre-release)
+
+*The audio waterfall on the RTTY Contest page. Everything in v2.5.6-pre5 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**AUDIO on the RTTY Contest page** *(new, for testing)* [§5.24](USER_MANUAL.md#524-rtty-contest)
+
+- A new **AUDIO** key on the RTTY Contest page's POP OUT bar opens the audio waterfall in a window of its own, so you can put it beside the spectrum or on another monitor. Click a station there and YWC tunes it onto the orange line, the RTTY tuner's mark-space midpoint.
+- The key lights while the window is open. Click it again, or **CLOSE** in the window, to close it. Saved layouts remember it.
+
+**Click-to-centre**
+
+- When a click can't tune (in AM, say, or while transmitting), the reason now shows in amber for 10 seconds, so it isn't missed.
+
+**Fixed**
+
+- In v2.5.6-pre5 the Radio page and the RTTY Contest page opened blank: an apostrophe in a new menu item stopped the page's script. Both open normally again, and a new test catches that mistake on every page.
+
 ## 2026-11-18 - v2.5.6-pre5 (pre-release)
 
 *A waterfall of the radio's USB audio, with a guess at each signal's mode, for every radio. Click a signal to tune to it. Everything in v2.5.6-pre4 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

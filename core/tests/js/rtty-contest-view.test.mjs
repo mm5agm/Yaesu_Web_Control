@@ -64,7 +64,7 @@ test('a layout with nothing in it is the standard page', () => {
         assert.deepEqual(tidyLayout(l), {
             stackWidth: null, stackHeight: null, tunerWidth: null, tunerHeight: null, meters: true, spots: true, wfFirst: false, fixed: false, decode: false,
             split: 0.5, step: 10, trace: 0.8,
-            out: { spectrum: false, waterfall: false, both: false, tuner: false, decode: false, wheel: false },
+            out: { spectrum: false, waterfall: false, both: false, tuner: false, decode: false, wheel: false, audio: false },
             places: {},
         });
     }
@@ -93,7 +93,7 @@ test('a saved layout comes back as saved, less what is wrong in it', () => {
     assert.equal(l.split, 0.3);
     assert.equal(l.step, 100);
     // Only true is out: a hand edit's "yes" is not.
-    assert.deepEqual(l.out, { spectrum: false, waterfall: false, both: true, tuner: false, decode: false, wheel: false });
+    assert.deepEqual(l.out, { spectrum: false, waterfall: false, both: true, tuner: false, decode: false, wheel: false, audio: false });
     // A place with no size is no place.
     assert.deepEqual(l.places, { both: place });
     assert.equal(tidyLayout({ split: 1.5, step: 7 }).split, 0.5);
@@ -116,4 +116,12 @@ test('tidyLevels keeps a waterfall brightness of 0 to 60 dB', () => {
     assert.equal(tidyLevels({ bright: 'x' }).bright, 0);
     // A level saved before brightness existed keeps everything else.
     assert.deepEqual(tidyLevels({ auto: false, ref: 4, range: 40 }), { auto: false, ref: 4, range: 40, bright: 0 });
+});
+
+test('the audio waterfall window is kept in a layout like the others', () => {
+    const l = tidyLayout({ out: { audio: true }, places: { audio: { left: 10, top: 20, width: 1000, height: 600 } } });
+    assert.equal(l.out.audio, true);
+    assert.deepEqual(l.places.audio, { left: 10, top: 20, width: 1000, height: 600 });
+    // An older layout, from before AUDIO, leaves it closed.
+    assert.equal(tidyLayout({ out: { both: true } }).out.audio, false);
 });

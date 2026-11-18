@@ -102,7 +102,7 @@ const DEFAULT_STEP_HZ = 10;
 // heavy here, so the view starts thinner.
 export const TRACE_CHOICES_PX = [0.5, 0.8, 1.2, 2];
 const DEFAULT_TRACE_PX = 0.8;
-export const POPOUT_PARTS = ['spectrum', 'waterfall', 'both', 'tuner', 'decode', 'wheel'];
+export const POPOUT_PARTS = ['spectrum', 'waterfall', 'both', 'tuner', 'decode', 'wheel', 'audio'];
 const POPOUT_SIZES = {
     spectrum: { width: 1100, height: 380 },
     waterfall: { width: 1100, height: 520 },
@@ -110,11 +110,12 @@ const POPOUT_SIZES = {
     tuner: { width: 380, height: 620 },
     decode: { width: 560, height: 420 },
     wheel: { width: 560, height: 330 },
+    audio: { width: 1000, height: 600 },
 };
-const POPOUT_LABELS = { spectrum: 'SPECTRUM', waterfall: 'WATERFALL', both: 'BOTH', tuner: 'RTTY TUNER', decode: 'POP OUT', wheel: 'POP OUT' };
+const POPOUT_LABELS = { spectrum: 'SPECTRUM', waterfall: 'WATERFALL', both: 'BOTH', tuner: 'RTTY TUNER', decode: 'POP OUT', wheel: 'POP OUT', audio: 'AUDIO' };
 // What each part is called in a sentence and on a key of its own.
-const PART_NAMES = { both: 'spectrum and waterfall', decode: 'decoded text', wheel: 'VFO wheel' };
-const PART_KEYS = { tuner: 'TUNER', decode: 'DECODE', wheel: 'VFO WHEEL' };
+const PART_NAMES = { both: 'spectrum and waterfall', decode: 'decoded text', wheel: 'VFO wheel', audio: 'audio waterfall' };
+const PART_KEYS = { tuner: 'TUNER', decode: 'DECODE', wheel: 'VFO WHEEL', audio: 'AUDIO' };
 
 /**
  * What the main page still draws, given which windows are out:
@@ -362,6 +363,9 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {() => void} [opts.onDock]  the window's DOCK key
  * @param {(part:string) => string} [opts.windowUrl]  the main page: the window for a part;
  *        without it there are no pop-outs
+ * @param {string} [opts.audioUrl]  the main page: the app's audio waterfall page (the radio's
+ *        receive audio, with a click to tune). With it and windowUrl, POP OUT has an AUDIO
+ *        key that opens it in a window of its own, saved in layouts like the other windows
  * @param {string} [opts.windowName='rtty-contest-']  names the pop-outs, their channels and places
  * @param {(out:boolean) => void} [opts.onTunerOut]  the tuner window opened or closed: the
  *        docked tuner must stand still while it is out, or the two fight over the audio
@@ -592,6 +596,10 @@ export function mountContestView(root, opts) {
         for (const p of ['spectrum', 'waterfall', 'both']) {
             popBtns[p] = key(POPOUT_LABELS[p], '', () => togglePopout(p), 'rc-pop-' + p);
             popGrp.append(popBtns[p]);
+        }
+        if (opts.audioUrl) {
+            popBtns.audio = key(POPOUT_LABELS.audio, '', () => togglePopout('audio'), 'rc-pop-audio');
+            popGrp.append(popBtns.audio);
         }
         popGrp.style.marginLeft = 'auto';
         scope.append(popGrp);
@@ -1127,7 +1135,7 @@ export function mountContestView(root, opts) {
     }
     // The pop-outs (main page only).
     const hosts = {};
-    const out = { spectrum: false, waterfall: false, both: false, tuner: false, decode: false, wheel: false };
+    const out = { spectrum: false, waterfall: false, both: false, tuner: false, decode: false, wheel: false, audio: false };
     function drawOut() {
         // A window shows its own part; the main page what has not gone out.
         const left = part === 'wheel' ? 'none' : part ?? partsLeft(out);
@@ -1136,6 +1144,11 @@ export function mountContestView(root, opts) {
         for (const g of stackGrabs) g.hidden = left === 'none';
         for (const [p, b] of Object.entries(popBtns)) {
             b.classList.toggle('on', out[p]);
+            if (p === 'audio') {
+                b.title = out.audio ? 'The audio waterfall is in its window: click to close it'
+                    : "Open the radio's receive audio in a waterfall window: click a signal there to tune it onto the target line";
+                continue;
+            }
             b.title = out[p] ? `The ${p === 'both' ? 'spectrum and waterfall are' : p + ' is'} in a window: click to dock`
                 : `Open the ${p === 'both' ? 'spectrum and waterfall' : p} in a window of its own, for another monitor`;
         }
@@ -1244,9 +1257,12 @@ export function mountContestView(root, opts) {
             if (p === 'tuner' && !opts.tuner) continue;
             if (p === 'decode' && !decodePop) continue;
             if (p === 'wheel' && !wheelPop) continue;
+            if (p === 'audio' && !opts.audioUrl) continue;
             hosts[p] = new PopoutHost({
                 name: winName + p,
-                url: opts.windowUrl(p),
+                // The audio waterfall is the app's own page, told which window it is.
+                url: p === 'audio' ? opts.audioUrl + (opts.audioUrl.includes('?') ? '&' : '?') + 'window=' + encodeURIComponent(winName + p)
+                    : opts.windowUrl(p),
                 defaultSize: POPOUT_SIZES[p],
                 onChange: o => {
                     if (o) recallClashing(p);

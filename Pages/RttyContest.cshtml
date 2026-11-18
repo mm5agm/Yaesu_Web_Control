@@ -80,6 +80,9 @@
             windowUrl: p => p === 'tuner' ? '/RttyTuner?contest=true'
                 : p === 'decode' ? '/RttyTuner?contest=true&decode=true'
                 : '/rtty-contest/window?p=' + p,
+            // AUDIO on the POP OUT bar: the radio's receive audio in a
+            // waterfall window, a click on a signal tunes it onto the line.
+            audioUrl: '/audio-waterfall',
             // Named layouts, kept on the server apart from Experimental's.
             layoutsApi: '/api/rttycontestlayouts',
             onTunerOut: out => {
@@ -116,7 +119,7 @@
                     { label: 'Diagnostics', href: '/Diagnostics' },
                 ] },
                 { group: 'RECEIVE', items: [
-                    { label: 'Audio Waterfall', href: '/audio-waterfall', title: 'The radio's USB audio with mode guesses; click a signal to tune to it' },
+                    { label: 'Audio Waterfall', href: '/audio-waterfall', title: "The radio's USB audio with mode guesses; click a signal to tune to it" },
                 ] },
                 { group: 'CW', items: [
                     { label: 'CW Paddle', href: '/CwPaddle', title: 'Key the radio from a paddle on a MIDI adapter' },

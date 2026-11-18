@@ -132,6 +132,7 @@ export function startYaesuRttyContest(root, cfg) {
         part: cfg.part,
         onDock: cfg.onDock,
         windowUrl: cfg.windowUrl,
+        audioUrl: cfg.audioUrl,
         onTunerOut: cfg.onTunerOut,
         onDecodeOut: cfg.onDecodeOut,
         layoutsApi: cfg.layoutsApi,
