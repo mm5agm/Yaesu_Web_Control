@@ -25,6 +25,8 @@ const SPECTRUM_SHARE = 0.3;        // the line's share of the height
 const LABEL_STRIP = 16;            // CSS pixels for the mode labels
 const STALE_MS = 1500;             // frames older than this are not drawn
 const OPEN_KEY = 'ywc.radioAudioFallOpen';
+// AudioModeClassifier.MinHistorySeconds: no guesses before a whole FT8 cycle.
+export const GUESS_AFTER_MS = 16000;
 const PALETTE = fallPalette();
 
 /** What a guess says, in words: WSJT-X decodes are facts, the rest are guesses. */
@@ -102,11 +104,15 @@ class Panel {
         if (bins.length !== this.bins) this._size(bins.length);
         this.binHz = value.binHz || this.binHz;
         const first = !this.lastAt;
+        if (first) this.firstAt = Date.now();
         for (let i = 0; i < bins.length; i++)
             this.line[i] = first ? bins[i] : this.line[i] + (bins[i] - this.line[i]) * LINE_FOLLOW;
         this._addToRow(bins);
         this.lastAt = Date.now();
-        this.setStatus('The radio\'s USB audio, 0 to 4 kHz. Modes with a ? are guesses; WSJT-X decodes have none.');
+        const listening = this.lastAt - this.firstAt < GUESS_AFTER_MS;
+        this.setStatus('The radio\'s USB audio, 0 to 4 kHz. ' + (listening
+            ? 'Mode guesses start after 16 s of listening.'
+            : 'Modes with a ? are guesses; WSJT-X decodes have none.'));
     }
 
     receiveModes(list) {

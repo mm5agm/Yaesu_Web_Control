@@ -180,6 +180,84 @@ public class AudioModeClassifierTests
     }
 
     [Fact]
+    public void ABusyFt8BandIsNamedByTheGapAtTheEndOfEachCycle()
+    {
+        // 28 stations 52 Hz apart, touching into one wide signal, each a
+        // little late or early, plus one that never stops and one with its
+        // clock 13 s out: as on 20 m on a weekday lunchtime.
+        var a = Noise(40);
+        var rng = new Random(11);
+        for (int i = 0; i < 28; i++)
+        {
+            double dt = -0.3 + 1.3 * rng.NextDouble();
+            double amp = 0.001 + 0.004 * rng.NextDouble();
+            double odd = rng.Next(2) * 15;   // even or odd cycles, or both
+            Func<double, bool> on = i % 3 == 0
+                ? t => t % 15 is var p && p >= 0.5 + dt && p < 0.5 + dt + 12.64
+                : t => (t + odd) % 30 is var p && p >= 0.5 + dt && p < 0.5 + dt + 12.64;
+            Mix(a, Fsk(40, 450 + 52 * i, 6.25, 8, 6.25, on, seed: 100 + i, amp: amp));
+        }
+        Mix(a, Fsk(40, 1150, 6.25, 8, 6.25, null, seed: 99, amp: 0.004));
+        Mix(a, Fsk(40, 1360, 6.25, 8, 6.25, t => t % 15 is >= 13.0 or < 0.6, seed: 98, amp: 0.004));
+
+        var guesses = Classify(a);
+        string all = string.Join("; ", guesses.Select(g => $"{g.Mode} {g.LowHz:0}-{g.HighHz:0} ({g.Detail})"));
+        Assert.Contains(guesses, g => g.Detail.StartsWith("many FT8") && g.HighHz - g.LowHz > 700);
+        double ft8 = guesses.Where(g => g.Mode == "FT8").Sum(g => g.HighHz - g.LowHz);
+        double other = guesses.Where(g => g.Mode != "FT8").Sum(g => g.HighHz - g.LowHz);
+        Assert.True(ft8 > 4 * other, all);
+    }
+
+    [Fact]
+    public void OneFt8SlotUsedInBothHalvesIsFt8NotPsk()
+    {
+        var a = Noise(40);
+        Mix(a, Fsk(40, 1500, 6.25, 8, 6.25, t => t % 30 is >= 0.5 and < 13.14, seed: 21));
+        Mix(a, Fsk(40, 1500, 6.25, 8, 6.25, t => t % 30 is >= 15.5 and < 28.14, seed: 22));
+        Assert.Equal("FT8", Only(Classify(a)).Mode);
+    }
+
+    [Fact]
+    public void TwoFt8StationsARttyShiftApartAreNotRtty()
+    {
+        var a = Noise(40);
+        Func<double, bool> both = t => t % 15 is >= 0.5 and < 13.14;
+        Mix(a, Fsk(40, 1000, 6.25, 8, 6.25, both, seed: 31));
+        Mix(a, Fsk(40, 1223, 6.25, 8, 6.25, both, seed: 32));
+        var guesses = Classify(a);
+        Assert.DoesNotContain(guesses, g => g.Mode == "RTTY");
+        Assert.All(guesses, g => Assert.Equal("FT8", g.Mode));
+    }
+
+    [Fact]
+    public void NothingIsFoundPastTheReceiveFilter()
+    {
+        // Noise through a 3 kHz filter, and a trace of leakage at 3.6 kHz:
+        // 40 dB under the noise in the passband, but well clear of the
+        // nothing past the filter edge.
+        var white = Noise(Seconds);
+        const int taps = 401;
+        const double cut = 3000.0 / Rate;
+        var h = new double[taps];
+        for (int i = 0; i < taps; i++)
+        {
+            double m = i - (taps - 1) / 2.0;
+            double sinc = m == 0 ? 2 * cut : Math.Sin(2 * Math.PI * cut * m) / (Math.PI * m);
+            h[i] = sinc * (0.42 - 0.5 * Math.Cos(2 * Math.PI * i / (taps - 1)) + 0.08 * Math.Cos(4 * Math.PI * i / (taps - 1)));
+        }
+        var a = new float[white.Length];
+        for (int n = taps; n < white.Length; n++)
+        {
+            double y = 0;
+            for (int i = 0; i < taps; i++) y += h[i] * white[n - i];
+            a[n] = (float)y;
+        }
+        for (int n = 0; n < a.Length; n++) a[n] += (float)(0.00005 * Math.Sin(2 * Math.PI * 3600 * n / Rate));
+
+        Assert.Empty(Classify(a));
+    }
+
+    [Fact]
     public void Ft4()
     {
         var a = Noise(Seconds);
