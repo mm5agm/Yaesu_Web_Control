@@ -1346,9 +1346,9 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 **AUDIO (the radio's USB audio, with mode guesses)** *(new in v2.5.6-pre5, for testing)* — the **AUDIO** group under MULTI shows a waterfall of the radio's USB receive audio: the same audio WSJT-X decodes, from 0 to 4 kHz. It needs no ACC board, only the radio's **RX device** set in Settings > Remote Audio. A spectrum line sits above the waterfall, which shows about 17 seconds. The bins are 5.9 Hz wide, so FT8's tones and Piccolo's 20 Hz comb show as separate lines.
 
-Over each signal is a label saying what mode it looks like, and the list under the waterfall gives each signal's frequencies and the reason for the guess. YWC looks at the last 32 seconds and updates the guesses every 2 seconds. It can name:
+Over each signal is a label saying what mode it looks like, and the list under the waterfall gives each signal's frequencies and the reason for the guess. YWC looks at the last 32 seconds and updates the guesses every 2 seconds. The first guesses come after 16 seconds, once a whole FT8 cycle has been heard. It can name:
 
-- **FT8** and **FT4**, by their bursts on the 15 s and 7.5 s clock
+- **FT8** and **FT4**, by their bursts on the 15 s and 7.5 s clock. On a busy band the signals run together into one wide block, so YWC looks for the quiet at the end of each cycle instead: the block is labelled "many FT8 signals" when enough of it goes quiet in the last second of every 15 s cycle. Your PC clock or a station may be up to a second out.
 - **RTTY**, by two tones 85, 170, 200, 425, 450 or 850 Hz apart
 - **CW**, keyed, and **Carrier**, steady
 - **PSK31**, **PSK63** and **PSK125**, by their width
@@ -1356,9 +1356,11 @@ Over each signal is a label saying what mode it looks like, and the list under t
 - **Voice?**, for anything 300 Hz wide or more that's none of these
 - **Multi-tone**, for evenly spaced tones that match none of the modes above, and **Unknown** for the rest
 
+Nothing is labelled past the edge of the radio's receive filter, where the noise drops away.
+
 A label with **?** is a guess. When WSJT-X has decoded something at a signal's frequency in the last 30 seconds, the label is green and has no **?**, because WSJT-X knows. The guesses come from measuring the signal, not from decoding it, so they can be wrong, especially on weak or fading signals and where two signals overlap. If the group says why it can't start, the reason is the same as the Remote Audio bar would give: usually no RX device set. YWC only listens while the group is open and on screen.
 
-> The guesses have only been tested with made-up signals so far, not on the air.
+> On the air the guesses have only been tried on a busy 20 m FT8 band so far, where they read FT8. The other modes have only been tested with made-up signals.
 
 #### Two behaviours that look like bugs and are not
 

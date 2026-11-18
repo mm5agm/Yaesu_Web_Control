@@ -91,6 +91,16 @@ public class AudioWaterfallTests
         Assert.InRange(secondsIn100Rows, 15, 30);
     }
 
+    [Fact]
+    public void The_page_waits_as_long_as_the_guesser_does()
+    {
+        var js = Read("wwwroot/js/ui/radio-audio-waterfall.js");
+        int ms = int.Parse(Regex.Match(js, @"export const GUESS_AFTER_MS = (\d+);").Groups[1].Value);
+        Assert.Equal(AudioModeClassifier.MinHistorySeconds * 1000, ms);
+        Assert.Contains($"start after {AudioModeClassifier.MinHistorySeconds:0} s", js);
+        Assert.InRange(AudioModeClassifier.MinHistorySeconds, 15, 20);   // one whole FT8 cycle
+    }
+
     private static string Read(string path) => File.ReadAllText(Path.Combine(RepoRoot(), path));
 
     private static string RepoRoot()

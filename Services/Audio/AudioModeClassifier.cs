@@ -40,6 +40,14 @@ namespace Yaesu_Web_Control.Services.Audio
         private const double ShortSeconds = 4.0;
         private const double KeyingSeconds = 8.0;
         private const double MinHz = 100.0;
+        private const double PassbandDropDb = 15.0;
+
+        /// <summary>
+        /// No guesses until a whole FT8 cycle has been heard: with less, a
+        /// busy band reads as a dozen made-up signals.
+        /// </summary>
+        public const double MinHistorySeconds = 16.0;
+        private const double CycleGapDb = 3.0;
 
         // RTTY shifts the guesser knows: 170 Hz is the amateur one.
         private static readonly double[] RttyShifts = { 85, 170, 200, 425, 450, 850 };
@@ -93,7 +101,7 @@ namespace Yaesu_Web_Control.Services.Audio
             DateTime[] times;
             lock (_lock)
             {
-                if (_count * FrameSeconds < 2.0) return Array.Empty<AudioModeGuess>();
+                if (_count * FrameSeconds < MinHistorySeconds) return Array.Empty<AudioModeGuess>();
                 frames = new float[_count][];
                 times = new DateTime[_count];
                 int start = (_head - _count + _frames.Length) % _frames.Length;
@@ -122,6 +130,7 @@ namespace Yaesu_Web_Control.Services.Audio
             private readonly double[] _meanDb;   // time-average power over the floor, dB
             private readonly double[] _shortDb;  // the same over the last few seconds
             private readonly double[] _active;
+            private readonly bool[] _inPassband;
             private readonly int _shortFrom;
 
             public Analysis(AudioModeClassifier c, float[][] frames, DateTime[] times)
@@ -135,6 +144,7 @@ namespace Yaesu_Web_Control.Services.Audio
                 _hi = _bins - 2;
                 _shortFrom = Math.Max(0, _n - (int)Math.Round(ShortSeconds / c.FrameSeconds));
                 _floor = NoiseFloor();
+                _inPassband = Passband();
                 _meanDb = new double[_bins];
                 _shortDb = new double[_bins];
                 _active = new double[_bins];
@@ -189,6 +199,22 @@ namespace Yaesu_Web_Control.Services.Audio
                 return floor;
             }
 
+            /// <summary>
+            /// The bins inside the radio's receive filter. Past the filter edge
+            /// the noise falls 20 to 50 dB, so a trace of leakage there stands
+            /// well clear of its own floor and would read as a signal.
+            /// </summary>
+            private bool[] Passband()
+            {
+                var inside = new bool[_bins];
+                var floors = new List<double>();
+                for (int k = _lo; k <= _hi; k++) floors.Add(_floor[k]);
+                if (floors.Count == 0) return inside;
+                double median = Median(floors);
+                for (int k = _lo; k <= _hi; k++) inside[k] = _floor[k] >= median - PassbandDropDb;
+                return inside;
+            }
+
             public IReadOnlyList<AudioModeGuess> Run(IReadOnlyList<AudioDecodeHint> hints)
             {
                 var segments = FindSegments().Select(Measure).ToList();
@@ -210,6 +236,8 @@ namespace Yaesu_Web_Control.Services.Audio
                         if (Math.Abs(a.PeakDb - b.PeakDb) > 10) continue;
                         double? known = MatchShift(shift);
                         if (known is null) continue;
+                        // Two FT8 stations are on most of the time too.
+                        if (IsFtx(a) || IsFtx(b)) continue;
                         if (HintIn(hints, a.LowHz, b.HighHz) is { } h)
                             guesses.Add(new(a.LowHz, b.HighHz, h.Mode, "WSJT-X decoded it here", true));
                         else
@@ -253,7 +281,7 @@ namespace Yaesu_Web_Control.Services.Audio
                 int start = -1, lastOn = -1;
                 for (int k = _lo; k <= _hi + 1; k++)
                 {
-                    bool on = k <= _hi && (_active[k] >= 0.05 || _meanDb[k] >= 2.0);
+                    bool on = k <= _hi && _inPassband[k] && (_active[k] >= 0.05 || _meanDb[k] >= 2.0);
                     if (on)
                     {
                         if (start < 0) start = k;
@@ -487,6 +515,19 @@ namespace Yaesu_Web_Control.Services.Audio
                 if (OnClock(s, 7.5, 4.5, 6.5, 1.5))
                     return Make("FT4", "about 90 Hz wide, bursts on the 7.5 s clock");
 
+                // A busy band: the signals overlap, so no one burst stands
+                // alone, but every one of them stops before the cycle ends.
+                // The same for one slot with a station in both the even and
+                // the odd cycles: never off but for the gap. Each FT8 gap is
+                // at the end of a 7.5 s cycle too, so FT4 needs a third
+                // window, which falls in the middle of an FT8 cycle.
+                if (s.WidthHz > 35 && IsCrowdedFt8(s) is { } ft8)
+                    return Make("FT8", s.WidthHz <= 75
+                        ? "about 50 Hz wide, quiet only at the end of each 15 s cycle: a station in each half"
+                        : $"many FT8 signals; {ft8.Quiet} of {ft8.Slices} slices go quiet at the end of each 15 s cycle");
+                if (s.WidthHz > 35 && QuietAtCycleEnd(s, 7.5, 6.0, 7.0, 3) is { } ft4)
+                    return Make("FT4", $"many FT4 signals; {ft4.Quiet} of {ft4.Slices} slices go quiet at the end of each 7.5 s cycle");
+
                 // Two strong tones in one signal, a known RTTY shift apart.
                 var strong = s.Comb.Where(p => p.Db >= s.Comb.Max(q => q.Db) - 6).ToList();
                 if (strong.Count == 2 && s.DutyShort >= 0.5 && MatchShift(strong[1].Hz - strong[0].Hz) is { } shift)
@@ -563,6 +604,94 @@ namespace Yaesu_Web_Control.Services.Audio
                     if (phase <= slack || phase >= period - 0.5) return true;
                 }
                 return false;
+            }
+
+            /// <summary>
+            /// For a busy FT8 or FT4 band: cuts the signal into slices about
+            /// 250 Hz wide and, in each, compares the power between quietFrom
+            /// and quietTo seconds into each period (UTC) with the power from
+            /// 1.5 s to 1.5 s before quietFrom. On a real band some slices
+            /// hold a station that never stops or one with its clock well out,
+            /// so it's enough that a third of the slices with signal in them go
+            /// <see cref="CycleGapDb"/> quieter, in every quiet window seen
+            /// whole (at least minWindows). The windows may all slide up to a second
+            /// either way, for a PC clock or stations a little out. Returns the
+            /// slices that go quiet and how many have signal, or null.
+            /// </summary>
+            private (int Quiet, int Slices)? IsCrowdedFt8(Segment s) => QuietAtCycleEnd(s, 15, 14.0, 15.0, 2);
+
+            /// <summary>FT8 or FT4 by its own bursts or by the gap at the end of the cycle.</summary>
+            private bool IsFtx(Segment s) =>
+                OnClock(s, 15, 11.0, 14.0, 2.5) || OnClock(s, 7.5, 4.5, 6.5, 1.5) || IsCrowdedFt8(s) is not null;
+
+            private (int Quiet, int Slices)? QuietAtCycleEnd(Segment s, double period, double quietFrom, double quietTo, int minWindows)
+            {
+                int lo = Math.Max(_lo, (int)Math.Round(s.LowHz / _c.BinHz + 0.5));
+                int hi = Math.Min(_hi, (int)Math.Round(s.HighHz / _c.BinHz - 0.5));
+                int width = Math.Max(1, (int)Math.Round(250 / _c.BinHz));
+                var slices = new List<(int Lo, int Hi)>();
+                for (int k = lo; k <= hi; k += width)
+                {
+                    int end = Math.Min(hi, k + width - 1);
+                    bool any = false;
+                    for (int j = k; j <= end && !any; j++) any = _meanDb[j] >= 2.0;
+                    if (any) slices.Add((k, end));
+                }
+                if (slices.Count == 0) return null;
+
+                var at = new double[_n];
+                var power = new double[_n, slices.Count];
+                for (int t = 0; t < _n; t++)
+                {
+                    // A frame's block ends at its time stamp; its middle is half a block earlier.
+                    at[t] = _t[t].Ticks / (double)TimeSpan.TicksPerSecond - _c.FrameSeconds / 2;
+                    for (int i = 0; i < slices.Count; i++)
+                        for (int k = slices[i].Lo; k <= slices[i].Hi; k++)
+                            power[t, i] += Math.Pow(10, E(t, k) / 10);
+                }
+
+                int quietNeed = (int)(0.8 * (quietTo - quietFrom) / _c.FrameSeconds);
+                int busyNeed = (int)(0.8 * (quietFrom - 3.0) / _c.FrameSeconds);
+                int bestQuiet = 0;
+                for (double shift = -1.0; shift <= 1.0 + 1e-9; shift += 0.25)
+                {
+                    var busy = new double[slices.Count];
+                    int busyN = 0;
+                    var quiet = new Dictionary<long, (double[] Sum, int N)>();
+                    for (int t = 0; t < _n; t++)
+                    {
+                        double x = at[t] - shift;
+                        long cycle = (long)Math.Floor(x / period);
+                        double phase = x - cycle * period;
+                        double[] into;
+                        if (phase >= quietFrom && phase <= quietTo)
+                        {
+                            if (!quiet.TryGetValue(cycle, out var q)) q = (new double[slices.Count], 0);
+                            quiet[cycle] = (q.Sum, q.N + 1);
+                            into = q.Sum;
+                        }
+                        else if (phase >= 1.5 && phase <= quietFrom - 1.5)
+                        {
+                            busyN++;
+                            into = busy;
+                        }
+                        else continue;
+                        for (int i = 0; i < slices.Count; i++) into[i] += power[t, i];
+                    }
+                    if (busyN < busyNeed) continue;
+                    var whole = quiet.Values.Where(q => q.N >= quietNeed).ToList();
+                    if (whole.Count < minWindows) continue;
+
+                    int quietSlices = 0;
+                    for (int i = 0; i < slices.Count; i++)
+                    {
+                        double busyMean = busy[i] / busyN;
+                        if (whole.All(q => 10 * Math.Log10(busyMean / Math.Max(1e-12, q.Sum[i] / q.N)) >= CycleGapDb))
+                            quietSlices++;
+                    }
+                    bestQuiet = Math.Max(bestQuiet, quietSlices);
+                }
+                return bestQuiet >= Math.Max(1, (slices.Count + 2) / 3) ? (bestQuiet, slices.Count) : null;
             }
 
             private static double Median(List<double> values)

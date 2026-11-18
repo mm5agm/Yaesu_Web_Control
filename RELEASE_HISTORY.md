@@ -20,7 +20,8 @@ a different and much older format.
 
 - A new **AUDIO** group in the Radio Scope controls shows a waterfall of the radio's USB receive audio, the same audio WSJT-X decodes, from 0 to 4 kHz. It needs no ACC board, only the RX device set in Settings > Remote Audio.
 - Over each signal is a label saying what mode it looks like: FT8, FT4, RTTY, CW, a carrier, PSK31/63/125, Piccolo, MFSK16, Olivia or Contestia, or voice. A **?** means it's a guess. When WSJT-X has decoded something at that frequency, the label is green and has no **?**.
-- Only tested with made-up signals so far, so the guesses may be wrong on the air. Please tell me what it gets wrong, with a screenshot.
+- A busy FT8 band, where the signals run together, is named by the quiet at the end of each 15 s cycle. The first guesses come after 16 seconds of listening.
+- On the air it has only been tried on a busy FT8 band so far; the other modes have only been tested with made-up signals. Please tell me what it gets wrong, with a screenshot.
 
 ## 2026-11-18 - v2.5.6-pre4 (pre-release)
 
