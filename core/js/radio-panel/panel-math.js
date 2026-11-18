@@ -231,6 +231,10 @@ export function waterfallColour(t, stops = WATERFALL_STOPS) {
     return s[i].map((v, k) => Math.round(v + (s[i + 1][k] - v) * f));
 }
 
+// The audio waterfall's colours (radio-audio-waterfall.js): black through
+// navy, cyan, yellow and red to white. The spectrum's Audio look uses them.
+export const AUDIO_WATERFALL_STOPS = [[0, 0, 0], [0, 0, 140], [0, 170, 220], [240, 230, 0], [230, 30, 0], [255, 255, 255]];
+
 // Reduce `bins` (low to high frequency) to `columns` values, keeping the
 // strongest bin in each column so a one-bin CW carrier is not averaged away.
 // With fewer bins than columns (a narrow software-zoom span sends ~130 bins)

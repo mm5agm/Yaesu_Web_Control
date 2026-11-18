@@ -17,6 +17,10 @@
 //   bright  dB of lift for the waterfall only, 0-60
 //   smooth  half-width in bins of a moving average across the trace, 0-8
 //   hold    true freezes trace and waterfall; frames are dropped, not queued
+//   look    'classic' or 'audio'. Audio draws like the audio waterfall: a thin
+//           line with no smoothing and no fill, dB labels, and a waterfall
+//           whose colours span the trace's window (less Bright) in the
+//           audio waterfall's black-blue-yellow-red-white palette
 //
 // Levels, which the RTTY Contest view sets and the radio panel leaves alone
 // (setLevels): `auto` false freezes the floor where it is, and `ref` puts
@@ -24,7 +28,7 @@
 // in place of the default share of the range. fit() sets the range so the
 // strongest peak of the last few seconds sits just under the top.
 
-import { binsToColumns, percentile, waterfallColour } from './panel-math.js';
+import { AUDIO_WATERFALL_STOPS, binsToColumns, percentile, waterfallColour } from './panel-math.js';
 
 const WATERFALL_DB = 60;
 const FLOOR_MARGIN_DB = 6;
@@ -34,7 +38,8 @@ const HIDDEN_COLUMNS = 1000;
 const FIT_HEADROOM_DB = 3;
 
 export const SPECTRUM_SPEEDS = [1, 2, 4, 8, 16, 32, 64, 128];
-export const SPECTRUM_DEFAULTS = Object.freeze({ range: 60, speed: 1, bright: 0, smooth: 2, hold: false });
+export const SPECTRUM_LOOKS = ['classic', 'audio'];
+export const SPECTRUM_DEFAULTS = Object.freeze({ range: 60, speed: 1, bright: 0, smooth: 2, hold: false, look: 'classic' });
 
 // Bring a settings object into range; anything missing takes the default.
 export function cleanSpectrumSettings(s = {}) {
@@ -47,6 +52,7 @@ export function cleanSpectrumSettings(s = {}) {
         bright: num(s.bright, D.bright, 0, 60),
         smooth: num(s.smooth, D.smooth, 0, 8),
         hold: s.hold === true,
+        look: SPECTRUM_LOOKS.includes(s.look) ? s.look : D.look,
     };
 }
 
@@ -86,6 +92,7 @@ export class SpectrumView {
         this._last = null;
         this._set = { ...SPECTRUM_DEFAULTS };
         this._frames = 0;
+        this._themeStops = undefined;
         this._palette = buildPalette();
         this._colours = {};
         this._ro = new ResizeObserver(() => this._resize());
@@ -100,7 +107,8 @@ export class SpectrumView {
         const cs = getComputedStyle(this._specEl);
         const get = k => cs.getPropertyValue('--rp-' + k).trim();
         this._colours = { grid: get('spec-grid'), trace: get('spec-trace'), fill: get('spec-fill'), bg: get('spec-bg') };
-        this._palette = buildPalette(theme?.waterfall);
+        this._themeStops = theme?.waterfall;
+        this._palette = this._buildPalette();
         this._wctx.fillStyle = this._colours.bg || '#000';
         this._wctx.fillRect(0, 0, this._wf.width, this._wf.height);
         this._draw();
@@ -117,15 +125,21 @@ export class SpectrumView {
         this._draw();
     }
 
-    /** Change any of range, speed, bright, smooth, hold; returns the settings in force. */
+    /** Change any of range, speed, bright, smooth, hold, look; returns the settings in force. */
     setSettings(s) {
+        const look = this._set.look;
         this._set = cleanSpectrumSettings({ ...this._set, ...s });
+        if (this._set.look !== look) this._palette = this._buildPalette();
         this._frames = 0;
         this._draw();
         return { ...this._set };
     }
 
     get settings() { return { ...this._set }; }
+
+    get _audio() { return this._set.look === 'audio'; }
+
+    _buildPalette() { return buildPalette(this._audio ? AUDIO_WATERFALL_STOPS : this._themeStops); }
 
     /**
      * The trace's width in CSS pixels, 0.5-3; 1.2 until set. Not one of the
@@ -174,7 +188,7 @@ export class SpectrumView {
 
     push(bins) {
         if (!bins?.length || this._set.hold) return;
-        bins = smoothBins(bins, this._set.smooth);
+        if (!this._audio) bins = smoothBins(bins, this._set.smooth);
         // A hidden trace's canvas is 1 px wide, and a floor from one column
         // is the average, not the floor: take the columns at the waterfall's
         // width then (a waterfall-only pop-out), or at a screen's.
@@ -239,16 +253,19 @@ export class SpectrumView {
         if (!cols?.length) return;
         const { lo, hi } = this._range();
         const yOf = v => h - Math.max(0, Math.min(1, (v - lo) / (hi - lo))) * h * 0.92;
-        if (this._dbScale && this._floor != null) this._drawScale(ctx, h, lo, hi, yOf);
+        const audio = this._audio;
+        if ((this._dbScale || audio) && this._floor != null) this._drawScale(ctx, h, lo, hi, yOf);
         const step = w / cols.length;
 
-        ctx.beginPath();
-        ctx.moveTo(0, h);
-        for (let i = 0; i < cols.length; i++) ctx.lineTo(i * step, yOf(cols[i]));
-        ctx.lineTo(w, h);
-        ctx.closePath();
-        ctx.fillStyle = this._colours.fill || 'rgba(95,211,255,.16)';
-        ctx.fill();
+        if (!audio) {
+            ctx.beginPath();
+            ctx.moveTo(0, h);
+            for (let i = 0; i < cols.length; i++) ctx.lineTo(i * step, yOf(cols[i]));
+            ctx.lineTo(w, h);
+            ctx.closePath();
+            ctx.fillStyle = this._colours.fill || 'rgba(95,211,255,.16)';
+            ctx.fill();
+        }
 
         ctx.beginPath();
         for (let i = 0; i < cols.length; i++) {
@@ -257,7 +274,7 @@ export class SpectrumView {
         }
         ctx.strokeStyle = this._colours.trace || '#7fdcff';
         // Thinner than a device pixel only when asked: below that it greys.
-        const tw = this._traceW ?? 1.2;
+        const tw = this._traceW ?? (audio ? 1 : 1.2);
         ctx.lineWidth = Math.max(tw < 1 ? 0.5 : 1, (window.devicePixelRatio || 1) * tw);
         ctx.stroke();
     }
@@ -287,7 +304,15 @@ export class SpectrumView {
         const rowH = Math.max(1, Math.round(window.devicePixelRatio || 1));
         this._wctx.drawImage(this._wf, 0, 0, w, h - rowH, 0, rowH, w, h - rowH);
         const cols = binsToColumns(bins, w);
-        const lo = (this._floor ?? -100) - FLOOR_MARGIN_DB - this._set.bright, hi = lo + WATERFALL_DB;
+        // Classic: a fixed 60 dB of colour from just under the floor. Audio:
+        // the trace's own window, so a signal's colour matches its height.
+        let lo, hi;
+        if (this._audio) {
+            ({ lo, hi } = this._range());
+            lo -= this._set.bright; hi -= this._set.bright;
+        } else {
+            lo = (this._floor ?? -100) - FLOOR_MARGIN_DB - this._set.bright; hi = lo + WATERFALL_DB;
+        }
         const img = this._wctx.createImageData(w, rowH);
         const d = img.data, pal = this._palette;
         for (let x = 0; x < w; x++) {
