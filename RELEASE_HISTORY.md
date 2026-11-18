@@ -12,6 +12,16 @@ a different and much older format.
 
 ---
 
+## 2026-11-18 - v2.5.6-pre5 (pre-release)
+
+*A waterfall of the radio's USB audio, with a guess at each signal's mode. Everything in v2.5.6-pre4 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**AUDIO waterfall and mode guesses** *(new, for testing)* [§5.20](USER_MANUAL.md#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
+
+- A new **AUDIO** group in the Radio Scope controls shows a waterfall of the radio's USB receive audio, the same audio WSJT-X decodes, from 0 to 4 kHz. It needs no ACC board, only the RX device set in Settings > Remote Audio.
+- Over each signal is a label saying what mode it looks like: FT8, FT4, RTTY, CW, a carrier, PSK31/63/125, Piccolo, MFSK16, Olivia or Contestia, or voice. A **?** means it's a guess. When WSJT-X has decoded something at that frequency, the label is green and has no **?**.
+- Only tested with made-up signals so far, so the guesses may be wrong on the air. Please tell me what it gets wrong, with a screenshot.
+
 ## 2026-11-18 - v2.5.6-pre4 (pre-release)
 
 *FT8 Tiles is now off until you turn it on. Everything in v2.5.6-pre3 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

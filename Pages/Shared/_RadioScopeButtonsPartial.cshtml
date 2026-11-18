@@ -247,4 +247,22 @@
         </div>
     </details>
 }
+
+@* Not just the FTdx101 with the ACC board: the USB RX audio WSJT-X decodes, 0 to 4 kHz, drawn by
+   js/ui/radio-audio-waterfall.js with a guess at each signal's mode. Holds
+   the capture only while this group is open and on screen. Found by class,
+   never id: the card and the dialog can share a page. *@
+<details class="radio-scope-multi radio-audio-fall-group">
+    <summary class="radio-scope-multi-toggle"
+             data-bs-toggle="tooltip" data-bs-placement="top"
+             data-bs-title="A waterfall of the radio's USB audio, the same audio WSJT-X decodes, with a guess at the mode of each signal in it.">AUDIO</summary>
+    <div class="radio-scope-multi-body">
+        <div class="radio-audio-fall" role="group" aria-label="Waterfall of the radio's USB audio with mode guesses">
+            <canvas class="radio-audio-fall-canvas" role="img"
+                    aria-label="Audio spectrum 0 to 4 kHz above its waterfall, with the guessed mode of each signal"></canvas>
+            <ul class="radio-audio-fall-modes list-unstyled small mb-0" aria-live="polite"></ul>
+            <div class="radio-audio-fall-status form-text">The radio's USB audio, 0 to 4 kHz. Modes are guesses unless WSJT-X decoded them.</div>
+        </div>
+    </div>
+</details>
 </div>

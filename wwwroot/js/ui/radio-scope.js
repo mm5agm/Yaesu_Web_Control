@@ -95,6 +95,7 @@ export class RadioScopeControl {
         if (this.toggle) this._wireExpand();
         this._wireMultiGroup();
         this._wireAccAudio();
+        this._wireAudioWaterfall();
         this._wireControls();
         this._initTooltips();
 
@@ -160,7 +161,7 @@ export class RadioScopeControl {
     // MULTI / AF-FFT / OSC sit behind a <details> because they only apply
     // after MULTI is showing on the TFT. Remember the last open/closed choice.
     _wireMultiGroup() {
-        this.card.querySelectorAll('details.radio-scope-multi').forEach(el => {
+        this.card.querySelectorAll('details.radio-scope-multi:not(.radio-audio-fall-group)').forEach(el => {
             el.open = localStorage.getItem('ywc.radioScopeMultiOpen') === '1';
             el.addEventListener('toggle', () => {
                 localStorage.setItem('ywc.radioScopeMultiOpen', el.open ? '1' : '0');
@@ -178,6 +179,18 @@ export class RadioScopeControl {
         import(url.href)
             .then(m => m.attachAccAudio(this.card))
             .catch(err => console.warn('ACC audio scope did not load', err));
+    }
+
+    // The radio audio waterfall (no ACC board needed): the USB RX audio WSJT-X
+    // decodes, with mode guesses, in the AUDIO group. Loaded on demand like
+    // the ACC audio scope, with this module's version on the URL.
+    _wireAudioWaterfall() {
+        if (!this.card.querySelector('.radio-audio-fall')) return;
+        const url = new URL('./radio-audio-waterfall.js', import.meta.url);
+        url.search = new URL(import.meta.url).search;
+        import(url.href)
+            .then(m => m.attachRadioAudioWaterfall(this.card))
+            .catch(err => console.warn('Audio waterfall did not load', err));
     }
 
     // ── control wiring ───────────────────────────────────────────────────────

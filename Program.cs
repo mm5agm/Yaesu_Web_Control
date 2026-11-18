@@ -544,6 +544,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.
 // Host-side RX audio spectrum for the Filter Function Display (#161). Opens the
 // bridge's RX-only capture on the first subscribed page, closes it on the last.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.FilterSpectrumService>();
+// The radio audio waterfall (0-4 kHz of the USB RX audio) and its mode guesses.
+// Same capture hold as the filter display: only while a page is showing it.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioWaterfallService>();
 
 // The CW reader listens to the audio bridge rather than opening the capture
 // device itself, so it must be a singleton alongside it: one decoder, one

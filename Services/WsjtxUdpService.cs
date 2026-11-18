@@ -43,6 +43,41 @@ namespace Yaesu_Web_Control.Services
         /// <summary>Stations the big-tile page can call (issue #332).</summary>
         public WsjtxCallList CallList { get; } = new();
 
+        // Where in the audio WSJT-X has decoded something lately, for the
+        // audio waterfall's mode labels.
+        private readonly List<(double OffsetHz, string Mode, DateTime At)> _recentDecodes = new();
+        private const int MaxRecentDecodes = 400;
+
+        /// <summary>The audio offsets and modes WSJT-X decoded within maxAge.</summary>
+        public IReadOnlyList<Audio.AudioDecodeHint> RecentDecodeHints(TimeSpan maxAge)
+        {
+            var since = DateTime.UtcNow - maxAge;
+            lock (_lock)
+                return _recentDecodes.Where(d => d.At >= since)
+                    .Select(d => new Audio.AudioDecodeHint(d.OffsetHz, d.Mode)).ToList();
+        }
+
+        /// <summary>
+        /// A decode's mode: WSJT-X marks FT8 "~" and FT4 "+"; anything else
+        /// takes the mode from its last Status.
+        /// </summary>
+        public static string DecodeModeName(string symbol, string statusMode) => symbol switch
+        {
+            "~" => "FT8",
+            "+" => "FT4",
+            _ => string.IsNullOrWhiteSpace(statusMode) ? "WSJT-X" : statusMode.Trim(),
+        };
+
+        internal void RememberDecode(WsjtxDecode decode, DateTime utc)
+        {
+            lock (_lock)
+            {
+                _recentDecodes.Add((decode.DeltaFrequency, DecodeModeName(decode.Mode, _wsjtxMode), utc));
+                if (_recentDecodes.Count > MaxRecentDecodes)
+                    _recentDecodes.RemoveRange(0, _recentDecodes.Count - MaxRecentDecodes);
+            }
+        }
+
         public bool IsConnected { get { lock (_lock) return (DateTime.UtcNow - _lastSeen).TotalSeconds < 30; } }
         public bool IsTransmitting { get { lock (_lock) return _isTransmitting; } }
         public string WsjtxMode { get { lock (_lock) return _wsjtxMode; } }
@@ -239,7 +274,11 @@ namespace Yaesu_Web_Control.Services
 
                 case WsjtxProtocol.TypeDecode:
                     var decode = WsjtxProtocol.TryParseDecode(data);
-                    if (decode is not null) CallList.Add(decode, DateTime.UtcNow);
+                    if (decode is not null)
+                    {
+                        CallList.Add(decode, DateTime.UtcNow);
+                        RememberDecode(decode, DateTime.UtcNow);
+                    }
                     break;
 
                 case WsjtxProtocol.TypeClear:
