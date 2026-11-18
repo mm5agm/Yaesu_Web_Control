@@ -281,6 +281,9 @@ class Panel {
         this.status = root.querySelector('.acc-audio-status');
         this.panes = Array.from(root.querySelectorAll('.acc-audio-pane')).map(f => new Pane(f));
         this.osc = root.querySelector('.acc-audio-osc');
+        // The panes show only while the board sends frames: no ACC board
+        // connected, no audio scope, just the status line saying why.
+        this.shown = [root.querySelector('.acc-audio-panes'), root.querySelector('.acc-audio-osc-label')].filter(Boolean);
         if (this.osc) {
             this.osc.checked = showOsc;
             this.osc.addEventListener('change', () => setShowOsc(this.osc.checked));
@@ -309,12 +312,17 @@ class Panel {
         if (value.problem) {
             this.setStatus(value.problem);
             this.panes.forEach(p => p.clear());
-            this.draw();
+            this.show(false);
             return;
         }
+        this.show(true);
         this.panes.forEach(p => { const d = value[p.receiver]; if (d) p.add(d); });
         this.lastAt = Date.now();
         this.setStatus(settingsText(value.fftAtt, value.oscAtt, value.oscTime));
+    }
+
+    show(on) {
+        this.shown.forEach(el => { el.hidden = !on; });
     }
 
     setStatus(text) {
@@ -327,6 +335,7 @@ class Panel {
         if (this.lastAt && Date.now() - this.lastAt > STALE_MS) {
             this.panes.forEach(p => p.clear());
             this.lastAt = 0;
+            this.show(false);
         }
         this.panes.forEach(p => p.draw());
     }

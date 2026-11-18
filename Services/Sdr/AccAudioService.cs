@@ -59,6 +59,9 @@ public sealed class AccAudioService : IDisposable
     {
         if (!AccScope.ModelHasAcc(_settings.GetCachedSettings().RadioModel))
             return "Only the FTdx101MP and FTdx101D send their audio scope from the ACC socket.";
+        var s = _settings.GetCachedSettings();
+        if (!AccScope.AudioScopeWanted(s.RadioModel, s.SdrDeviceKeyA, s.SdrDeviceKeyB))
+            return AccScope.AudioScopeNotPicked;
 
         lock (_gate)
         {

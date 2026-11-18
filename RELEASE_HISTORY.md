@@ -20,6 +20,11 @@ a different and much older format.
 - The Classic page and the Experimental UI have it too: **Look** beside Smooth, for each VFO.
 - The RTTY Contest page has a **CLASSIC** / **SHARP** key on the scope row that shows the look and switches it, one setting for both receivers.
 
+**The audio scope only with the ACC board** [§5.20](USER_MANUAL.md#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
+
+- The Main and Sub audio scope in MULTI shows only when the ACC scope is the source for a spectrum. With an SDR on both, it isn't shown and YWC doesn't open the board for it.
+- It also stays hidden until the board sends frames, and hides again if the board isn't found or is lost. The line under it says why.
+
 ## 2026-11-18 - v2.5.6-pre7 (pre-release)
 
 *The audio waterfall gets a fixed level scale, so you can see how strong things are. Everything in v2.5.6-pre6 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
