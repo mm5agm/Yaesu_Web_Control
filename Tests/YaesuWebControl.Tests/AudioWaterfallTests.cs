@@ -44,7 +44,10 @@ public class AudioWaterfallTests
         // Outside every @if: after the last closing brace of the MULTI block.
         int lastIfEnd = partial.LastIndexOf("\n}", StringComparison.Ordinal);
         Assert.True(group > lastIfEnd, "the AUDIO group is inside an @if");
+        Assert.True(partial.IndexOf("<partial name=\"_AudioWaterfallPartial\" />", StringComparison.Ordinal) > group,
+            "the AUDIO group does not hold the audio waterfall partial");
         Assert.DoesNotMatch(@"<[^>]*radio-audio-fall[^>]*\sid=", partial);
+        Assert.DoesNotMatch(@"<[^>]*radio-audio-fall[^>]*\sid=", Read("Pages/Shared/_AudioWaterfallPartial.cshtml"));
 
         // MULTI remembers its own open state; AUDIO has its own.
         var scope = Read("wwwroot/js/ui/radio-scope.js");

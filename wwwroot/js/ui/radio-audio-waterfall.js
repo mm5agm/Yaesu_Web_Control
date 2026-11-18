@@ -11,8 +11,16 @@
 // One hub connection for the page, shared by every panel on it (the Radio
 // Scope card and the Radio Display Controls dialog can both be on one page).
 // Panels are found by class, never by id, for the same reason.
+//
+// Click-to-centre: a click on a signal asks YWC to move the dial so the signal
+// is heard at the target, drawn as an orange line. The target is the RTTY
+// tuner's mark-space midpoint (2210 Hz for 2125/170), or the CW pitch in CW,
+// which YWC fills in itself. A click on or near a bracketed signal takes the
+// middle of the bracket, so an RTTY pair lands centred. Receive only: YWC
+// refuses while transmitting and never keys the radio.
 
 import { decodeBytes, averageRow, rowStretch, fallPalette } from './acc-audio-scope.js';
+import { loadRttySettings, afskMidpointAudioHz } from '../rtty/rtty-settings.js';
 
 const MAX_HZ = 4000;
 // Frames come about 11.7 a second, so 2 a row puts about 17 seconds in 100
@@ -28,6 +36,25 @@ const OPEN_KEY = 'ywc.radioAudioFallOpen';
 // AudioModeClassifier.MinHistorySeconds: no guesses before a whole FT8 cycle.
 export const GUESS_AFTER_MS = 16000;
 const PALETTE = fallPalette();
+export const CENTRE_URL = '/api/audio-waterfall/centre';
+const SNAP_HZ = 25;                // a click this near a bracket takes its middle
+const NOTE_MS = 6000;              // how long a centre result stays in the status
+const TARGET_COLOUR = '#ffb74d';
+
+/** The tone to centre on for a click at hz: the middle of a bracket on or near it, else hz. */
+export function snapToGuess(hz, guesses) {
+    let best = null, bestGap = Infinity;
+    for (const g of guesses || []) {
+        const gap = hz < g.lowHz ? g.lowHz - hz : hz > g.highHz ? hz - g.highHz : 0;
+        if (gap <= SNAP_HZ && gap < bestGap) { best = g; bestGap = gap; }
+    }
+    return best ? (best.lowHz + best.highHz) / 2 : hz;
+}
+
+/** Where a centred signal should be heard: the RTTY tuner's mark-space midpoint. */
+export function centreTargetHz(settings = loadRttySettings()) {
+    return afskMidpointAudioHz(settings);
+}
 
 /** What a guess says, in words: WSJT-X decodes are facts, the rest are guesses. */
 export function guessText(g) {
@@ -61,7 +88,14 @@ class Panel {
         this.rowSum = null;
         this.rowFrames = 0;
         this.stretch = null;
+        this.targetHz = centreTargetHz();
+        this.noteUntil = 0;
+        this.busy = false;
 
+        if (this.canvas) {
+            this.canvas.style.cursor = 'crosshair';
+            this.canvas.addEventListener('click', e => this._centre(e));
+        }
         if (this.details) {
             try { this.details.open = localStorage.getItem(OPEN_KEY) === '1'; } catch { /* storage blocked */ }
             this.details.addEventListener('toggle', () => {
@@ -110,6 +144,7 @@ class Panel {
         this._addToRow(bins);
         this.lastAt = Date.now();
         const listening = this.lastAt - this.firstAt < GUESS_AFTER_MS;
+        if (Date.now() < this.noteUntil) return;   // a centre result is showing
         this.setStatus('The radio\'s USB audio, 0 to 4 kHz. ' + (listening
             ? 'Mode guesses start after 16 s of listening.'
             : 'Modes with a ? are guesses; WSJT-X decodes have none.'));
@@ -124,6 +159,39 @@ class Panel {
             if (g.fromWsjtx) li.classList.add('radio-audio-fall-wsjtx');
             return li;
         }));
+    }
+
+    // Click-to-centre: the tone under the click (or its bracket's middle) to the target.
+    async _centre(e) {
+        if (this.busy || !this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        if (!rect.width) return;
+        const clicked = (e.clientX - rect.left) * MAX_HZ / rect.width;
+        const fromHz = Math.round(snapToGuess(clicked, this.guesses));
+        this.targetHz = centreTargetHz();
+        this.busy = true;
+        this.note(`Centring ${fromHz} Hz...`);
+        try {
+            const r = await fetch(CENTRE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fromHz, toHz: Math.round(this.targetHz) }),
+            });
+            const body = await r.json().catch(() => null);
+            if (body && Number.isFinite(body.targetHz) && body.targetHz > 0) this.targetHz = body.targetHz;
+            this.note(body?.message || `YWC said ${r.status}.`);
+            scheduleDraw();
+        } catch {
+            this.note('Could not reach YWC to move the dial.');
+        } finally {
+            this.busy = false;
+        }
+    }
+
+    note(text) {
+        this.noteUntil = Date.now() + NOTE_MS;
+        this.message = '';
+        this.setStatus(text);
     }
 
     setStatus(text) {
@@ -189,6 +257,19 @@ class Panel {
         this._drawLine(g, 0, 0, w, lineH, dpr, xAt);
         this._drawLabels(g, lineH, w, labelH, dpr, xAt);
         this._drawFall(g, lineH + labelH + gap, w, h - lineH - labelH - gap, xAt);
+        this._drawTarget(g, h, dpr, xAt);
+    }
+
+    // The orange line a click brings a signal to.
+    _drawTarget(g, h, dpr, xAt) {
+        if (!(this.targetHz > 0)) return;
+        const px = Math.round(xAt(this.targetHz)) + 0.5;
+        g.save();
+        g.strokeStyle = TARGET_COLOUR;
+        g.lineWidth = 2 * dpr;
+        g.setLineDash([4 * dpr, 4 * dpr]);
+        g.beginPath(); g.moveTo(px, 0); g.lineTo(px, h); g.stroke();
+        g.restore();
     }
 
     _drawLine(g, x, y, w, h, dpr, xAt) {

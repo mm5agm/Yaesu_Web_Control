@@ -14,7 +14,7 @@ a different and much older format.
 
 ## 2026-11-18 - v2.5.6-pre5 (pre-release)
 
-*A waterfall of the radio's USB audio, with a guess at each signal's mode. Everything in v2.5.6-pre4 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+*A waterfall of the radio's USB audio, with a guess at each signal's mode, for every radio. Click a signal to tune to it. Everything in v2.5.6-pre4 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
 
 **AUDIO waterfall and mode guesses** *(new, for testing)* [§5.20](USER_MANUAL.md#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
 
@@ -22,6 +22,12 @@ a different and much older format.
 - Over each signal is a label saying what mode it looks like: FT8, FT4, RTTY, CW, a carrier, PSK31/63/125, Piccolo, MFSK16, Olivia or Contestia, or voice. A **?** means it's a guess. When WSJT-X has decoded something at that frequency, the label is green and has no **?**.
 - A busy FT8 band, where the signals run together, is named by the quiet at the end of each 15 s cycle. The first guesses come after 16 seconds of listening.
 - On the air it has only been tried on a busy FT8 band so far; the other modes have only been tested with made-up signals. Please tell me what it gets wrong, with a screenshot.
+- **Every radio:** the same waterfall is on a page of its own, **Audio Waterfall** in the menu bar (and in the MENU on the Radio and RTTY Contest pages). The AUDIO group is still in the Radio Scope controls on the FTdx101 and FTdx10.
+
+**Click a signal to tune to it** *(new, for testing)* [§5.20](USER_MANUAL.md#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
+
+- Click a signal on the audio waterfall and YWC moves the dial so it sits on the dashed orange line: the RTTY tuner's mark-space midpoint (2210 Hz for 2125/170), or your CW pitch in CW. A click on or near a bracketed RTTY pair centres the pair.
+- Works in LSB, USB, CW, RTTY and DATA-L/U. Moving the VFO moves your transmit frequency too unless you're working split, so it's for search and pounce, not running. YWC never transmits from here.
 
 ## 2026-11-18 - v2.5.6-pre4 (pre-release)
 

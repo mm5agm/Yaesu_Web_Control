@@ -1,0 +1,13 @@
+@* The radio audio waterfall: the USB RX audio WSJT-X decodes, 0 to 4 kHz, drawn
+   by js/ui/radio-audio-waterfall.js with a guess at each signal's mode. A click
+   on a signal tunes it onto the orange target line (POST api/audio-waterfall/centre).
+   Used inside the AUDIO group of the scope controls and on its own page
+   (/audio-waterfall), which every radio has. Found by class, never id: the
+   card and the dialog can share a page. *@
+<div class="radio-audio-fall" role="group" aria-label="Waterfall of the radio's USB audio with mode guesses">
+    <canvas class="radio-audio-fall-canvas" role="img"
+            title="Click a signal to tune it onto the orange line"
+            aria-label="Audio spectrum 0 to 4 kHz above its waterfall, with the guessed mode of each signal. Click a signal to tune it onto the orange line."></canvas>
+    <ul class="radio-audio-fall-modes list-unstyled small mb-0" aria-live="polite"></ul>
+    <div class="radio-audio-fall-status form-text">The radio's USB audio, 0 to 4 kHz. Modes are guesses unless WSJT-X decoded them. Click a signal to tune it onto the orange line.</div>
+</div>
