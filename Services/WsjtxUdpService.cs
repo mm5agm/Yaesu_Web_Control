@@ -1,7 +1,7 @@
-﻿using System.Buffers.Binary;
-using System.Net;
+﻿using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Yaesu_Web_Control.Services.Wsjtx;
 
 namespace Yaesu_Web_Control.Services
 {
@@ -13,11 +13,6 @@ namespace Yaesu_Web_Control.Services
     /// </summary>
     public class WsjtxUdpService : BackgroundService
     {
-        // Removed hardcoded port; will use settings
-        private const uint MagicNumber = 0xADBCCBDA;
-        private const uint MessageTypeHeartbeat = 0;
-        private const uint MessageTypeStatus = 1;
-        private const uint MessageTypeClose = 6;
 
         private readonly ICatClient _catClient;
         private readonly RadioStateService _radioStateService;
@@ -30,11 +25,80 @@ namespace Yaesu_Web_Control.Services
         private bool _isTransmitting;
         private string _wsjtxMode = "";
         private string _wsjtxId = "";
+        private long _dialFrequency;
+        private bool _txEnabled;
+        private string _dxCall = "";
+        private string _deCall = "";
+
+        // Where WSJT-X/WSJT-Z sends from. Requests (Reply, HaltTx, Configure)
+        // go back to this endpoint, which is the socket it listens on.
+        private IPEndPoint? _wsjtxEndPoint;
+        private UdpClient? _udpClient;
+
+        // After the big-tile page changes band, WSJT-X keeps broadcasting the old
+        // dial frequency until it next polls the radio. Without this pause the
+        // Status handler below would put the radio straight back on the old band.
+        private DateTime _dialSyncPausedUntil = DateTime.MinValue;
+
+        /// <summary>Stations the big-tile page can call (issue #332).</summary>
+        public WsjtxCallList CallList { get; } = new();
 
         public bool IsConnected { get { lock (_lock) return (DateTime.UtcNow - _lastSeen).TotalSeconds < 30; } }
         public bool IsTransmitting { get { lock (_lock) return _isTransmitting; } }
         public string WsjtxMode { get { lock (_lock) return _wsjtxMode; } }
         public string WsjtxId { get { lock (_lock) return _wsjtxId; } }
+        public long DialFrequency { get { lock (_lock) return _dialFrequency; } }
+        public bool TxEnabled { get { lock (_lock) return _txEnabled; } }
+        public string DxCall { get { lock (_lock) return _dxCall; } }
+        public string DeCall { get { lock (_lock) return _deCall; } }
+
+        /// <summary>Stops the WSJT-X dial frequency being copied to the radio for a while.</summary>
+        public void PauseDialSync(TimeSpan duration)
+        {
+            lock (_lock) _dialSyncPausedUntil = DateTime.UtcNow + duration;
+        }
+
+        /// <summary>
+        /// Asks WSJT-X/WSJT-Z to answer a station from the call list, as if the
+        /// operator had double-clicked its latest decode. This can make it
+        /// transmit, if Enable Tx is on: it is the operator's own call.
+        /// </summary>
+        public async Task<(bool Ok, string? Error)> SendReplyAsync(string call)
+        {
+            if (!CallList.TryGet(call, out var entry) || entry is null)
+                return (false, $"{call} is no longer in the list");
+            return await SendAsync(id => WsjtxProtocol.BuildReply(entry.Decode, id), $"Reply to {entry.Call}");
+        }
+
+        /// <summary>Stops transmitting now (autoTxOnly=false) or just turns Enable Tx off.</summary>
+        public Task<(bool Ok, string? Error)> SendHaltTxAsync(bool autoTxOnly) =>
+            SendAsync(id => WsjtxProtocol.BuildHaltTx(id, autoTxOnly), autoTxOnly ? "Halt auto Tx" : "Halt Tx now");
+
+        /// <summary>
+        /// WSJT-Z only: switches Auto Call on or off. Auto CQ is always switched
+        /// off, because WSJT-Z sets both from the same message.
+        /// </summary>
+        public Task<(bool Ok, string? Error)> SendAutoCallAsync(bool on) =>
+            SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: false, autoCall: on), on ? "Auto Call on" : "Auto Call off");
+
+        private async Task<(bool Ok, string? Error)> SendAsync(Func<string, byte[]> build, string what)
+        {
+            UdpClient? udp;
+            IPEndPoint? target;
+            string id;
+            lock (_lock)
+            {
+                udp = _udpClient;
+                target = _wsjtxEndPoint;
+                id = _wsjtxId;
+            }
+            if (udp is null) return (false, "WSJT-X integration is off in YWC's settings");
+            if (target is null || !IsConnected) return (false, "WSJT-X is not sending to YWC");
+            var bytes = build(id);
+            await udp.SendAsync(bytes, bytes.Length, target);
+            _logger.LogInformation("[WSJT-X UDP] Sent {What} to '{Id}' at {EndPoint}", what, id, target);
+            return (true, null);
+        }
 
         public WsjtxUdpService(
             ICatClient catClient,
@@ -66,6 +130,7 @@ namespace Yaesu_Web_Control.Services
                 }
                 _logger.LogInformation("WSJT-X UDP Settings: Address={Address}, Port={Port}", settings.WsjtxUdpAddress, settings.WsjtxUdpPort);
                 udpClient = CreateUdpListener(settings.WsjtxUdpAddress, settings.WsjtxUdpPort);
+                lock (_lock) _udpClient = udpClient;
                 _logger.LogInformation("WSJT-X UDP listener ACTIVE on port {Port} (address filter: {Address})", settings.WsjtxUdpPort, settings.WsjtxUdpAddress);
 
                 while (!stoppingToken.IsCancellationRequested)
@@ -76,7 +141,7 @@ namespace Yaesu_Web_Control.Services
                         // Debug: WSJT-X sends a status packet roughly once a second
                         // while it is running, so this is a steady stream, not an event.
                         _logger.LogDebug("[WSJT-X UDP] Packet received: {Length} bytes from {RemoteEndPoint}", result.Buffer.Length, result.RemoteEndPoint);
-                        await ProcessMessageAsync(result.Buffer, stoppingToken);
+                        await ProcessMessageAsync(result.Buffer, result.RemoteEndPoint, stoppingToken);
                     }
                     catch (OperationCanceledException) { break; }
                     catch (Exception ex)
@@ -91,6 +156,7 @@ namespace Yaesu_Web_Control.Services
             }
             finally
             {
+                lock (_lock) _udpClient = null;
                 udpClient?.Close();
                 _logger.LogInformation("WSJT-X UDP listener stopped");
                 _logger.LogInformation("WsjtxUdpService ExecuteAsync has exited. Service should be stopped.");
@@ -144,12 +210,9 @@ namespace Yaesu_Web_Control.Services
             return udp;
         }
 
-        private async Task ProcessMessageAsync(byte[] data, CancellationToken ct)
+        private async Task ProcessMessageAsync(byte[] data, IPEndPoint sender, CancellationToken ct)
         {
-            // Parse synchronously (no spans across await boundaries)
-
-            var msg = TryParseMessage(data);
-            if (msg == null)
+            if (!WsjtxProtocol.TryReadHeader(data, out var header))
             {
                 // Log first 16 bytes of the packet for debugging
                 var hex = BitConverter.ToString(data.Take(16).ToArray());
@@ -157,24 +220,50 @@ namespace Yaesu_Web_Control.Services
                 return;
             }
 
+            // Our own requests come back to us when WSJT-X uses multicast.
+            if (header.Type is WsjtxProtocol.TypeReply or WsjtxProtocol.TypeHaltTx or WsjtxProtocol.TypeConfigure)
+                return;
+
             lock (_lock)
             {
                 _lastSeen = DateTime.UtcNow;
-                _wsjtxId = msg.Id;
+                _wsjtxId = header.Id;
+                _wsjtxEndPoint = sender;
             }
 
-            switch (msg.Type)
+            switch (header.Type)
             {
-                case MessageTypeHeartbeat:
-                    _logger.LogDebug("WSJT-X Heartbeat from '{Id}'", msg.Id);
+                case WsjtxProtocol.TypeHeartbeat:
+                    _logger.LogDebug("WSJT-X Heartbeat from '{Id}'", header.Id);
                     break;
 
-                case MessageTypeStatus:
+                case WsjtxProtocol.TypeDecode:
+                    var decode = WsjtxProtocol.TryParseDecode(data);
+                    if (decode is not null) CallList.Add(decode, DateTime.UtcNow);
+                    break;
+
+                case WsjtxProtocol.TypeClear:
+                    CallList.Clear();
+                    break;
+
+                case WsjtxProtocol.TypeStatus:
+                    var msg = WsjtxProtocol.TryParseStatus(data);
+                    if (msg is null) break;
+                    bool bandChanged;
+                    bool syncPaused;
                     lock (_lock)
                     {
+                        bandChanged = _dialFrequency != 0 && Math.Abs(msg.DialFrequency - _dialFrequency) > 100_000;
                         _isTransmitting = msg.Transmitting;
                         _wsjtxMode = msg.Mode;
+                        _dialFrequency = msg.DialFrequency;
+                        _txEnabled = msg.TxEnabled;
+                        _dxCall = msg.DxCall;
+                        _deCall = msg.DeCall;
+                        syncPaused = DateTime.UtcNow < _dialSyncPausedUntil;
                     }
+                    CallList.MyCall = msg.DeCall;
+                    if (bandChanged) CallList.Clear();
 
                     // Log every status message with frequency info for debugging
                     _logger.LogDebug("WSJT-X Status: Id={Id}, DialFreq={Freq}, Mode={Mode}, TX={TX}",
@@ -208,7 +297,7 @@ namespace Yaesu_Web_Control.Services
                         // status about once a second while it sits on the band.
                         await _rejectionNotifier.NotifyAsync(msg.DialFrequency, "WSJT-X");
                     }
-                    else if (msg.DialFrequency > 0)
+                    else if (msg.DialFrequency > 0 && !syncPaused)
                     {
                         var currentFreq = _radioStateService.FrequencyA;
                         var diff = Math.Abs(msg.DialFrequency - currentFreq);
@@ -227,90 +316,16 @@ namespace Yaesu_Web_Control.Services
                     }
                     break;
 
-                case MessageTypeClose:
-                    _logger.LogInformation("WSJT-X '{Id}' closed", msg.Id);
+                case WsjtxProtocol.TypeClose:
+                    _logger.LogInformation("WSJT-X '{Id}' closed", header.Id);
                     lock (_lock)
                     {
                         _isTransmitting = false;
                         _lastSeen = DateTime.MinValue;
                     }
+                    CallList.Clear();
                     break;
             }
-        }
-
-        // --- Message parsing (all synchronous — spans are safe here) ---
-
-        private record ParsedMessage(uint Type, string Id, long DialFrequency, bool Transmitting, string Mode);
-
-        private static ParsedMessage? TryParseMessage(byte[] data)
-        {
-            if (data.Length < 8) return null;
-            try
-            {
-                var span = data.AsSpan();
-                int offset = 0;
-
-                uint magic = ReadUInt32(span, ref offset);
-                if (magic != MagicNumber) return null;
-
-                ReadUInt32(span, ref offset); // schema version
-                uint type = ReadUInt32(span, ref offset);
-                string id = ReadQString(span, ref offset) ?? "";
-
-                long dialFrequency = 0;
-                bool transmitting = false;
-                string mode = "";
-
-                if (type == MessageTypeStatus)
-                {
-                    dialFrequency = (long)ReadUInt64(span, ref offset);
-                    mode = ReadQString(span, ref offset) ?? "";
-                    ReadQString(span, ref offset); // DX Call
-                    ReadQString(span, ref offset); // Report
-                    ReadQString(span, ref offset); // TX Mode
-                    ReadBool(span, ref offset);    // TX Enabled
-                    transmitting = ReadBool(span, ref offset);
-                }
-
-                return new ParsedMessage(type, id, dialFrequency, transmitting, mode);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static uint ReadUInt32(ReadOnlySpan<byte> data, ref int offset)
-        {
-            var value = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(offset, 4));
-            offset += 4;
-            return value;
-        }
-
-        private static ulong ReadUInt64(ReadOnlySpan<byte> data, ref int offset)
-        {
-            var value = BinaryPrimitives.ReadUInt64BigEndian(data.Slice(offset, 8));
-            offset += 8;
-            return value;
-        }
-
-        private static bool ReadBool(ReadOnlySpan<byte> data, ref int offset)
-        {
-            return data[offset++] != 0;
-        }
-
-        private static string? ReadQString(ReadOnlySpan<byte> data, ref int offset)
-        {
-            if (offset + 4 > data.Length) return null;
-            uint rawLength = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(offset, 4));
-            offset += 4;
-            int length = (int)rawLength;
-            if (length == -1) return null;       // null Qt string
-            if (length == 0) return string.Empty;
-            if (offset + length > data.Length) return null;
-            var str = Encoding.UTF8.GetString(data.Slice(offset, length));
-            offset += length;
-            return str;
         }
     }
     // Extension for multicast detection

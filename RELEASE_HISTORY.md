@@ -12,6 +12,18 @@ a different and much older format.
 
 ---
 
+## 2026-11-18 - v2.5.6-pre3 (pre-release)
+
+*FT8 Tiles, for testing. Everything in v2.5.6-pre2 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT8 Tiles** *(new, for testing)* [§24](USER_MANUAL.md#24-ft8-tiles)
+
+- A page of large one-click tiles for working FT8 and FT4 with a switch, an eye-gaze tablet or Windows Voice Access, made for [#332](https://github.com/mm5agm/Yaesu_Web_Control/issues/332). Open it from **FT8 Tiles** in the menu bar.
+- Stations calling CQ, stations that have just finished a QSO, and stations calling you each get a numbered tile, **Call 1** to **Call 9**. One click asks WSJT-Z to answer that station, as a double-click in WSJT-Z would. With Voice Access, say *"click Call 3"*.
+- Tiles for **Stop transmit**, **Auto Call on** and **Auto Call off** (WSJT-Z), **Next page** and **Change band**.
+- Best with [WSJT-Z](https://github.com/sq9fve/wsjt-z). Standard WSJT-X only answers CQ stations this way. In WSJT-Z, tick **Accept UDP requests** on the Reporting tab.
+- Tested with simulated WSJT-Z messages only, not yet with WSJT-Z on the air. Please say on [#332](https://github.com/mm5agm/Yaesu_Web_Control/issues/332) how it goes.
+
 ## 2026-11-17 - v2.5.6-pre2 (pre-release)
 
 *The Yaesu FT-847, for testing. Everything in v2.5.6-pre1 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

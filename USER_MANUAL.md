@@ -159,6 +159,11 @@
     - 23.4 [Keyer and sidetone](#234-keyer-and-sidetone)
     - 23.5 [Keying the radio](#235-keying-the-radio)
     - 23.6 [Troubleshooting](#236-troubleshooting)
+24. [FT8 Tiles](#24-ft8-tiles)
+    - 24.1 [Setting up WSJT-Z](#241-setting-up-wsjt-z)
+    - 24.2 [Using the tiles](#242-using-the-tiles)
+    - 24.3 [Voice Access and switches](#243-voice-access-and-switches)
+    - 24.4 [Troubleshooting](#244-troubleshooting)
 
 ---
 
@@ -4689,6 +4694,67 @@ To go on the air:
 | The adapter stops answering after sitting idle | Unplug it and plug it back in. If it keeps happening, turn off USB selective suspend in the Windows power plan. |
 | Keying arrives but the radio doesn't transmit | Set **PC KEYING = DTR** on the radio's own menu, check that the radio is in CW, and check that Key line is the **Standard** port, not the CAT port. |
 | Morse on the air is choppy | The log says when the network went over the 150 ms buffer. Use a wired connection or a closer Wi-Fi access point. |
+
+---
+
+## 24. FT8 Tiles
+
+*New in v2.5.6-pre3, for testing.*
+
+**FT8 Tiles** (`/ft8-tiles`, or **FT8 Tiles** in the menu bar) is a page of large tiles for working FT8 and FT4 with a switch, an eye-gaze tablet or Windows Voice Access instead of a mouse and keyboard. Every tile is one click. Nothing needs holding down, typing or double-clicking. It was made for an operator in [#332](https://github.com/mm5agm/Yaesu_Web_Control/issues/332).
+
+The stations you can call come from WSJT-Z's decodes:
+
+- **CQ**: stations calling CQ or QRZ.
+- **Just finished**: stations that have just sent RR73, RRR or 73, so they've finished a QSO and are often happy to take another.
+- **Calling you**: stations sending your callsign. These go first, with an orange border.
+
+One click on a station's tile asks WSJT-Z to answer it, exactly as if you'd double-clicked that line in WSJT-Z. **If Enable Tx is on in WSJT-Z, it will transmit**, the same as a double-click would.
+
+The page works best with **WSJT-Z** ([sq9fve/wsjt-z](https://github.com/sq9fve/wsjt-z)). Standard WSJT-X only answers CQ and QRZ stations this way and ignores clicks on **Just finished** stations, and it has no Auto Call.
+
+### 24.1 Setting up WSJT-Z
+
+WSJT-Z is set up the same way as WSJT-X in [§9.1](#91-wsjt-x): **Rig** set to **Hamlib NET rigctl** on `localhost:4532`, so that WSJT-Z controls the radio through YWC. Then, on WSJT-Z's **Reporting** tab:
+
+- **UDP Server** and **UDP Server port** the same as YWC's (`239.255.0.1` and `2237` unless you've changed them in YWC's Settings).
+- Tick **Accept UDP requests**. Without it, WSJT-Z ignores every tile.
+- Untick **Accepted UDP request restores window**, or WSJT-Z jumps in front of everything on the shack PC each time you click a tile.
+
+In YWC's Settings, **WSJT-X integration** must be on (it is by default).
+
+### 24.2 Using the tiles
+
+| Tile | What it does |
+|---|---|
+| **Call 1** to **Call 9** | Answers that station. Its tile gets a blue border while WSJT-Z is working it. |
+| **Stop transmit** | Stops transmitting at once and turns Enable Tx off, like WSJT-Z's **Halt Tx** button. |
+| **Auto Call on** | Turns on WSJT-Z's Auto Call. |
+| **Auto Call off** | Turns off Auto Call, and Auto CQ with it. |
+| **Next page** | Shows the next nine stations when there are more than nine. |
+| **Change band** | Opens a page of band tiles. Choose a band to put the radio on its FT8 frequency (FT4 if WSJT-Z is in FT4), or **Back** to stay where you are. WSJT-Z follows the radio within a few seconds. |
+
+The bar at the top shows the frequency, band and mode, who WSJT-Z is working, and whether WSJT-Z is **Receiving**, has **Tx enabled**, or is **Transmitting** (red).
+
+A station keeps its tile from one cycle to the next, so it's still there when you reach it. A station that goes quiet fades after one cycle and its tile empties after two. A station that starts a QSO with someone else goes at once.
+
+You can open the page on the tablet's own browser, at `http://` and the shack PC's address, port 8080, followed by `/ft8-tiles`. That works better than a remote-desktop view of the shack PC, because WSJT-Z can't cover it.
+
+### 24.3 Voice Access and switches
+
+Every tile has a short fixed name, so **Windows Voice Access** can click it: say *"click Call 3"*, *"click Stop transmit"*, *"click Change band"*, then *"click 20 m"*. The station tiles are always numbered 1 to 9 on every page, so the names stay one digit.
+
+Switch-scanning and eye-gaze software see the tiles as ordinary buttons. A tile is clicked once on the press, so a dwell click or a single switch press is enough.
+
+### 24.4 Troubleshooting
+
+| Symptom | What to try |
+|---|---|
+| The top bar says *WSJT-Z not connected* | WSJT-Z isn't sending to YWC. Check the UDP Server and port on WSJT-Z's Reporting tab against YWC's Settings, and that WSJT-X integration is on in YWC. |
+| Stations show but clicking does nothing | Tick **Accept UDP requests** in WSJT-Z. |
+| Clicking a **Just finished** station does nothing | That's standard WSJT-X. Use WSJT-Z. |
+| *no longer in the list* | The station dropped off between seeing it and clicking. Pick another. |
+| **Change band** moves the radio, then it goes back | WSJT-Z isn't controlling the radio through YWC. Set its Rig to Hamlib NET rigctl, `localhost:4532` ([§9.1](#91-wsjt-x)). |
 
 ---
 

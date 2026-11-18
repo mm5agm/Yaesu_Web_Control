@@ -1,0 +1,157 @@
+@page "/ft8-tiles"
+@model Yaesu_Web_Control.Pages.Ft8TilesModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>FT8 Tiles - Yaesu Web Control</title>
+    <style>
+        :root {
+            --ft-bg: #eef1f5; --ft-head: #1b2433; --ft-ink: #1b2433; --ft-muted: #5b6575;
+            --ft-green: #7cb342; --ft-blue: #1e63c6; --ft-red: #c62828; --ft-amber: #f2a51a;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; }
+        body {
+            display: flex; flex-direction: column; background: var(--ft-bg); color: var(--ft-ink);
+            font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden;
+        }
+        header {
+            flex: 0 0 auto; display: flex; align-items: center; gap: 1.2rem;
+            background: var(--ft-head); color: #fff; padding: 0.6rem 1.2rem;
+        }
+        #ftFreq { font-size: 2.4rem; font-weight: 600; letter-spacing: 0.02em; }
+        #ftBandMode { font-size: 1.5rem; color: #cfd6e2; }
+        #ftCalling { font-size: 1.4rem; color: #ffd27a; margin-left: auto; }
+        .ft-state { font-size: 1.4rem; font-weight: 600; padding: 0.35rem 1rem; border-radius: 0.5rem; }
+        .ft-rx { background: #2e7d32; }
+        .ft-tx { background: var(--ft-red); }
+        .ft-armed { background: #b26a00; }
+        .ft-off { background: #5b6575; }
+        .ft-sub { flex: 0 0 auto; display: flex; gap: 1rem; align-items: baseline; padding: 0.4rem 1.2rem 0; }
+        .ft-sub strong { font-size: 1.2rem; }
+        #ftSummary { color: var(--ft-muted); }
+        #ftMessage { margin-left: auto; font-size: 1.2rem; font-weight: 600; color: #2e7d32; }
+        #ftMessage.ft-error { color: var(--ft-red); }
+
+        main, #ftBands {
+            flex: 1 1 auto; min-height: 0; display: grid; gap: 0.8rem; padding: 0.6rem 1.2rem 1rem;
+        }
+        main {
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+        }
+        main[hidden], #ftBands[hidden] { display: none; }
+
+        .ft-tile {
+            position: relative; display: flex; flex-direction: column; justify-content: center;
+            align-items: flex-start; text-align: left; padding: 0.6rem 1rem; min-height: 0;
+            border: 4px solid var(--ft-green); border-radius: 0.8rem; background: #fff;
+            color: var(--ft-ink); font: inherit; cursor: pointer;
+        }
+        .ft-tile:focus-visible { outline: 5px solid var(--ft-blue); outline-offset: 3px; }
+        .ft-tile:disabled { cursor: default; }
+        .ft-num { position: absolute; top: 0.4rem; left: 0.8rem; font-size: 1rem; font-weight: 600; color: var(--ft-muted); }
+        .ft-call { font-size: clamp(1.4rem, 4.2vh, 2.6rem); font-weight: 700; margin-top: 0.6rem; }
+        .ft-detail { font-size: clamp(1rem, 2.4vh, 1.4rem); color: var(--ft-muted); }
+        .ft-badge { position: absolute; right: 0.6rem; bottom: 0.5rem; font-size: 1rem; font-weight: 600;
+                    padding: 0.1rem 0.5rem; border-radius: 0.35rem; }
+        .ft-badge-cq { background: #e3f1d4; color: #2f5d0c; }
+        .ft-badge-finished { background: #dce8f8; color: #154a94; }
+        .ft-badge-you { background: #ffe9b3; color: #6b4300; }
+        .ft-tile.ft-you { border-color: var(--ft-amber); background: #fff8e1; }
+        .ft-tile.ft-working { border-color: var(--ft-blue); box-shadow: 0 0 0 4px #bcd3f5; }
+        .ft-tile.ft-faded { opacity: 0.45; border-style: dashed; }
+        .ft-tile.ft-empty { border: 3px dashed #c9ced6; background: transparent; }
+        .ft-tile.ft-empty .ft-num { color: #b0b6bf; }
+        .ft-tile.ft-pressed { transform: scale(0.97); }
+
+        .ft-action { align-items: center; text-align: center; border-color: #6b7685; }
+        .ft-action .ft-big { font-size: clamp(1.3rem, 3.6vh, 2.1rem); font-weight: 700; }
+        .ft-action .ft-small { font-size: 1.1rem; color: var(--ft-muted); }
+        .ft-action:disabled { opacity: 0.4; }
+        #ftStop { grid-column: 4; grid-row: 1 / span 2; background: var(--ft-red); border-color: #8e0000; color: #fff; }
+        #ftStop .ft-big { font-size: clamp(1.6rem, 4.5vh, 2.6rem); }
+        #ftStop .ft-square { width: 3.2rem; height: 3.2rem; background: #fff; margin-bottom: 0.8rem; }
+        #ftAutoOn { grid-column: 4; grid-row: 3; border-color: #2e7d32; }
+        #ftAutoOff { grid-column: 4; grid-row: 4; }
+        #ftNextPage { grid-column: 1; grid-row: 4; }
+        #ftChangeBand { grid-column: 2; grid-row: 4; border-color: var(--ft-blue); }
+        .ft-note { grid-column: 3; grid-row: 4; align-self: center; color: var(--ft-muted); font-size: 0.95rem; }
+
+        #ftBands { grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; }
+        .ft-band { align-items: center; font-size: clamp(1.6rem, 5vh, 2.8rem); font-weight: 700; border-color: var(--ft-blue); }
+        .ft-band.ft-current { background: #dce8f8; }
+        #ftBandBack { border-color: #6b7685; }
+    </style>
+</head>
+<body>
+    <header>
+        <span id="ftFreq">—</span>
+        <span id="ftBandMode"></span>
+        <span id="ftCalling" aria-live="polite"></span>
+        <span id="ftState" class="ft-state ft-off" role="status">WSJT-Z not connected</span>
+    </header>
+    <div class="ft-sub">
+        <strong>Stations to call: click one to call</strong>
+        <span id="ftSummary"></span>
+        <span id="ftMessage" aria-live="assertive"></span>
+    </div>
+
+    <main id="ftMain">
+        @for (int i = 1; i <= 9; i++)
+        {
+            int row = (i - 1) / 3 + 1, col = (i - 1) % 3 + 1;
+            <button type="button" class="ft-tile ft-empty" id="ftCall@(i)" disabled
+                    style="grid-row: @row; grid-column: @col;"
+                    aria-label="Call @i" aria-describedby="ftCall@(i)Text">
+                <span class="ft-num" aria-hidden="true">Call @i</span>
+                <span id="ftCall@(i)Text">
+                    <span class="ft-call"></span><br />
+                    <span class="ft-detail"></span>
+                    <span class="ft-badge"></span>
+                </span>
+            </button>
+        }
+
+        <button type="button" class="ft-tile ft-action" id="ftStop" aria-label="Stop transmit">
+            <span class="ft-square" aria-hidden="true"></span>
+            <span class="ft-big">Stop transmit</span>
+        </button>
+        <button type="button" class="ft-tile ft-action" id="ftAutoOn" aria-label="Auto Call on">
+            <span class="ft-big">Auto Call on</span>
+            <span class="ft-small">WSJT-Z</span>
+        </button>
+        <button type="button" class="ft-tile ft-action" id="ftAutoOff" aria-label="Auto Call off">
+            <span class="ft-big">Auto Call off</span>
+            <span class="ft-small">and Auto CQ off</span>
+        </button>
+        <button type="button" class="ft-tile ft-action" id="ftNextPage" aria-label="Next page" disabled>
+            <span class="ft-big">Next page</span>
+            <span class="ft-small" id="ftNextPageMore"></span>
+        </button>
+        <button type="button" class="ft-tile ft-action" id="ftChangeBand" aria-label="Change band">
+            <span class="ft-big">Change band</span>
+            <span class="ft-small" id="ftChangeBandNow"></span>
+        </button>
+        <div class="ft-note">
+            CQ = calling CQ. Just finished = sent RR73 or 73. A station that goes quiet fades, then its tile empties.
+        </div>
+    </main>
+
+    <div id="ftBands" hidden>
+        <div id="ftBandGrid" style="display: contents;"></div>
+        <button type="button" class="ft-tile ft-action" id="ftBandBack" aria-label="Back">
+            <span class="ft-big">Back</span>
+            <span class="ft-small">keep this band</span>
+        </button>
+    </div>
+
+    <script type="module" src="~/js/ft8-tiles/ft8-tiles-page.js" asp-append-version="true"></script>
+</body>
+</html>
