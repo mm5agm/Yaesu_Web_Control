@@ -12,7 +12,9 @@ a different and much older format.
 
 ---
 
-## Unreleased
+## 2026-11-18 - v2.5.6-pre8 (pre-release)
+
+*Every spectrum gets a Sharp look, now the default, and the audio scope shows only with the ACC board. Everything in v2.5.6-pre7 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
 
 **Spectrum: a Sharp look** [§5.23](USER_MANUAL.md#523-radio-panel)
 
@@ -24,6 +26,10 @@ a different and much older format.
 
 - The Main and Sub audio scope in MULTI shows only when the ACC scope is the source for a spectrum. With an SDR on both, it isn't shown and YWC doesn't open the board for it.
 - It also stays hidden until the board sends frames, and hides again if the board isn't found or is lost. The line under it says why.
+
+**Fixed**
+
+- The filter spectrum and the ACC audio scope could stop updating for good if one frame's trip to the page never finished. They now recover within 2 seconds, as the audio waterfall has since pre7.
 
 ## 2026-11-18 - v2.5.6-pre7 (pre-release)
 

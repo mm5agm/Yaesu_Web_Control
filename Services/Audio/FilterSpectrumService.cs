@@ -57,7 +57,7 @@ namespace Yaesu_Web_Control.Services.Audio
         private bool _holdingCapture;
         private bool _listening;
         private int  _frameCounter;
-        private int  _sendInFlight;
+        private readonly SendGate _sendGate = new();
         private string? _lastError;
         private CancellationTokenSource? _releaseCts;
 
@@ -210,8 +210,10 @@ namespace Yaesu_Web_Control.Services.Audio
 
             // Drop a frame rather than queue behind a slow client: the next
             // one is 86 ms away and carries the same smoothing history.
-            if (Interlocked.CompareExchange(ref _sendInFlight, 1, 0) != 0)
+            if (!_sendGate.TryBegin(out long token, out bool stuck))
                 return;
+            if (stuck)
+                _logger.LogWarning("Filter spectrum: a frame send has not finished after {Ms} ms; sending again", SendGate.StuckMs);
 
             var bins = _analyser.Bins.ToArray();
             var payload = new
@@ -226,14 +228,23 @@ namespace Yaesu_Web_Control.Services.Audio
                 },
             };
 
-            _ = _hub.Clients.Group(GroupName)
-                .SendAsync("RadioStateUpdate", payload)
-                .ContinueWith(t =>
-                {
-                    Interlocked.Exchange(ref _sendInFlight, 0);
-                    if (t.IsFaulted)
-                        _logger.LogDebug(t.Exception, "Filter spectrum send failed");
-                }, TaskScheduler.Default);
+            Task send;
+            try
+            {
+                send = _hub.Clients.Group(GroupName).SendAsync("RadioStateUpdate", payload);
+            }
+            catch (Exception ex)
+            {
+                _sendGate.End(token);
+                _logger.LogWarning(ex, "Filter spectrum send threw");
+                return;
+            }
+            _ = send.ContinueWith(t =>
+            {
+                _sendGate.End(token);
+                if (t.IsFaulted)
+                    _logger.LogWarning(t.Exception, "Filter spectrum send failed");
+            }, TaskScheduler.Default);
         }
 
         public void Dispose()
