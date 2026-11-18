@@ -18,7 +18,7 @@ a different and much older format.
 
 - **Look** in each spectrum's SCOPE panel: **Classic** or **Sharp**. Sharp draws the SDR or ACC spectrum like the audio waterfall: a sharp thin line, dB labels, and the audio waterfall's colours, spread over the same levels as the trace. Classic is the default, so nothing changes until you pick it.
 - The Classic page and the Experimental UI have it too: **Look** beside Smooth, for each VFO.
-- The RTTY Contest page has a **SHARP** key on the scope row, one setting for both receivers.
+- The RTTY Contest page has a **CLASSIC** / **SHARP** key on the scope row that shows the look and switches it, one setting for both receivers.
 
 ## 2026-11-18 - v2.5.6-pre7 (pre-release)
 

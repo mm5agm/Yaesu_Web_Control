@@ -556,7 +556,7 @@ export function mountContestView(root, opts) {
     // The Sharp look (spectrum-view.js, value 'audio'): a sharp thin line and the audio
     // waterfall's colours. One setting for the page, both receivers.
     let look = store.get(own + 'look', 'classic') === 'audio' ? 'audio' : 'classic';
-    const lookKey = key('SHARP', 'Draw the spectrum like the audio waterfall: a thin line with no smoothing, and the audio waterfall colours spread over the same levels as the trace. Off, the classic filled trace', () => setLook(look === 'audio' ? 'classic' : 'audio'), 'rc-look');
+    const lookKey = key('CLASSIC', 'The spectrum look. Press to switch. SHARP draws it like the audio waterfall: a thin line with no smoothing, and the audio waterfall colours spread over the same levels as the trace. CLASSIC is the filled trace', () => setLook(look === 'audio' ? 'classic' : 'audio'), 'rc-look');
     const fitKey = key('FIT', 'Fit the range to the strongest signal of the last few seconds (or double-click the bar between the spectrum and the waterfall)', () => fitNow(), 'rc-fit');
     const swapKey = key('WF ON TOP', 'Put the waterfall above the spectrum', () => setOrder(!wfFirst), 'rc-swap');
     // Bruce VK2RT: a station is remembered by where it sits, so the screen
@@ -1112,6 +1112,7 @@ export function mountContestView(root, opts) {
         swapKey.setAttribute('aria-pressed', wfFirst ? 'true' : 'false');
         fixedKey.classList.toggle('on', fixed);
         fixedKey.setAttribute('aria-pressed', fixed ? 'true' : 'false');
+        lookKey.textContent = look === 'audio' ? 'SHARP' : 'CLASSIC';
         lookKey.classList.toggle('on', look === 'audio');
         lookKey.setAttribute('aria-pressed', look === 'audio' ? 'true' : 'false');
     }
