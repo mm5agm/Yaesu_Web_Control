@@ -38,6 +38,7 @@ export const GUESS_AFTER_MS = 16000;
 const PALETTE = fallPalette();
 export const CENTRE_URL = '/api/audio-waterfall/centre';
 const SNAP_HZ = 25;                // a click this near a bracket takes its middle
+const REFUSED_MS = 10000;          // a refused click's reason stays longer, in amber
 const NOTE_MS = 6000;              // how long a centre result stays in the status
 const TARGET_COLOUR = '#ffb74d';
 
@@ -179,23 +180,28 @@ class Panel {
             });
             const body = await r.json().catch(() => null);
             if (body && Number.isFinite(body.targetHz) && body.targetHz > 0) this.targetHz = body.targetHz;
-            this.note(body?.message || `YWC said ${r.status}.`);
+            // Refused (AM, transmitting, out of range...) stands out: an
+            // "already centred" has offset 0 and is not a refusal.
+            const refused = !r.ok || !body || (body.moved === false && body.offsetHz !== 0);
+            this.note(body?.message || `YWC said ${r.status}.`, refused);
             scheduleDraw();
         } catch {
-            this.note('Could not reach YWC to move the dial.');
+            this.note('Could not reach YWC to move the dial.', true);
         } finally {
             this.busy = false;
         }
     }
 
-    note(text) {
-        this.noteUntil = Date.now() + NOTE_MS;
+    note(text, refused = false) {
+        this.noteUntil = Date.now() + (refused ? REFUSED_MS : NOTE_MS);
         this.message = '';
-        this.setStatus(text);
+        this.setStatus(text, refused);
     }
 
-    setStatus(text) {
-        if (text === this.message || !this.status) return;
+    setStatus(text, refused = false) {
+        if (!this.status) return;
+        this.status.classList.toggle('radio-audio-fall-refused', refused);
+        if (text === this.message) return;
         this.message = text;
         this.status.textContent = text;
     }

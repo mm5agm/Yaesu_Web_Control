@@ -50,8 +50,11 @@ namespace Yaesu_Web_Control.Controllers
             string vfo = useB ? "B" : "A";
 
             if (AudioClickCentre.ToneRisesWithDial(mode) is not { } rises)
+            {
+                _logger.LogInformation("Audio waterfall: click at {From:0} Hz refused, VFO {Vfo} is in {Mode}", request.FromHz, vfo, mode);
                 return Ok(new CentreResult(false,
                     $"Click-to-centre works in SSB, CW, RTTY and DATA-L/U, not {(mode.Length == 0 ? "this mode" : mode)}."));
+            }
 
             double target = AudioClickCentre.IsCw(mode)
                 ? AudioClickCentre.CwPitchHz(_state.CwPitch)
