@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanSpectrumSettings, smoothBins, SPECTRUM_DEFAULTS } from '../../js/radio-panel/spectrum-view.js';
+import { cleanSpectrumSettings, sharpWaterfallSpan, smoothBins, SPECTRUM_DEFAULTS } from '../../js/radio-panel/spectrum-view.js';
 
 test('nothing saved gives the defaults', () => {
     assert.deepEqual(cleanSpectrumSettings(), { ...SPECTRUM_DEFAULTS });
@@ -49,4 +49,13 @@ test('smoothing averages neighbours; the ends average what they have', () => {
     assert.deepEqual(out, [0, 3, 3, 3, 0]);
     const ends = Array.from(smoothBins([3, 0, 0, 0, 6], 1));
     assert.deepEqual(ends, [1.5, 1, 0, 2, 3]);
+});
+
+test('the Sharp waterfall is black just under the noise, whatever REF does', () => {
+    // REF lifts the window's bottom far under the noise: the noise stays black.
+    assert.deepEqual(sharpWaterfallSpan(-100, { lo: -130, hi: -70 }), { lo: -103, hi: -70 });
+    // A narrow RANGE: still 20 dB of colour above the floor.
+    assert.deepEqual(sharpWaterfallSpan(-100, { lo: -105, hi: -95 }), { lo: -103, hi: -83 });
+    // No floor yet: the window's bottom.
+    assert.deepEqual(sharpWaterfallSpan(null, { lo: -110, hi: -50 }), { lo: -113, hi: -50 });
 });

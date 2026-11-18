@@ -40,10 +40,10 @@ export function spectrumSettingsPanel(onChange) {
     };
     const same = x => x;
     const lookRow = h('label', 'rp-spec-row');
-    lookRow.title = 'Classic: a smoothed, filled trace. Audio: a sharp thin line with dB labels and the audio waterfall colours';
+    lookRow.title = 'Classic: a smoothed, filled trace. Sharp: a thin line, no smoothing, with dB labels and the audio waterfall colours';
     const lookSel = h('select');
     lookSel.dataset.set = 'look';
-    for (const [v, t] of [['classic', 'Classic'], ['audio', 'Audio']]) {
+    for (const [v, t] of [['classic', 'Classic'], ['audio', 'Sharp']]) {
         const o = h('option', null, t); o.value = v; lookSel.append(o);
     }
     lookSel.addEventListener('change', () => onChange({ look: lookSel.value }));
@@ -55,7 +55,7 @@ export function spectrumSettingsPanel(onChange) {
         x => x === 1 ? 'Full' : '1/' + x, 'How fast the waterfall scrolls');
     slider('bright', 'Bright', 0, 60, same, same, x => x ? '+' + x + ' dB' : 'Off', 'Lifts weak signals in the waterfall only');
     slider('smooth', 'Smooth', 0, 8, same, same, x => x ? String(x) : 'Off', 'Averages neighbouring bins across the trace');
-    // The Audio look never smooths, so its slider rests.
+    // The Sharp look never smooths, so its slider rests.
     const smoothInp = el.querySelector('input[data-set="smooth"]');
     rows.push(cur => { smoothInp.disabled = cur.look === 'audio'; });
     const pbRow = h('label', 'rp-spec-row');
