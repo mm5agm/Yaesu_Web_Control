@@ -210,6 +210,7 @@ namespace Yaesu_Web_Control.Services.Audio
                     bins,
                     binHz = _analyser.BinHz,
                     frameSeconds = _analyser.FrameSeconds * SendEvery,
+                    filterHz = UsbAudioFilterHz(_services.GetService<RadioStateService>()),
                 },
             };
 
@@ -257,6 +258,23 @@ namespace Yaesu_Web_Control.Services.Audio
             {
                 Interlocked.Exchange(ref _classifying, 0);
             }
+        }
+
+        /// <summary>
+        /// The IF width, in Hz, of the receiver the radio sends to its USB
+        /// audio, or null when it is not known. In RTTY-L at 300 Hz the
+        /// waterfall shows one 300 Hz slice of hiss whatever the band is doing
+        /// (Colin, 2026-11-18), so the page says so when it is narrow.
+        /// Single-receiver radios like the FTdx10 send whichever VFO is in
+        /// use; the dual-receiver ones send MAIN, as in click-to-centre.
+        /// </summary>
+        public static int? UsbAudioFilterHz(RadioStateService? state)
+        {
+            if (state is null) return null;
+            bool useB = state.IsSingleReceiver && state.ActiveVfo == 1;
+            return YaesuIfWidth.HzForCode(state.RadioModel,
+                                          useB ? state.ModeB : state.ModeA,
+                                          useB ? state.IfWidthB : state.IfWidthA);
         }
 
         /// <summary>What the page gets for each signal.</summary>

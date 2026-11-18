@@ -58,6 +58,40 @@ public class AudioWaterfallTests
     }
 
     [Fact]
+    public void The_page_is_told_when_the_radio_filter_is_narrow()
+    {
+        // Colin, 2026-11-18: in RTTY-L at 300 Hz the waterfall was one slice
+        // of hiss whatever he tuned to. Each frame now carries the IF width
+        // of the receiver on the USB audio, and the page says when it is narrow.
+        var (state, _) = ModeVfoRoutingTests.NewDispatcher(singleReceiver: false, activeVfo: 0);
+        state.RadioModel = "FTdx101MP";
+        state.ModeA = "RTTY-L";
+        state.IfWidthA = "6";
+        Assert.Equal(300, AudioWaterfallService.UsbAudioFilterHz(state));
+        state.IfWidthA = "18";
+        Assert.Equal(3000, AudioWaterfallService.UsbAudioFilterHz(state));
+        state.IfWidthA = "";
+        Assert.Null(AudioWaterfallService.UsbAudioFilterHz(state));
+        Assert.Null(AudioWaterfallService.UsbAudioFilterHz(null));
+
+        // A dual-receiver radio sends MAIN even with SUB selected...
+        state.IfWidthA = "6";
+        state.ModeB = "RTTY-L";
+        state.IfWidthB = "18";
+        state.ActiveVfo = 1;
+        Assert.Equal(300, AudioWaterfallService.UsbAudioFilterHz(state));
+        // ...a single-receiver one sends the VFO in use.
+        state.IsSingleReceiver = true;
+        Assert.Equal(3000, AudioWaterfallService.UsbAudioFilterHz(state));
+
+        Assert.Contains("filterHz = UsbAudioFilterHz(", Read("Services/Audio/AudioWaterfallService.cs"));
+        var js = Read("wwwroot/js/ui/radio-audio-waterfall.js");
+        Assert.Contains("export const NARROW_FILTER_HZ = 1000;", js);
+        Assert.Contains("const narrow = filterNote(value.filterHz);", js);
+        Assert.Contains("Open WIDTH to see the band.", js);
+    }
+
+    [Fact]
     public void A_frame_send_that_never_finishes_does_not_stop_the_waterfall()
     {
         var service = Read("Services/Audio/AudioWaterfallService.cs");

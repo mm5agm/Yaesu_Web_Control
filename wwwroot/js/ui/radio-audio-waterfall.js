@@ -80,6 +80,16 @@ export function labelText(g) {
     return g.fromWsjtx || g.mode.endsWith('?') ? g.mode : `${g.mode}?`;
 }
 
+// Under this the radio's own filter hides most of the band: in RTTY-L at
+// 300 Hz the waterfall is one slice of hiss (Colin, 2026-11-18).
+export const NARROW_FILTER_HZ = 1000;
+
+/** What the status says about the radio's IF width, or null when it is wide or not known. */
+export function filterNote(filterHz) {
+    if (!(filterHz > 0) || filterHz >= NARROW_FILTER_HZ) return null;
+    return `The radio's filter is ${filterHz} Hz wide, so only that slice shows here. Open WIDTH to see the band.`;
+}
+
 /** A level in dBFS as the host's byte: 0 at -140 dBFS, 255 at -20 (AudioWaterfallAnalyser.ToByte). */
 export function dbToByte(db) {
     return (db + 140) * 255 / 120;
@@ -192,6 +202,8 @@ class Panel {
         this.lastAt = Date.now();
         const listening = this.lastAt - this.firstAt < GUESS_AFTER_MS;
         if (Date.now() < this.noteUntil) return;   // a centre result is showing
+        const narrow = filterNote(value.filterHz);
+        if (narrow) { this.setStatus(narrow); return; }
         this.setStatus('The radio\'s USB audio, 0 to 4 kHz. ' + (listening
             ? 'Mode guesses start after 16 s of listening.'
             : 'Modes with a ? are guesses; WSJT-X decodes have none.'));
