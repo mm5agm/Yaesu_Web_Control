@@ -57,7 +57,7 @@
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
                         <input type="range" class="form-range spectrum-smooth-slider" data-vfo="B" min="0" max="8" step="1" value="2" aria-label="VFO B spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="B" style="min-width:3.5em; text-align:right;">2</span>
-                        <label class="text-nowrap mb-0 ms-2" title="Classic: a smoothed trace with a shaded area under it. Sharp: a thin line with no smoothing, and the audio waterfall colours, spread over the same levels as the trace.">Look</label>
+                        <label class="text-nowrap mb-0 ms-2" title="Sharp (the default): a thin line with no smoothing, and the audio waterfall colours, spread over the same levels as the trace. Classic: a smoothed trace with a shaded area under it; the faintest traces in the noise stand out a little better, so try it when hunting weak DX.">Look</label>
                         <select class="form-select form-select-sm spectrum-look-select" data-vfo="B" aria-label="VFO B spectrum look" style="width:auto; padding-top:0; padding-bottom:0;">
                             <option value="classic">Classic</option>
                             <option value="audio">Sharp</option>

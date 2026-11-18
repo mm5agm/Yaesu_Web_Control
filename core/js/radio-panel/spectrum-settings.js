@@ -40,7 +40,7 @@ export function spectrumSettingsPanel(onChange) {
     };
     const same = x => x;
     const lookRow = h('label', 'rp-spec-row');
-    lookRow.title = 'Classic: a smoothed, filled trace. Sharp: a thin line, no smoothing, with dB labels and the audio waterfall colours';
+    lookRow.title = 'Sharp (the default): a thin line, no smoothing, with dB labels and the audio waterfall colours. Classic: a smoothed, filled trace; the faintest traces in the noise stand out a little better, so try it when hunting weak DX';
     const lookSel = h('select');
     lookSel.dataset.set = 'look';
     for (const [v, t] of [['classic', 'Classic'], ['audio', 'Sharp']]) {
