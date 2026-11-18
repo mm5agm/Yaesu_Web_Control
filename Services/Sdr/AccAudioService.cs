@@ -37,7 +37,7 @@ public sealed class AccAudioService : IDisposable
     private readonly HashSet<string> _subscribers = new(StringComparer.Ordinal);
     private CancellationTokenSource? _pumpCts;
     private CancellationTokenSource? _releaseCts;
-    private int _sendInFlight;
+    private readonly SendGate _sendGate = new();
 
     public AccAudioService(
         AccScopeService acc,
@@ -158,16 +158,28 @@ public sealed class AccAudioService : IDisposable
     private void Send(AccAudioFrame frame)
     {
         // Drop a frame rather than queue behind a slow page: the next is 80 ms away.
-        if (Interlocked.CompareExchange(ref _sendInFlight, 1, 0) != 0) return;
+        if (!_sendGate.TryBegin(out long token, out bool stuck)) return;
+        if (stuck)
+            _logger.LogWarning("ACC audio scope: a frame send has not finished after {Ms} ms; sending again", SendGate.StuckMs);
 
-        _ = _hub.Clients.Group(GroupName)
-            .SendAsync("RadioStateUpdate", new { property = "AccAudio", value = frame })
-            .ContinueWith(t =>
-            {
-                Interlocked.Exchange(ref _sendInFlight, 0);
-                if (t.IsFaulted)
-                    _logger.LogDebug(t.Exception, "ACC audio scope send failed");
-            }, TaskScheduler.Default);
+        Task send;
+        try
+        {
+            send = _hub.Clients.Group(GroupName)
+                .SendAsync("RadioStateUpdate", new { property = "AccAudio", value = frame });
+        }
+        catch (Exception ex)
+        {
+            _sendGate.End(token);
+            _logger.LogWarning(ex, "ACC audio scope send threw");
+            return;
+        }
+        _ = send.ContinueWith(t =>
+        {
+            _sendGate.End(token);
+            if (t.IsFaulted)
+                _logger.LogWarning(t.Exception, "ACC audio scope send failed");
+        }, TaskScheduler.Default);
     }
 
     public void Dispose()
