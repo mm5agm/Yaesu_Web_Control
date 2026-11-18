@@ -7,13 +7,13 @@ import { cleanSpectrumSettings, sharpWaterfallSpan, smoothBins, SPECTRUM_DEFAULT
 
 test('nothing saved gives the defaults', () => {
     assert.deepEqual(cleanSpectrumSettings(), { ...SPECTRUM_DEFAULTS });
-    assert.deepEqual(cleanSpectrumSettings({}), { range: 60, speed: 1, bright: 0, smooth: 2, hold: false, look: 'classic' });
+    assert.deepEqual(cleanSpectrumSettings({}), { range: 60, speed: 1, bright: 0, smooth: 2, hold: false, look: 'audio' });
 });
 
-test('the look is classic unless audio is asked for', () => {
-    assert.equal(cleanSpectrumSettings({ look: 'audio' }).look, 'audio');
-    assert.equal(cleanSpectrumSettings({ look: 'sharp' }).look, 'classic');
-    assert.equal(cleanSpectrumSettings({ range: 80 }).look, 'classic');
+test('the look is Sharp (audio) unless Classic is asked for', () => {
+    assert.equal(cleanSpectrumSettings({ look: 'classic' }).look, 'classic');
+    assert.equal(cleanSpectrumSettings({ look: 'sharp' }).look, 'audio');
+    assert.equal(cleanSpectrumSettings({ range: 80 }).look, 'audio');
 });
 
 test('values are clamped to the classic sliders', () => {
