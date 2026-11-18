@@ -7,7 +7,13 @@ import { cleanSpectrumSettings, smoothBins, SPECTRUM_DEFAULTS } from '../../js/r
 
 test('nothing saved gives the defaults', () => {
     assert.deepEqual(cleanSpectrumSettings(), { ...SPECTRUM_DEFAULTS });
-    assert.deepEqual(cleanSpectrumSettings({}), { range: 60, speed: 1, bright: 0, smooth: 2, hold: false });
+    assert.deepEqual(cleanSpectrumSettings({}), { range: 60, speed: 1, bright: 0, smooth: 2, hold: false, look: 'classic' });
+});
+
+test('the look is classic unless audio is asked for', () => {
+    assert.equal(cleanSpectrumSettings({ look: 'audio' }).look, 'audio');
+    assert.equal(cleanSpectrumSettings({ look: 'sharp' }).look, 'classic');
+    assert.equal(cleanSpectrumSettings({ range: 80 }).look, 'classic');
 });
 
 test('values are clamped to the classic sliders', () => {

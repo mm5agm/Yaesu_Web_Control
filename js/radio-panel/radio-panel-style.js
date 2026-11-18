@@ -239,6 +239,8 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-spec-settings.open{display:flex}
 .rp-spec-row{display:grid;grid-template-columns:64px 150px 56px;align-items:center;gap:8px}
 .rp-spec-row input[type=range]{width:150px}
+.rp-spec-row select{width:150px;font:inherit;padding:2px 4px;border-radius:4px;background:${v('spec-bg')};color:inherit;border:1px solid ${v('soft-border')}}
+.rp-spec-row input:disabled{opacity:.35}
 .rp-spec-val{font-variant-numeric:tabular-nums;text-align:right}
 .rp-spop-key.rp-spop-hold.on{background:${v('tx')};border-color:${v('tx')};color:${v('tx-fg')}}
 .rp-spec-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 22px ${SANS};letter-spacing:.14em;text-transform:uppercase;color:${v('spec-label')}}
@@ -380,7 +382,7 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-spop .rp-axis{font-size:17px;min-height:18px}
 .rp-pane>.rp-spec-settings{left:auto;right:8px;top:44px;bottom:auto;font-size:16px}
 .rp-pane>.rp-spec-settings .rp-spec-row{grid-template-columns:84px 180px 70px}
-.rp-pane>.rp-spec-settings .rp-spec-row input[type=range]{width:180px}
+.rp-pane>.rp-spec-settings .rp-spec-row input[type=range],.rp-pane>.rp-spec-settings .rp-spec-row select{width:180px}
 .rp-pane-bar{display:flex;align-items:center;gap:10px;min-height:32px}
 .rp-pane-label{flex:1;font:400 18px ${MONO};color:${v('chip-fg')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rp-pane-tools{display:flex;gap:6px}

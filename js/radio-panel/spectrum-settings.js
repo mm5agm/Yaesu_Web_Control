@@ -1,5 +1,5 @@
-// spectrum-settings.js - the SCOPE panel for one spectrum pane: Range, Speed,
-// Bright, Smooth, Passband and DEFAULTS. The board shows it under each pane
+// spectrum-settings.js - the SCOPE panel for one spectrum pane: Look, Range,
+// Speed, Bright, Smooth, Passband and DEFAULTS. The board shows it under each pane
 // and the pop-out spectrum window beside each of its panes; each keeps the
 // settings itself and is handed every change.
 
@@ -39,11 +39,25 @@ export function spectrumSettingsPanel(onChange) {
         rows.push(cur => { inp.value = String(fromVal(cur[name])); out.textContent = text(cur[name]); });
     };
     const same = x => x;
+    const lookRow = h('label', 'rp-spec-row');
+    lookRow.title = 'Classic: a smoothed, filled trace. Audio: a sharp thin line with dB labels and the audio waterfall colours';
+    const lookSel = h('select');
+    lookSel.dataset.set = 'look';
+    for (const [v, t] of [['classic', 'Classic'], ['audio', 'Audio']]) {
+        const o = h('option', null, t); o.value = v; lookSel.append(o);
+    }
+    lookSel.addEventListener('change', () => onChange({ look: lookSel.value }));
+    lookRow.append(h('span', null, 'Look'), lookSel, h('span', 'rp-spec-val', ''));
+    el.append(lookRow);
+    rows.push(cur => { lookSel.value = cur.look; });
     slider('range', 'Range', 5, 160, same, same, x => x + ' dB', 'dB from the bottom of the trace to the top');
     slider('speed', 'Speed', 0, SPECTRUM_SPEEDS.length - 1, i => SPECTRUM_SPEEDS[i], x => SPECTRUM_SPEEDS.indexOf(x),
         x => x === 1 ? 'Full' : '1/' + x, 'How fast the waterfall scrolls');
     slider('bright', 'Bright', 0, 60, same, same, x => x ? '+' + x + ' dB' : 'Off', 'Lifts weak signals in the waterfall only');
     slider('smooth', 'Smooth', 0, 8, same, same, x => x ? String(x) : 'Off', 'Averages neighbouring bins across the trace');
+    // The Audio look never smooths, so its slider rests.
+    const smoothInp = el.querySelector('input[data-set="smooth"]');
+    rows.push(cur => { smoothInp.disabled = cur.look === 'audio'; });
     const pbRow = h('label', 'rp-spec-row');
     pbRow.title = 'Shades the part of the spectrum you are hearing: the width of the receive filter for the mode';
     const pbBox = h('input');
