@@ -12,6 +12,17 @@ a different and much older format.
 
 ---
 
+## 2026-11-19 - v2.5.6-pre10 (pre-release)
+
+*The FT-817, FT-818, FT-857 and FT-897 can be chosen as the radio. Everything in v2.5.6-pre9 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**New radios: the FT-817, FT-818, FT-857 and FT-897** [The FT-817, FT-818, FT-857 and FT-897](USER_MANUAL.md#the-ft-817-ft-818-ft-857-and-ft-897)
+
+- **Radio Model** in Settings now offers the **FT-817** (and FT-817ND), **FT-818**, **FT-857** (and FT-857D) and **FT-897** (and FT-897D). They use the same older CAT as the FT-847, so YWC sets and reads the frequency and mode, reads the S-meter and the power meter, and hides the controls their CAT can't reach. The band keys have 2 m and 70 cm.
+- DATA, RTTY and PSK go out in the radio's **DIG** mode, and DATA-FM as **PKT**.
+- YWC never sends the commands that lock the front panel on these radios, never raises DTR or RTS, and doesn't key them.
+- They're built from the radios' manuals and haven't been tried on a real radio yet. If you have one, please try it and say how it went on the Discussions tab. Thanks to Felix DF3FX for asking for them.
+
 ## 2026-11-19 - v2.5.6-pre9 (pre-release)
 
 *RTTY Auto says plainly when it ticks or unticks Rev. Everything in v2.5.6-pre8 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

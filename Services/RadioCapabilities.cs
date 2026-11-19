@@ -55,6 +55,9 @@ public static class RadioCapabilities
         // FT-847 RX 100 kHz - 76 MHz, 108 - 174 MHz and 420 - 512 MHz
         // (FT-847 Operating Manual, Specifications).
         "FT-847" => (100_000, 512_000_000),
+        // FT-817ND / FT-818ND / FT-857D / FT-897 RX 100 kHz - 56 MHz,
+        // 76 - 154 MHz and 420 - 470 MHz (their Operating Manuals, Specifications).
+        "FT-817" or "FT-818" or "FT-857" or "FT-897" => (100_000, 470_000_000),
         _ => (30_000, 75_000_000)
     };
 
@@ -66,15 +69,24 @@ public static class RadioCapabilities
     /// wwwroot/css/limited-cat.css hides every control they cannot reach.
     /// Hidden, not removed, so the page scripts still find their elements.
     /// </summary>
-    public static bool HasLimitedCat(string radioModel) => radioModel == "FT-847";
+    public static bool HasLimitedCat(string radioModel) => UsesFiveByteCat(radioModel);
+
+    /// <summary>
+    /// True when the radio speaks the older five-byte binary CAT, which
+    /// <see cref="Ft847CatTransport"/> translates: the FT-847, and the
+    /// FT-817, FT-818, FT-857 and FT-897.
+    /// </summary>
+    public static bool UsesFiveByteCat(string radioModel) =>
+        radioModel is "FT-847" or "FT-817" or "FT-818" or "FT-857" or "FT-897";
 
     /// <summary>
     /// True when the radio has the 2 m and 70 cm bands, so the band keys swap
     /// 4 m for 2 m and 70 cm. The FT-991A (CAT manual, BS table) and the
-    /// FT-847 (100 W on 160 - 6 m, 50 W on 2 m and 70 cm, no 4 m).
+    /// FT-847 (100 W on 160 - 6 m, 50 W on 2 m and 70 cm, no 4 m), and the
+    /// FT-817, FT-818, FT-857 and FT-897, which are HF, 6 m, 2 m and 70 cm too.
     /// </summary>
     public static bool HasTwoMetresAndSeventyCm(string radioModel) =>
-        radioModel is "FT-991A" or "FT-847";
+        radioModel is "FT-991A" || UsesFiveByteCat(radioModel);
 
     /// <summary>
     /// True when <paramref name="hz"/> is within the model's tunable range.
@@ -137,7 +149,9 @@ public static class RadioCapabilities
     public static int MaxPowerWatts(string radioModel) => radioModel switch
     {
         "FTdx101MP" or "FTDX5000MP" or "FTDX5000D" => 200,
-        "FTdx101D" or "FTdx10" or "FT-710" or "FTDX3000" or "FT-991A" or "FT-847" => 100,
+        "FTdx101D" or "FTdx10" or "FT-710" or "FTDX3000" or "FT-991A" or "FT-847" or "FT-857" or "FT-897" => 100,
+        "FT-817" => 5,
+        "FT-818" => 6,
         _ => 200
     };
 
@@ -149,8 +163,14 @@ public static class RadioCapabilities
     /// FT-847 (Operating Manual: "2m/70cm: 50 Watts"). PC still
     /// takes watts there, so the slider is capped rather than rescaled.
     /// </summary>
-    public static int MaxPowerWattsAt(string radioModel, long hz) =>
-        HasTwoMetresAndSeventyCm(radioModel) && hz >= 100_000_000 ? 50 : MaxPowerWatts(radioModel);
+    /// The FT-857 and FT-897 drop again to 20 W on 70 cm.
+    public static int MaxPowerWattsAt(string radioModel, long hz)
+    {
+        if (radioModel is "FT-857" or "FT-897" && hz >= 400_000_000) return 20;
+        return HasTwoMetresAndSeventyCm(radioModel) && hz >= 100_000_000
+            ? Math.Min(50, MaxPowerWatts(radioModel))
+            : MaxPowerWatts(radioModel);
+    }
 
     /// <summary>
     /// True when the radio has a PA temperature meter, read with RM9. The
@@ -161,7 +181,8 @@ public static class RadioCapabilities
     /// </summary>
     public static bool HasPaTemperatureMeter(string radioModel) => radioModel switch
     {
-        "FTdx10" or "FT-710" or "FTDX5000MP" or "FTDX5000D" or "FT-991A" or "FT-847" => false,
+        "FTdx10" or "FT-710" or "FTDX5000MP" or "FTDX5000D" or "FT-991A" => false,
+        _ when UsesFiveByteCat(radioModel) => false,
         _ => true
     };
 
@@ -170,7 +191,7 @@ public static class RadioCapabilities
     /// excluded; see <see cref="HasPaTemperatureMeter"/> for why the others
     /// still poll.
     /// </summary>
-    public static bool PollsTemperature(string radioModel) => radioModel is not ("FT-991A" or "FT-847");
+    public static bool PollsTemperature(string radioModel) => radioModel is not "FT-991A" && !UsesFiveByteCat(radioModel);
 
     /// <summary>
     /// True when the roofing filter can be chosen over CAT (the RF command).
@@ -178,7 +199,7 @@ public static class RadioCapabilities
     /// roofing filter themselves.
     /// </summary>
     public static bool HasRoofingFilterCat(string radioModel) =>
-        radioModel is not ("FT-710" or "FT-991A" or "FT-847");
+        radioModel is not ("FT-710" or "FT-991A") && !UsesFiveByteCat(radioModel);
 
     /// <summary>
     /// True when split is driven by FT alone (FT2 = TX on A, FT3 = TX on B),
@@ -195,8 +216,8 @@ public static class RadioCapabilities
     /// FT-991A has neither (its CAT command list has no FR and no VS); its
     /// only way to listen on B is to swap the VFOs with SV.
     /// </summary>
-    /// The FT-847's CAT reaches the main VFO only.
-    public static bool CanSelectRxVfo(string radioModel) => radioModel is not ("FT-991A" or "FT-847");
+    /// The five-byte CAT (FT-847, FT-8x7) reaches the main VFO only.
+    public static bool CanSelectRxVfo(string radioModel) => radioModel is not "FT-991A" && !UsesFiveByteCat(radioModel);
 
     /// <summary>
     /// Nominal PA supply voltage — what the radio's own VDD meter is aligned
@@ -236,7 +257,8 @@ public static class RadioCapabilities
     {
         // The FT-847 has four antenna jacks, but one per band, chosen by the
         // radio; there is nothing to select.
-        "FTdx10" or "FT-710" or "FT-991A" or "FT-847" => false,
+        "FTdx10" or "FT-710" or "FT-991A" => false,
+        _ when UsesFiveByteCat(radioModel) => false,
         _                     => true
     };
 

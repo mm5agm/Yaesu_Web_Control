@@ -112,6 +112,81 @@ namespace Yaesu_Web_Control.Services
         /// <summary>The meter bits (0-31) of an E7 or F7 reply, on YWC's 0-255 scale.</summary>
         public static int MeterTo255(byte status) => (status & 0x1F) * 255 / 31;
 
+        // ── The FT-817, FT-818, FT-857 and FT-897 ──
+        //
+        // They use the same five-byte blocks, and the same 01 (set frequency),
+        // 07 (set mode), 03 (read frequency and mode), E7 (receiver status),
+        // F7 (transmit status) and 88 (PTT off) as the FT-847 (FT-817ND,
+        // FT-818ND, FT-857D and FT-897 Operating Manuals, "CAT System
+        // Programming"). Three differences matter here:
+        //   - 00 and 80 are LOCK ON and LOCK OFF on these radios, not CAT ON
+        //     and CAT OFF, so nothing is sent when the link opens or closes.
+        //   - Their meters are four bits (0-15), not five (Hamlib's ft817.c
+        //     and ft857.c; the bit pictures are images in the manuals).
+        //   - They have a DIG mode (0A) for data and PKT (0C) for FM packet.
+        //     The FT-857 and FT-897 also have FM-N (88); the FT-817 and
+        //     FT-818 do not.
+
+        public const byte DigMode = 0x0A;
+        public const byte PktMode = 0x0C;
+
+        /// <summary>True for the FT-817, FT-818, FT-857 and FT-897.</summary>
+        public static bool IsFt8x7(string model) => model is "FT-817" or "FT-818" or "FT-857" or "FT-897";
+
+        /// <summary>True when 00 / 80 mean CAT ON / OFF and must be sent at open and close: the FT-847 only.</summary>
+        public static bool SendsCatOnOff(string model) => !IsFt8x7(model);
+
+        /// <summary>The ID; reply for the model: ID0847, ID0817 and so on.</summary>
+        public static string IdReply(string model) =>
+            model.Length >= 6 && model.StartsWith("FT-") ? "ID0" + model[3..6] : "ID0847";
+
+        /// <summary>The mode byte for an MD code on <paramref name="model"/>, or null when it has no such mode.</summary>
+        public static byte? ModeFromMd(char md, string model)
+        {
+            if (!IsFt8x7(model)) return ModeFromMd(md);
+            var hasFmN = model is "FT-857" or "FT-897";
+            return char.ToUpperInvariant(md) switch
+            {
+                '1' => 0x00,                                // LSB
+                '2' => 0x01,                                // USB
+                '3' => 0x02,                                // CW
+                '7' => 0x03,                                // CW-R
+                '5' or 'D' => 0x04,                         // AM (no AM-N)
+                '4' => 0x08,                                // FM
+                '6' or '8' or '9' or 'C' or 'E' => DigMode, // RTTY, DATA, PSK
+                'A' => PktMode,                             // DATA-FM
+                'B' or 'F' => hasFmN ? (byte)0x88 : (byte)0x08,
+                _ => null
+            };
+        }
+
+        /// <summary>
+        /// The MD code for a mode byte from <paramref name="model"/>. DIG reads
+        /// as DATA-U: the reply does not say which side the DIG menu has
+        /// chosen, so the transport shows the mode YWC asked for when it can.
+        /// </summary>
+        public static char? MdFromMode(byte mode, string model)
+        {
+            if (!IsFt8x7(model)) return MdFromMode(mode);
+            return mode switch
+            {
+                0x00 => '1',
+                0x01 => '2',
+                0x02 or 0x82 => '3',
+                0x03 or 0x83 => '7',
+                0x04 or 0x84 => '5',
+                0x06 or 0x08 => '4',            // WFM (FT-817/818 receive) shows as FM
+                0x88 => 'B',
+                DigMode or 0x8A => 'C',
+                PktMode or 0x8C => 'A',
+                _ => null
+            };
+        }
+
+        /// <summary>The meter bits of an E7 or F7 reply from <paramref name="model"/>, on YWC's 0-255 scale.</summary>
+        public static int MeterTo255(byte status, string model) =>
+            IsFt8x7(model) ? (status & 0x0F) * 255 / 15 : MeterTo255(status);
+
         /// <summary>True when an F7 reply says the radio is transmitting (bit 7 clear).</summary>
         public static bool IsTransmitting(byte txStatus) => (txStatus & 0x80) == 0;
     }

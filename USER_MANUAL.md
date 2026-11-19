@@ -214,6 +214,8 @@ Supported radios:
 | FT-710 | 100 W | Single |
 | FT-991A | 100 W (50 W on 2 m and 70 cm) | Single |
 | FT-847 | 100 W (50 W on 2 m and 70 cm) | Single (see below) |
+| FT-817 / FT-818 | 5 W (FT-818: 6 W) | Single (see below) |
+| FT-857 / FT-897 | 100 W (50 W on 2 m, 20 W on 70 cm) | Single (see below) |
 
 The app runs as a small host process and is accessed through any web browser — on the same machine, a tablet, or any device on your home network.
 
@@ -264,6 +266,24 @@ What still works in full is everything YWC does on the computer itself: the spec
 - YWC does not key the FT-847 over CAT. Key it as you do now, with your PTT switch, footswitch or VOX.
 
 The FT-847 doesn't tell the computer when you turn the knob, so YWC asks it for the frequency and mode a few times a second. Some very early FT-847s don't answer these questions at all; if the frequency never appears in YWC, please say so on Discussions with your serial number.
+
+### The FT-817, FT-818, FT-857 and FT-897
+
+*New in v2.5.6-pre10, and not yet tested on a real radio.* They were built from the radios' operating manuals. If you have one, please try it and tell me on the [Discussions tab](https://github.com/mm5agm/Yaesu_Web_Control/discussions).
+
+These radios use the same older CAT as the FT-847, so YWC treats them the same way: it sets and reads the frequency and mode, reads the S-meter and the power meter, and sees whether the radio is transmitting. It hides every control their CAT can't reach, and keeps VFO B in YWC only. Pick **FT-817** (for the FT-817 and FT-817ND), **FT-818**, **FT-857** (for the FT-857 and FT-857D) or **FT-897** (for the FT-897 and FT-897D) as the **Radio Model**.
+
+- **Data modes.** DATA, RTTY and PSK go out in the radio's **DIG** mode. Choose the kind of DIG mode (USER-U, USER-L, RTTY and so on) in the radio's own menu. DATA-FM goes out as **PKT**.
+- **FM-N** is on the FT-857 and FT-897 only. On the FT-817 and FT-818, FM-N goes out as FM.
+- **The meters** on these radios have fewer steps than the FT-847's, so the S-meter and power meter move in bigger jumps.
+- **Front-panel lock.** On these radios the CAT commands that switch CAT on and off on the FT-847 lock and unlock the front panel instead. YWC never sends them.
+
+**Setting it up**
+
+- **FT-817 and FT-818:** the CAT cable (a CT-62 or similar) goes in the **ACC** jack. Set **Baud Rate** in YWC to match **menu 14 (CAT RATE)**. The radio's default is 4800.
+- **FT-857 and FT-897:** the CAT cable goes in the **CAT/LINEAR** jack. Set **Baud Rate** to match **menu 019 (CAT RATE)**, default 4800, and set **menu 020 (CAT/LIN/TUN)** to **CAT**.
+- YWC never raises DTR or RTS on these radios' ports, and does not key them over CAT. Key them as you do now, with your PTT switch, footswitch or VOX.
+- YWC doesn't switch these radios on or off.
 
 ---
 
@@ -416,7 +436,7 @@ Before the app can communicate with your radio you need to tell it which serial 
    - **macOS:** use the menu-bar status item (Open), or check the console log.
    - **Linux / Docker:** use the URL printed at startup, or `http://<host>:8080` from another device on the LAN.
 2. Click the **Settings** link in the navigation bar.
-3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), **FT-710** (100 W, single receiver), **FT-991A** (100 W, 50 W on 2 m and 70 cm, single receiver), or **FT-847** (100 W, 50 W on 2 m and 70 cm, frequency, mode and meters only; see [The FT-847](#the-ft-847)).
+3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), **FT-710** (100 W, single receiver), **FT-991A** (100 W, 50 W on 2 m and 70 cm, single receiver), **FT-847** (100 W, 50 W on 2 m and 70 cm, frequency, mode and meters only; see [The FT-847](#the-ft-847)), or **FT-817**, **FT-818**, **FT-857** or **FT-897** (frequency, mode and meters only; see [The FT-817, FT-818, FT-857 and FT-897](#the-ft-817-ft-818-ft-857-and-ft-897)).
 4. Set **Serial Port** to the radio's **Enhanced** (CAT) virtual port — not the Standard / TX-control port if two appear:
    - **Windows:** a COM port (e.g. `COM3`). Use **Diagnostics → Ports** or Device Manager (*Silicon Labs Dual CP210x… Enhanced COM Port*).
    - **macOS:** prefer a `/dev/cu.*` device (e.g. `ls /dev/cu.usbserial-*` in Terminal). Try the other `cu.usbserial-…` node if Test Connection fails.
@@ -1645,7 +1665,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 
 | Setting | Description |
 |---------|-------------|
-| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), **FT-710** (100 W, single RX), **FT-991A** (100 W, 50 W on 2 m / 70 cm, single RX), or **FT-847** (100 W, 50 W on 2 m / 70 cm; frequency, mode and meters only) |
+| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), **FT-710** (100 W, single RX), **FT-991A** (100 W, 50 W on 2 m / 70 cm, single RX), **FT-847** (100 W, 50 W on 2 m / 70 cm; frequency, mode and meters only), or **FT-817**, **FT-818**, **FT-857** or **FT-897** (frequency, mode and meters only) |
 | Serial Port | Path to the radio's **Enhanced** (CAT) USB/serial port. **Windows:** `COM3`, `COM4`, … (Device Manager: *Enhanced COM Port*). **macOS:** `/dev/cu.usbserial-…` (prefer `cu.*` over `tty.*`). **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or `/dev/serial/by-id/…`. If ports are missing or CAT never answers on Windows/macOS, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot — [§2.4](#24-usb-serial-driver-windows--macos--linux). Linux can normally skip that. |
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
 | Turn the radio off when Yaesu Web Control closes | Off by default. Switches the radio off when YWC closes, whether you choose **Exit** from the tray icon or YWC exits by itself after the last browser has gone. **Restart Now** leaves the radio on. YWC always switches the radio on when it starts, so you don't need a setting for that. *New in v2.5.4.* |
