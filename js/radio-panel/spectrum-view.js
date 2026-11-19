@@ -43,7 +43,7 @@ const FIT_HEADROOM_DB = 3;
 
 export const SPECTRUM_SPEEDS = [1, 2, 4, 8, 16, 32, 64, 128];
 export const SPECTRUM_LOOKS = ['classic', 'audio'];
-export const SPECTRUM_DEFAULTS = Object.freeze({ range: 60, speed: 1, bright: 0, smooth: 2, hold: false, look: 'classic' });
+export const SPECTRUM_DEFAULTS = Object.freeze({ range: 60, speed: 1, bright: 0, smooth: 2, hold: false, look: 'audio' });   // Sharp is the default (Colin, 2026-11-18)
 
 // Bring a settings object into range; anything missing takes the default.
 export function cleanSpectrumSettings(s = {}) {
