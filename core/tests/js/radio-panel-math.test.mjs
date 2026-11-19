@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
     formatFrequency, sMeterFraction, sMeterText, passbandPercent, passbandHz, dialPercent, passbandCentrePercent,
     axisLabels, spectrumHzAt, spanText, widthText, knobAngle, binsToColumns, percentile,
-    meterGeometry, waterfallColour,
+    meterGeometry, waterfallColour, pbtShiftHz,
 } from '../../js/radio-panel/panel-math.js';
 
 test('frequency splits into MHz.kHz and .Hz', () => {
@@ -83,6 +83,39 @@ test('the fine line at the middle of the DATA passband (#250)', () => {
     assert.equal(passbandCentrePercent('USB', 5000, 1500, 0), null);
     assert.equal(passbandCentrePercent('DATA-L', 5000, 0, 0), null);
     assert.equal(passbandCentrePercent('DATA-L', 0, 1500, 0), null);
+});
+
+// Colin, 2026-11-19: the IC-7300's passband box should follow Twin PBT.
+test('Twin PBT: centred knobs leave the passband as it was', () => {
+    assert.deepEqual(pbtShiftHz(128, 128, 2400, 'USB'), { lo: 0, hi: 0 });
+    assert.deepEqual(passbandHz('USB', 2400, 0, pbtShiftHz(128, 128, 2400, 'USB')), { lo: 100, hi: 2500 });
+    assert.equal(pbtShiftHz(null, 128, 2400, 'USB'), null);
+    assert.equal(pbtShiftHz(128, 128, null, 'FM'), null);
+});
+
+test('Twin PBT: both knobs the same way shift the passband', () => {
+    // Both fully up is half the width up: 1200 Hz on 2.4 kHz.
+    const up = pbtShiftHz(255, 255, 2400, 'USB');
+    assert.deepEqual(passbandHz('USB', 2400, 0, up), { lo: 1300, hi: 3700 });
+    // On LSB a higher pitch is further below the dial.
+    const lsb = pbtShiftHz(255, 255, 2400, 'LSB');
+    assert.deepEqual(passbandHz('LSB', 2400, 0, lsb), { lo: -3700, hi: -1300 });
+    // 64 steps down is a quarter of the width.
+    assert.deepEqual(passbandHz('USB', 2400, 0, pbtShiftHz(64, 64, 2400, 'USB')), { lo: -500, hi: 1900 });
+    assert.deepEqual(passbandHz('CW', 500, 0, pbtShiftHz(64, 64, 500, 'CW')), { lo: -375, hi: 125 });
+    assert.deepEqual(passbandHz('CW-R', 500, 0, pbtShiftHz(64, 64, 500, 'CW-R')), { lo: -125, hi: 375 });
+});
+
+test('Twin PBT: the knobs opposite ways narrow it, whichever is which', () => {
+    const a = pbtShiftHz(255, 64, 2400, 'USB'), b = pbtShiftHz(64, 255, 2400, 'USB');
+    assert.deepEqual(a, b);
+    assert.deepEqual(passbandHz('USB', 2400, 0, a), { lo: 1300, hi: 1900 });
+    // Fully opposite: nothing is left to draw.
+    assert.equal(passbandHz('USB', 2400, 0, pbtShiftHz(255, 0, 2400, 'USB')), null);
+    assert.equal(passbandPercent('USB', 2400, 10000, 0, 0, pbtShiftHz(255, 0, 2400, 'USB')), null);
+    const pct = passbandPercent('USB', 2400, 10000, 0, 0, a);
+    assert.equal(pct.left, 63);
+    assert.equal(pct.width, 6);
 });
 
 test('passband: USB above the dial, LSB below, CW centred', () => {

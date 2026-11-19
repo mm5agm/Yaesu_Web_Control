@@ -104,13 +104,24 @@ export function meterGeometry(frac, lower = LOWER_SCALES.PO) {
 // dataCentreHz, when a radio has one, is where its DATA filter is centred
 // from the dial (a Yaesu's DATA SHIFT, 1500 Hz by default): the DATA modes are
 // then drawn around it, not from the 100 Hz edge. Radios without one leave it out.
-export function passbandHz(mode, widthHz, dataCentreHz) {
+// edges, when given, moves the two edges by { lo, hi } Hz (pbtShiftHz); the
+// passband is gone (null) if they cross.
+export function passbandHz(mode, widthHz, dataCentreHz, edges) {
+    const pb = basePassbandHz(mode, widthHz, dataCentreHz);
+    if (!pb || !edges) return pb;
+    const lo = pb.lo + (Number(edges.lo) || 0), hi = pb.hi + (Number(edges.hi) || 0);
+    return hi > lo ? { lo, hi } : null;
+}
+
+const isUpper = m => m === 'USB' || m === 'DATA-U' || m === 'USB-D' || m === 'PSK' || m === 'DATA-USB';
+const isLower = m => m === 'LSB' || m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB';
+
+function basePassbandHz(mode, widthHz, dataCentreHz) {
     const w = Math.max(0, Number(widthHz) || 0);
     const m = String(mode || '').toUpperCase();
     if (!w) return null;
     const c = Number(dataCentreHz) || 0;
-    const upper = m === 'USB' || m === 'DATA-U' || m === 'USB-D' || m === 'PSK' || m === 'DATA-USB';
-    const lower = m === 'LSB' || m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB';
+    const upper = isUpper(m), lower = isLower(m);
     if (c > 0 && (m.startsWith('DATA') || m.endsWith('-D'))) {
         const lo = Math.max(100, c - w / 2), hi = c + w / 2;
         if (upper) return { lo, hi };
@@ -121,12 +132,34 @@ export function passbandHz(mode, widthHz, dataCentreHz) {
     return { lo: -w / 2, hi: w / 2 };
 }
 
+// How far an Icom's Twin PBT moves the passband's two edges, in Hz, as
+// passbandHz's edges. inner and outer are the CI-V levels (14 07, 14 08),
+// 0-255 with 128 at the centre (0 and 255 the two ends). Each knob slides one of two filters in
+// series by up to half the filter width; what is heard is where they
+// overlap, so the low edge follows the higher of the two shifts and the high
+// edge the lower. Turned the same way they shift the passband; turned
+// opposite ways they narrow it. A positive shift raises the pitch heard, so
+// on the lower-sideband modes and CW-R the edges move down the band. Null
+// when either level is unknown.
+export function pbtShiftHz(inner, outer, widthHz, mode) {
+    const w = Math.max(0, Number(widthHz) || 0);
+    if (inner == null || outer == null || !w) return null;
+    const shift = v => { const d = Number(v) - 128; return Math.max(-1, Math.min(1, d / (d > 0 ? 127 : 128))) * w / 2; };
+    const a = shift(inner), b = shift(outer);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    const lowEdge = Math.max(a, b), highEdge = Math.min(a, b);
+    const m = String(mode || '').toUpperCase();
+    if (isLower(m) || m === 'CW-R') return { lo: -highEdge, hi: -lowEdge };
+    return { lo: lowEdge, hi: highEdge };
+}
+
 // The same passband as percentages of the span, clipped to the screen.
 // Returns null when there is nothing to draw. viewOffsetHz is how far the
 // span's centre sits from the dial (setViewOffset on the panes); 0, the
 // span is centred on the dial.
-export function passbandPercent(mode, widthHz, spanHz, dataCentreHz, viewOffsetHz = 0) {
-    const pb = passbandHz(mode, widthHz, dataCentreHz);
+// edges: the Twin PBT shift, as passbandHz.
+export function passbandPercent(mode, widthHz, spanHz, dataCentreHz, viewOffsetHz = 0, edges = null) {
+    const pb = passbandHz(mode, widthHz, dataCentreHz, edges);
     const span = Number(spanHz) || 0;
     if (!pb || span <= 0) return null;
     const off = Number(viewOffsetHz) || 0;
