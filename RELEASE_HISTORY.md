@@ -12,6 +12,14 @@ a different and much older format.
 
 ---
 
+## 2026-11-19 - v2.5.6-pre9 (pre-release)
+
+*RTTY Auto says plainly when it ticks or unticks Rev. Everything in v2.5.6-pre8 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**RTTY: Auto explains Rev**
+
+- When **Auto** ticks **Rev**, its message now says so in a sentence of its own: the station is sending with mark and space swapped, and if it is your own signal, check the Rev setting in the program you send with. When Auto unticks Rev, it says the station is sending the normal way round. Before, the only sign was the word "reversed" at the end of the list. Thanks to Bruce VK2RT for asking for it.
+
 ## 2026-11-18 - v2.5.6-pre8 (pre-release)
 
 *Every spectrum gets a Sharp look, now the default, and the audio scope shows only with the ACC board. Everything in v2.5.6-pre7 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
