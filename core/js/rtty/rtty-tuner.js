@@ -519,6 +519,7 @@ export class RttyTuner {
             this._settings.markHz  = Math.round(r.markHz);
             this._settings.shiftHz = shiftHz;
             if (!r.speedUnmeasured) this._settings.baud = baudHz;
+            const wasReverse = !!this._settings.reverse;
             this._settings.reverse = !!r.reverse;
             this._showSettings();
             this._saveSettings();
@@ -537,7 +538,23 @@ export class RttyTuner {
                 ? `speed left at ${this._settings.baud} - it did not measure twice`
                 : r.snappedBaud == null ? `${baudHz} baud measured` : `${baudHz} baud`;
             const parts = [`mark ${Math.round(r.markHz)} Hz`, `shift ${shift}`, baud];
-            if (r.reverse) parts.push('reversed');
+
+            // Rev said in a sentence of its own when Auto changes it, not as one
+            // word in the list. A tick that arrives unexplained looks like the
+            // panel's fault, and when the station is the operator's own it is
+            // the sending program that wants looking at: a station was
+            // sending reversed from MMTTY, Auto ticked Rev, and the word
+            // "reversed" at the end of the list did not say why (2026-11-19).
+            let rev = '';
+            if (r.reverse && !wasReverse) {
+                rev = ' Ticked Rev: this station is sending with mark and space ' +
+                      'swapped. If it is your own signal, check the Rev setting ' +
+                      'in the program you send with.';
+            } else if (!r.reverse && wasReverse) {
+                rev = ' Unticked Rev: this station is sending the normal way round.';
+            } else if (r.reverse) {
+                parts.push('Rev stays ticked');
+            }
 
             // Two different uncertainties, and the second one is the operator's to
             // act on: a station using a one-bit stop element can be measured
@@ -563,7 +580,7 @@ export class RttyTuner {
 
             // Longer than the usual hold: this is up to four clauses, and the ones
             // that ask the operator to do something are at the end of them.
-            this._setStatus(`Auto: ${parts.join(', ')}.${centre}${advice}${doubt}`, 14000);
+            this._setStatus(`Auto: ${parts.join(', ')}.${rev}${centre}${advice}${doubt}`, 14000);
         } catch {
             this._setStatus('Cannot reach the server.', 5000);
         } finally {
