@@ -260,9 +260,10 @@ export class SpectrumPane {
         this._held = holdView(this._held, this._st.hz, wantedHz, this._st.spanHz);
         return this._held.viewHz;
     }
-    /** dataCentreHz: where the radio centres its DATA filter from the dial; see passbandHz. */
-    setPassband(mode, widthHz, dataCentreHz) {
+    /** dataCentreHz: where the radio centres its DATA filter from the dial; edges: an Icom's Twin PBT shift (pbtShiftHz). See passbandHz. */
+    setPassband(mode, widthHz, dataCentreHz, edges) {
         this._st.mode = mode ?? ''; this._st.widthHz = widthHz ?? null; this._st.dataCentreHz = dataCentreHz ?? 0;
+        this._st.edges = edges ?? null;
         this._draw();
     }
     setSpan(hz) {
@@ -353,7 +354,7 @@ export class SpectrumPane {
 
     _draw() {
         const s = this._st;
-        const pct = s.passband && passbandPercent(s.mode, s.widthHz, s.spanHz, s.dataCentreHz, s.view);
+        const pct = s.passband && passbandPercent(s.mode, s.widthHz, s.spanHz, s.dataCentreHz, s.view, s.edges);
         if (pct) { this._pb.style.display = 'block'; this._pb.style.left = pct.left + '%'; this._pb.style.width = pct.width + '%'; }
         else this._pb.style.display = 'none';
         const mid = s.passband ? passbandCentrePercent(s.mode, s.spanHz, s.dataCentreHz, s.view) : null;
