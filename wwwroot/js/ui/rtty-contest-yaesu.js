@@ -41,7 +41,7 @@ const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 15e3, 20e3, 30e3, 40e3, 50e3, 100e3, 200e
 
 // The bands, as the band keys on the radio panel and Classic have them.
 const HF_BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
-const bandsFor = model => (model === 'FT-991A' || model === 'FT-847') ? [...HF_BANDS, '2m', '70cm'] : [...HF_BANDS, '4m'];
+const bandsFor = model => ['FT-991A', 'FT-847', 'FT-817', 'FT-818', 'FT-857', 'FT-897'].includes(model) ? [...HF_BANDS, '2m', '70cm'] : [...HF_BANDS, '4m'];
 
 // Where RTTY is found on bands whose band plan has no RTTY segment.
 const RTTY_SPOTS = {

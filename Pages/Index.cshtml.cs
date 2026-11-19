@@ -101,7 +101,7 @@ namespace Yaesu_Web_Control.Pages
         public bool AutoModeChangeOnTune { get; set; } = true;
         public string RadioModel { get; set; } = "FTdx101MP";
 
-        /// <summary>The older Yaesu CAT (the FT-847): the pages hide what it cannot reach.</summary>
+        /// <summary>The older Yaesu CAT (the FT-847 and FT-817/818/857/897): the pages hide what it cannot reach.</summary>
         public bool LimitedCat => RadioCapabilities.HasLimitedCat(RadioModel);
         public List<string> InstalledRoofingFilters { get; set; } = new() { "6", "7", "8", "9", "A" };
 

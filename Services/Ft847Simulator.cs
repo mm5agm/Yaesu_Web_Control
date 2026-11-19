@@ -9,6 +9,11 @@ namespace Yaesu_Web_Control.Services
     /// way Hamlib's ft847.c reads them, and ignores blocks until CAT ON, as the
     /// radio does. It is built from the manual and Hamlib, not from a real
     /// radio, so it proves the translation, not the radio.
+    ///
+    /// Given an FT-817, FT-818, FT-857 or FT-897 as its model, it acts as one:
+    /// CAT is always on, 00 and 80 lock and unlock the front panel (recorded
+    /// in <see cref="Locked"/> so the tests can prove YWC never sends them),
+    /// and the meters are four bits.
     /// </summary>
     public sealed class Ft847Simulator : IFt847Port
     {
@@ -16,11 +21,18 @@ namespace Yaesu_Web_Control.Services
         private readonly List<byte> _partial = new();
         private bool _open;
 
-        public Ft847Simulator(string portName = "STUB", int baudRate = 4800)
+        public Ft847Simulator(string portName = "STUB", int baudRate = 4800, string model = "FT-847")
         {
             PortName = portName;
             BaudRate = baudRate;
+            Model = model;
+            if (Ft847Cat.IsFt8x7(model)) CatOn = true;
         }
+
+        public string Model { get; }
+
+        /// <summary>FT-8x7 only: true after a 00 (LOCK ON) block.</summary>
+        public bool Locked { get; private set; }
 
         public string PortName { get; }
         public int BaudRate { get; }
@@ -30,10 +42,10 @@ namespace Yaesu_Web_Control.Services
         public bool CatOn { get; private set; }
         public long FrequencyHz { get; set; } = 14_074_000;
         public byte Mode { get; set; } = 0x01;
-        public int SMeter { get; set; } = 9;          // 0-31
+        public int SMeter { get; set; } = 9;          // 0-31 (FT-8x7: 0-15)
         public bool SquelchOpen { get; set; } = true;
         public bool Transmitting { get; set; }
-        public int PowerMeter { get; set; }           // 0-31
+        public int PowerMeter { get; set; }           // 0-31 (FT-8x7: 0-15)
         public bool AnswersReads { get; set; } = true; // false = early "FT-847UNI"
 
         /// <summary>Every complete block received, in order. For tests.</summary>
@@ -73,6 +85,10 @@ namespace Yaesu_Web_Control.Services
         private byte[]? Handle(byte[] b)
         {
             var opcode = b[4];
+            var ft8x7 = Ft847Cat.IsFt8x7(Model);
+            var meterMask = ft8x7 ? 0x0F : 0x1F;
+            if (ft8x7 && opcode == 0x00) { Locked = true; return null; }
+            if (ft8x7 && opcode == 0x80) { Locked = false; return null; }
             if (opcode == Ft847Cat.CatOn) { CatOn = true; return null; }
             if (opcode == Ft847Cat.CatOff) { CatOn = false; return null; }
             if (!CatOn) return null;
@@ -95,10 +111,10 @@ namespace Yaesu_Web_Control.Services
                     return new[] { f[0], f[1], f[2], f[3], Mode };
                 case Ft847Cat.ReadRxStatus:
                     if (!AnswersReads) return null;
-                    return new[] { (byte)((SquelchOpen ? 0 : 0x80) | (SMeter & 0x1F)) };
+                    return new[] { (byte)((SquelchOpen ? 0 : 0x80) | (SMeter & meterMask)) };
                 case Ft847Cat.ReadTxStatus:
                     if (!AnswersReads) return null;
-                    return new[] { (byte)((Transmitting ? 0 : 0x80) | (PowerMeter & 0x1F)) };
+                    return new[] { (byte)((Transmitting ? 0 : 0x80) | (PowerMeter & meterMask)) };
             }
             return null;
         }

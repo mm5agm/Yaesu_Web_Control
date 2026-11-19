@@ -323,7 +323,7 @@ namespace Yaesu_Web_Control.Controllers
             { "40m", 7100000 }, { "30m", 10136000 }, { "20m", 14074000 },
             { "17m", 18110000 }, { "15m", 21074000 }, { "12m", 24915000 },
             { "10m", 28074000 }, { "6m", 50313000 }, { "4m", 70100000 },
-            // FT-991A and FT-847; SetBand refuses them on a radio whose range stops short.
+            // FT-991A, FT-847 and FT-817/818/857/897; SetBand refuses them on a radio whose range stops short.
             { "2m", 144300000 }, { "70cm", 432200000 }
         };
 

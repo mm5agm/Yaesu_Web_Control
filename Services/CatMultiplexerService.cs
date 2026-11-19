@@ -150,16 +150,18 @@ namespace Yaesu_Web_Control.Services
                     await CloseSerialPortAsync();
                 }
 
-                if (_radioStateService.RadioModel == "FT-847")
+                var model = _radioStateService.RadioModel;
+                if (RadioCapabilities.UsesFiveByteCat(model))
                 {
-                    // The FT-847 speaks the older binary CAT, so a translator
-                    // sits between its port and the text CAT everything here uses.
+                    // The FT-847 and the FT-817/818/857/897 speak the older binary
+                    // CAT, so a translator sits between the port and the text CAT
+                    // everything here uses.
                     IFt847Port ft847Port;
                     if (StubRadio.Enabled)
                     {
-                        ft847Port = new Ft847Simulator(portName, baudRate);
-                        _logger.LogWarning("STUB RADIO: {Variable}=1, so CAT goes to a simulated FT-847, not {PortName}",
-                            StubRadio.EnvironmentVariable, portName);
+                        ft847Port = new Ft847Simulator(portName, baudRate, model);
+                        _logger.LogWarning("STUB RADIO: {Variable}=1, so CAT goes to a simulated {Model}, not {PortName}",
+                            StubRadio.EnvironmentVariable, model, portName);
                     }
                     else
                     {
@@ -171,7 +173,7 @@ namespace Yaesu_Web_Control.Services
                         }
                         ft847Port = new SerialFt847Port(portName, baudRate);
                     }
-                    _link = new Ft847CatTransport(ft847Port, _logger);
+                    _link = new Ft847CatTransport(ft847Port, _logger, model: model);
                 }
                 else if (StubRadio.Enabled)
                 {

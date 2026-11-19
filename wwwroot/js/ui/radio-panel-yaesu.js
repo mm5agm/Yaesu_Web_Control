@@ -99,7 +99,7 @@ export function startYaesuRadioPanel(root, cfg) {
     // the clarifier, which the board always draws, and the windows it has no
     // CAT for (the windows code expects all of them, so they are hidden).
     const limitedCat = !!cfg.limitedCat;
-    const bands = ['FT-991A', 'FT-847'].includes(model) ? [...BANDS, '2m', '70cm'] : BANDS;
+    const bands = ['FT-991A', 'FT-847', 'FT-817', 'FT-818', 'FT-857', 'FT-897'].includes(model) ? [...BANDS, '2m', '70cm'] : BANDS;
 
     let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
     let win = null;             // likewise: windows restored from last time report during mount

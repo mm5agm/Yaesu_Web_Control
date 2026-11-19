@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Yaesu_Web_Control.Services
 {
-    /// <summary>The byte link to an FT-847: its COM port, or the simulated radio.</summary>
+    /// <summary>The byte link to a radio with the five-byte CAT: its COM port, or the simulated radio.</summary>
     public interface IFt847Port : IDisposable
     {
         string PortName { get; }
@@ -109,6 +109,12 @@ namespace Yaesu_Web_Control.Services
     /// information. With AI1 set, this polls 03 every <c>pollMs</c> and reports
     /// a changed frequency or mode the way AI1 would on a modern radio, so the
     /// VFO knob on the radio still moves the display in the browser.
+    ///
+    /// The FT-817, FT-818, FT-857 and FT-897 use the same blocks, so the same
+    /// transport serves them, told which radio it is by <c>model</c>. For
+    /// those it sends nothing at open or close (00 and 80 are LOCK ON and OFF
+    /// there), scales their four-bit meters, uses DIG and PKT for data, and
+    /// answers ID; with ID0817, ID0818, ID0857 or ID0897. See <see cref="Ft847Cat"/>.
     /// </summary>
     public sealed class Ft847CatTransport : ICatTransport
     {
@@ -134,9 +140,16 @@ namespace Yaesu_Web_Control.Services
         private DateTime _mainReadUtc = DateTime.MinValue;
         private (long Hz, char Md)? _reported;
         private int _consecutiveTimeouts;
+        private readonly string _model;
+        private readonly long _minHz;
+        private readonly long _maxHz;
+        private readonly string _tag;
 
-        public Ft847CatTransport(IFt847Port port, ILogger? logger = null, int replyTimeoutMs = 120, int pollMs = 300)
+        public Ft847CatTransport(IFt847Port port, ILogger? logger = null, int replyTimeoutMs = 120, int pollMs = 300, string model = "FT-847")
         {
+            _model = model;
+            (_minHz, _maxHz) = RadioCapabilities.FrequencyRangeHz(model);
+            _tag = "[" + model + "]";
             _port = port;
             _logger = logger;
             _replyTimeoutMs = replyTimeoutMs;
@@ -151,10 +164,13 @@ namespace Yaesu_Web_Control.Services
 
         public event Action<string>? DataReceived;
 
+        /// <summary>The radio this transport speaks for: FT-847, FT-817, FT-818, FT-857 or FT-897.</summary>
+        public string Model => _model;
+
         public void Open()
         {
             _port.Open();
-            _port.Write(Ft847Cat.Block(Ft847Cat.CatOn));
+            if (Ft847Cat.SendsCatOnOff(_model)) _port.Write(Ft847Cat.Block(Ft847Cat.CatOn));
             _open = true;
             _cts = new CancellationTokenSource();
             _worker = Task.Run(() => WorkAsync(_cts.Token));
@@ -164,7 +180,7 @@ namespace Yaesu_Web_Control.Services
 
         public void Write(byte[] buffer, int offset, int count)
         {
-            if (!_open) throw new InvalidOperationException("The FT-847 link is not open.");
+            if (!_open) throw new InvalidOperationException($"The {_model} link is not open.");
             var text = Encoding.ASCII.GetString(buffer, offset, count);
             foreach (var part in text.Split(';', StringSplitOptions.RemoveEmptyEntries))
             {
@@ -181,11 +197,11 @@ namespace Yaesu_Web_Control.Services
             try { _worker?.Wait(1000); } catch (AggregateException) { }
             try
             {
-                if (_port.IsOpen) _port.Write(Ft847Cat.Block(Ft847Cat.CatOff));
+                if (_port.IsOpen && Ft847Cat.SendsCatOnOff(_model)) _port.Write(Ft847Cat.Block(Ft847Cat.CatOff));
             }
             catch (Exception ex)
             {
-                _logger?.LogDebug(ex, "[FT-847] CAT OFF not sent");
+                _logger?.LogDebug(ex, "{Tag} CAT OFF not sent", _tag);
             }
             _port.Close();
         }
@@ -221,7 +237,7 @@ namespace Yaesu_Web_Control.Services
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogWarning(ex, "[FT-847] error handling {Command}", command ?? "(poll)");
+                    _logger?.LogWarning(ex, "{Tag} error handling {Command}", _tag, command ?? "(poll)");
                 }
             }
         }
@@ -257,7 +273,7 @@ namespace Yaesu_Web_Control.Services
                         var main = await ReadMainAsync(maxAgeMs: 100);
                         return main == null ? none : new[] { FaReply(main.Value.Hz) };
                     }
-                    if (long.TryParse(body, out var hz) && hz >= Ft847Cat.MinHz && hz <= Ft847Cat.MaxHz)
+                    if (long.TryParse(body, out var hz) && hz >= _minHz && hz <= _maxHz)
                     {
                         _port.Write(Ft847Cat.SetFrequencyBlock(hz));
                         _mainReadUtc = DateTime.MinValue;
@@ -284,7 +300,7 @@ namespace Yaesu_Web_Control.Services
                     if (body.Length == 2 && body[0] == '0')
                     {
                         var md = char.ToUpperInvariant(body[1]);
-                        var mode = Ft847Cat.ModeFromMd(md);
+                        var mode = Ft847Cat.ModeFromMd(md, _model);
                         if (mode != null)
                         {
                             _port.Write(Ft847Cat.SetModeBlock(mode.Value));
@@ -298,7 +314,7 @@ namespace Yaesu_Web_Control.Services
                     if (body == "0")
                     {
                         var rx = await ExchangeAsync(Ft847Cat.Block(Ft847Cat.ReadRxStatus), 1);
-                        return rx == null ? none : new[] { $"SM0{Ft847Cat.MeterTo255(rx[0]):D3}" };
+                        return rx == null ? none : new[] { $"SM0{Ft847Cat.MeterTo255(rx[0], _model):D3}" };
                     }
                     return new[] { "?" };
 
@@ -306,7 +322,10 @@ namespace Yaesu_Web_Control.Services
                     if (body == "5")
                     {
                         var tx = await ExchangeAsync(Ft847Cat.Block(Ft847Cat.ReadTxStatus), 1);
-                        return tx == null ? none : new[] { $"RM5{Ft847Cat.MeterTo255(tx[0]):D3}000" };
+                        if (tx == null) return none;
+                        // Receiving, the meter bits are not a power reading.
+                        var po = Ft847Cat.IsTransmitting(tx[0]) ? Ft847Cat.MeterTo255(tx[0], _model) : 0;
+                        return new[] { $"RM5{po:D3}000" };
                     }
                     return new[] { "?" };
 
@@ -318,7 +337,7 @@ namespace Yaesu_Web_Control.Services
                         return new[] { Ft847Cat.IsTransmitting(tx[0]) ? "TX2" : "TX0" };
                     }
                     if (body == "0") _port.Write(Ft847Cat.Block(Ft847Cat.PttOff));
-                    else _logger?.LogWarning("[FT-847] {Command} ignored: CAT PTT on is not enabled for the FT-847", command);
+                    else _logger?.LogWarning("{Tag} {Command} ignored: CAT PTT on is not enabled for the {Model}", _tag, command, _model);
                     return none;
 
                 case "AI":
@@ -333,7 +352,7 @@ namespace Yaesu_Web_Control.Services
                     if (body == "2") return new[] { "DT2+0000" };
                     return none;
 
-                case "ID": return body.Length == 0 ? new[] { "ID0847" } : none;
+                case "ID": return body.Length == 0 ? new[] { Ft847Cat.IdReply(_model) } : none;
                 case "PS": return body.Length == 0 ? new[] { "PS1" } : none;
                 case "VS": return body.Length == 0 ? new[] { "VS0" } : none;
                 case "FT": return body.Length == 0 ? new[] { "FT0" } : none;
@@ -356,17 +375,18 @@ namespace Yaesu_Web_Control.Services
             if (reply == null) return null;
 
             var hz = Ft847Cat.FrequencyFromBcd(reply);
-            var md = Ft847Cat.MdFromMode(reply[4]);
+            var md = Ft847Cat.MdFromMode(reply[4], _model);
             if (hz == null || md == null)
             {
-                _logger?.LogDebug("[FT-847] unreadable 03 reply {Bytes}", Convert.ToHexString(reply));
+                _logger?.LogDebug("{Tag} unreadable 03 reply {Bytes}", _tag, Convert.ToHexString(reply));
                 return null;
             }
 
-            // The FT-847 has no DATA modes, so a DATA-U set reads back as USB.
+            // The FT-847 has no DATA modes, so a DATA-U set reads back as USB,
+            // and the FT-8x7's DIG reads back the same for DATA-L, DATA-U and RTTY.
             // Report the mode YWC asked for while the radio is still in its base.
             var shown = md.Value;
-            if (_lastSetMd is char asked && Ft847Cat.ModeFromMd(asked) == reply[4])
+            if (_lastSetMd is char asked && Ft847Cat.ModeFromMd(asked, _model) == reply[4])
                 shown = asked;
             else
                 _lastSetMd = null;
@@ -403,7 +423,14 @@ namespace Yaesu_Web_Control.Services
             }
 
             if (++_consecutiveTimeouts == 5)
-                _logger?.LogWarning("[FT-847] no reply to five reads in a row. Check the null-modem cable, menu 37 CAT RATE against YWC's baud rate, and that the FC-20 tuner cable is unplugged");
+            {
+                if (_model is "FT-817" or "FT-818")
+                    _logger?.LogWarning("{Tag} no reply to five reads in a row. Check the CAT cable in the ACC jack and menu 14 CAT RATE against YWC's baud rate", _tag);
+                else if (Ft847Cat.IsFt8x7(_model))
+                    _logger?.LogWarning("{Tag} no reply to five reads in a row. Check the CAT cable in the CAT/LINEAR jack, menu 019 CAT RATE against YWC's baud rate, and that menu 020 CAT/LIN/TUN is set to CAT", _tag);
+                else
+                    _logger?.LogWarning("[FT-847] no reply to five reads in a row. Check the null-modem cable, menu 37 CAT RATE against YWC's baud rate, and that the FC-20 tuner cable is unplugged");
+            }
             return null;
         }
 

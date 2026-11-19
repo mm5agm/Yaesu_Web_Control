@@ -75,11 +75,11 @@ function isFt991a() {
     return radioModel().toUpperCase() === "FT-991A";
 }
 
-// 2 m and 70 cm instead of 4 m: the FT-991A and the FT-847
+// 2 m and 70 cm instead of 4 m: the FT-991A, the FT-847 and the FT-817/818/857/897
 // (RadioCapabilities.HasTwoMetresAndSeventyCm).
 function hasTwoMetresAndSeventyCm() {
     const m = radioModel().toUpperCase();
-    return m === "FT-991A" || m === "FT-847";
+    return ["FT-991A", "FT-847", "FT-817", "FT-818", "FT-857", "FT-897"].includes(m);
 }
 
 function bandOptions() {
