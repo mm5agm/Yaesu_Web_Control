@@ -952,7 +952,7 @@ export function mountRadioPanel(root, opts = {}) {
 
     // ---- state ---------------------------------------------------------
     const st = {
-        freq: { A: 0, B: 0 }, view: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null }, dataCentreHz: 0,
+        freq: { A: 0, B: 0 }, view: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null }, dataCentreHz: 0, edges: { A: null, B: null },
         s: { A: 0, B: 0 }, tx: false, meter: store.get(prefix + 'meter', 'PO'),
         txMeters: {}, spanHz: { A: 0, B: 0 }, theme: null, spots: [], marks: { edges: [], ticks: [] }, sel: 'A',
         specView: specViews[0],
@@ -1002,7 +1002,7 @@ export function mountRadioPanel(root, opts = {}) {
         const pn = panes[vfo];
         if (!pn) return;
         const span = st.spanHz[vfo], f = centreOf(vfo);
-        const pct = pn.sets.get().passband && passbandPercent(st.mode[vfo], st.widthHz[vfo], span, st.dataCentreHz, st.view[vfo]);
+        const pct = pn.sets.get().passband && passbandPercent(st.mode[vfo], st.widthHz[vfo], span, st.dataCentreHz, st.view[vfo], st.edges[vfo]);
         if (pct) { pn.pb.style.display = 'block'; pn.pb.style.left = pct.left + '%'; pn.pb.style.width = pct.width + '%'; }
         else pn.pb.style.display = 'none';
         const mid = pn.sets.get().passband ? passbandCentrePercent(st.mode[vfo], span, st.dataCentreHz, st.view[vfo]) : null;
@@ -1266,6 +1266,11 @@ export function mountRadioPanel(root, opts = {}) {
         setDataShift(hz) {
             st.dataCentreHz = Number(hz) || 0;
             drawOverlays();
+        },
+        /** An Icom's Twin PBT shift of the passband's edges for a VFO (pbtShiftHz); null for none. */
+        setPassbandEdges(vfo, edges) {
+            st.edges[vfo] = edges ?? null;
+            drawOverlays(vfo);
         },
         setAgc(vfo, text) { flagsFor(vfo).agc.textContent = text ? 'AGC ' + text : ''; },
         // A vfoChips chip's text; empty hides it.
