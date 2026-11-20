@@ -959,6 +959,8 @@ With **Radio Model** set to **FT-991A**, every plan also has **2m** and **70cm**
 
 RTTY is RTTY-L on every band, including above 10 MHz. On the FTdx101 the dial sits on the upper tone in RTTY-U as well, so in RTTY-U the radio's own decoder reads normal amateur RTTY with mark and space swapped and prints rubbish.
 
+On **2 m** and **70 cm** the segments are CW, FT8, SSB and FM, at your region's calling frequencies: in Region 1 SSB 144.300 / 432.200 and FM 145.500 / 433.500, in Region 2 SSB 144.200 / 432.100 and FM 146.520 / 446.000, in Region 3 (VK as the reference) SSB 144.100 / 432.100 and FM 146.500 / 439.000. Japan has CW and FM (145.00 / 433.00) only for now. If your country uses other spots, edit `bandplan.default.json` in the install folder. *(New in v2.5.6-pre15.)*
+
 The last segment you used on each band is remembered, so when you return to a band the dropdown re-selects your previous segment.
 
 **Auto-sync to current frequency** — the Segment dropdown also follows your actual tuning. When you change frequency by any means (clicking the spectrum, turning the radio's front-panel knob, typing on the on-screen frequency keyboard), the dropdown updates to show the segment that contains your new frequency. If you tune into a gap between segments (e.g. 14.150 — between FT8 at 14.074 and SSB at 14.225 on 20m), the dropdown shows the closest segment at or below your frequency. This keeps the dropdown's display honest — it always tells you where you actually are, not where you last clicked.

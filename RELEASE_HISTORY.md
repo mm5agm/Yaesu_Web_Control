@@ -12,6 +12,14 @@ a different and much older format.
 
 ---
 
+## 2026-11-20 - v2.5.6-pre15 (pre-release)
+
+*Segments on 2 m and 70 cm. Everything in v2.5.6-pre14 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**2 m and 70 cm segments** [Band and Segment Selection](USER_MANUAL.md#59-band-and-segment-selection)
+
+- The Segment drop-down now works on 2 m and 70 cm, for the FT-817, FT-818, FT-857, FT-897, FT-847 and FT-991A. It offers CW, FT8, SSB and FM at your region's calling frequencies. Before, it showed "--" on those bands. Japan has CW and FM only for now. The FTdx101 and FTdx10 don't cover these bands, so nothing changes for them.
+
 ## 2026-11-20 - v2.5.6-pre14 (pre-release)
 
 *No app buttons in Docker. Everything in v2.5.6-pre13 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

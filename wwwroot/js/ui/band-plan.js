@@ -84,6 +84,19 @@ export const BAND_PLANS = {
             CW:   { freq: 70050000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 70154000, mode: 'DATA-U',  label: 'FT8' },
             SSB:  { freq: 70200000, mode: 'USB',     label: 'SSB' }
+        },
+        '2m': {
+            // IARU R1 VHF Managers Handbook centres of activity: SSB 144.300 / 432.200, FM simplex calling 145.500 / 433.500.
+            CW:   { freq: 144050000, mode: 'CW-U',    label: 'CW' },
+            FT8:  { freq: 144174000, mode: 'DATA-U',  label: 'FT8' },
+            SSB:  { freq: 144300000, mode: 'USB',     label: 'SSB' },
+            FM:   { freq: 145500000, mode: 'FM',      label: 'FM' }
+        },
+        '70cm': {
+            CW:   { freq: 432050000, mode: 'CW-U',    label: 'CW' },
+            FT8:  { freq: 432174000, mode: 'DATA-U',  label: 'FT8' },
+            SSB:  { freq: 432200000, mode: 'USB',     label: 'SSB' },
+            FM:   { freq: 433500000, mode: 'FM',      label: 'FM' }
         }
     },
 
@@ -148,6 +161,19 @@ export const BAND_PLANS = {
             CW:   { freq: 50050000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 50313000, mode: 'DATA-U',  label: 'FT8' },
             SSB:  { freq: 50125000, mode: 'USB',     label: 'SSB' }
+        },
+        '2m': {
+            // ARRL band plan: SSB calling 144.200 / 432.100, FM simplex calling 146.520 / 446.000.
+            CW:   { freq: 144050000, mode: 'CW-U',    label: 'CW' },
+            FT8:  { freq: 144174000, mode: 'DATA-U',  label: 'FT8' },
+            SSB:  { freq: 144200000, mode: 'USB',     label: 'SSB' },
+            FM:   { freq: 146520000, mode: 'FM',      label: 'FM' }
+        },
+        '70cm': {
+            CW:   { freq: 432050000, mode: 'CW-U',    label: 'CW' },
+            SSB:  { freq: 432100000, mode: 'USB',     label: 'SSB' },
+            FT8:  { freq: 432174000, mode: 'DATA-U',  label: 'FT8' },
+            FM:   { freq: 446000000, mode: 'FM',      label: 'FM' }
         }
         // No 4m (70 MHz) allocation in Region 2
     },
@@ -213,6 +239,19 @@ export const BAND_PLANS = {
             CW:   { freq: 50050000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 50313000, mode: 'DATA-U',  label: 'FT8' },
             SSB:  { freq: 50150000, mode: 'USB',     label: 'SSB' }
+        },
+        '2m': {
+            // WIA (VK) as the reference: SSB calling 144.100 / 432.100, FM calling 146.500 / 439.000. Other R3 countries differ; edit bandplan.default.json.
+            CW:   { freq: 144050000, mode: 'CW-U',    label: 'CW' },
+            SSB:  { freq: 144100000, mode: 'USB',     label: 'SSB' },
+            FT8:  { freq: 144174000, mode: 'DATA-U',  label: 'FT8' },
+            FM:   { freq: 146500000, mode: 'FM',      label: 'FM' }
+        },
+        '70cm': {
+            CW:   { freq: 432050000, mode: 'CW-U',    label: 'CW' },
+            SSB:  { freq: 432100000, mode: 'USB',     label: 'SSB' },
+            FT8:  { freq: 432174000, mode: 'DATA-U',  label: 'FT8' },
+            FM:   { freq: 439000000, mode: 'FM',      label: 'FM' }
         }
         // No 4m (70 MHz) allocation in Region 3
     },
@@ -273,6 +312,15 @@ export const BAND_PLANS = {
             CW:   { freq: 50050000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 50313000, mode: 'DATA-U',  label: 'FT8' },
             SSB:  { freq: 50150000, mode: 'USB',     label: 'SSB' }
+        },
+        '2m': {
+            // JARL FM calling 145.00 / 433.00. Only CW and FM until the JARL SSB and FT8 spots are confirmed.
+            CW:   { freq: 144050000, mode: 'CW-U',    label: 'CW' },
+            FM:   { freq: 145000000, mode: 'FM',      label: 'FM' }
+        },
+        '70cm': {
+            CW:   { freq: 430050000, mode: 'CW-U',    label: 'CW' },
+            FM:   { freq: 433000000, mode: 'FM',      label: 'FM' }
         }
         // No 4m (70 MHz) allocation in Japan
     }
