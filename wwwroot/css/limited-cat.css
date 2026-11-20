@@ -120,9 +120,10 @@
 /* ── Radio panel (/radio) and its windows ──
  * radio-panel-yaesu.js already leaves out the keys and knobs (cfg.limitedCat).
  * The board always draws the clarifier and VFO-B, and the windows code
- * expects every window, so these are hidden here. */
+ * expects every window, so these are hidden here. The FT-817 and FT-818
+ * (ywc-vfo-ab) keep VFO-B: YWC reads which VFO they're on. */
 .ywc-limited-cat .rp-clar,
-.ywc-limited-cat .rp-subvfo,
+.ywc-limited-cat:not(.ywc-vfo-ab) .rp-subvfo,
 /* RX SETUP, TX SETUP and the radio's scope: launcher keys and windows */
 .ywc-limited-cat .rp-pop-keys [data-group="rx"],
 .ywc-limited-cat .rp-pop-keys [data-group="tx"],

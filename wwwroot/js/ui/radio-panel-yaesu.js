@@ -99,6 +99,9 @@ export function startYaesuRadioPanel(root, cfg) {
     // the clarifier, which the board always draws, and the windows it has no
     // CAT for (the windows code expects all of them, so they are hidden).
     const limitedCat = !!cfg.limitedCat;
+    // The FT-817 and FT-818 can say which VFO they're on (read from their
+    // EEPROM) and swap it, so they keep the VFO A / B key.
+    const mainsubKey = { id: 'mainsub', label: dual ? 'MAIN / SUB' : 'VFO A / B', title: dual ? 'Select MAIN or SUB: the keys, knobs and rows act on the selected receiver' : 'Select VFO A or VFO B' };
     const bands = ['FT-991A', 'FT-847', 'FT-817', 'FT-818', 'FT-857', 'FT-897'].includes(model) ? [...BANDS, '2m', '70cm'] : BANDS;
 
     let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
@@ -114,8 +117,8 @@ export function startYaesuRadioPanel(root, cfg) {
         menu: cfg.menu ?? [],
         lamps: [{ id: 'cat', label: 'CAT', click: true, title: "The radio's CAT link: click to disconnect or connect, as Classic's Connect key" }, { id: 'sdr', label: 'SDR' }, { id: 'dx', label: 'DX' }],
         statusChips: [{ id: 'wsjtx', label: 'WSJT-X TX', title: 'Lit while WSJT-X is transmitting through YWC' }],
-        keys: limitedCat ? [] : [
-            { id: 'mainsub', label: dual ? 'MAIN / SUB' : 'VFO A / B', title: dual ? 'Select MAIN or SUB: the keys, knobs and rows act on the selected receiver' : 'Select VFO A or VFO B' },
+        keys: limitedCat ? (cfg.vfoSelect ? [mainsubKey] : []) : [
+            mainsubKey,
             { id: 'proc', label: 'PROC', title: 'Speech processor on / off (transmit audio only)' },
             { id: 'vox', label: 'VOX', title: 'VOX on / off: while on, your microphone keys the transmitter. Gain and delay are in TX SETUP' },
             { id: 'tune', label: 'TUNE', title: 'ATU TUNE - transmits a carrier: press twice. Pressed while tuning, it stops' },

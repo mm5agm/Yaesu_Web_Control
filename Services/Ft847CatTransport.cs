@@ -115,6 +115,16 @@ namespace Yaesu_Web_Control.Services
     /// those it sends nothing at open or close (00 and 80 are LOCK ON and OFF
     /// there), scales their four-bit meters, uses DIG and PKT for data, and
     /// answers ID; with ID0817, ID0818, ID0857 or ID0897. See <see cref="Ft847Cat"/>.
+    ///
+    /// The FT-817 and FT-818 also get VFO A and B, as on the FTdx10: the
+    /// transport reads which VFO the radio is on from its EEPROM (BB 0055),
+    /// answers VS; with it, and swaps with 81 when YWC sends VS0; or VS1;
+    /// (never while transmitting). FA and MD0 are VFO A, FB and MD1 VFO B.
+    /// The VFO the radio is on is read live; the other one is the last
+    /// frequency and mode read while the radio was on it. A set for the VFO
+    /// the radio is not on is dropped rather than swapping behind the
+    /// operator's back. If the EEPROM cannot be read while the radio answers
+    /// everything else, it falls back to one VFO, as on the FT-857.
     /// </summary>
     public sealed class Ft847CatTransport : ICatTransport
     {
@@ -141,6 +151,14 @@ namespace Yaesu_Web_Control.Services
         private (long Hz, char Md)? _reported;
         private int _consecutiveTimeouts;
         private readonly string _model;
+        private readonly bool _readsVfo;
+        private int? _vfo;                          // 0 = A, 1 = B; null until read
+        private DateTime _vfoReadUtc = DateTime.MinValue;
+        private int _vfoReadFailures;
+        private bool _vfoReadGivenUp;
+        private readonly (long Hz, char Md)?[] _slot = new (long Hz, char Md)?[2];
+        private int? _reportedVfo;
+        private readonly (long Hz, char Md)?[] _reportedSlot = new (long Hz, char Md)?[2];
         private readonly long _minHz;
         private readonly long _maxHz;
         private readonly string _tag;
@@ -148,6 +166,7 @@ namespace Yaesu_Web_Control.Services
         public Ft847CatTransport(IFt847Port port, ILogger? logger = null, int replyTimeoutMs = 120, int pollMs = 300, string model = "FT-847")
         {
             _model = model;
+            _readsVfo = Ft847Cat.ReadsVfoFromEeprom(model);
             (_minHz, _maxHz) = RadioCapabilities.FrequencyRangeHz(model);
             _tag = "[" + model + "]";
             _port = port;
@@ -246,8 +265,34 @@ namespace Yaesu_Web_Control.Services
         private async Task<IEnumerable<string>> PollAsync()
         {
             if (!_autoInformation) return Array.Empty<string>();
+            var vfo = await ReadVfoAsync(maxAgeMs: 0);
+            var before = vfo is int b ? _slot[b] : null;
             var main = await ReadMainAsync(maxAgeMs: 0);
-            return main == null ? Array.Empty<string>() : ChangesSinceReported(main.Value);
+            if (vfo is not int v) return main == null ? Array.Empty<string>() : ChangesSinceReported(main.Value);
+
+            // A/B pressed on the radio between the two reads: the 03 reply may
+            // be the other VFO's, so undo what it stored and report only the
+            // VFO change. The next poll reads the new VFO cleanly.
+            if (await ReadVfoAsync(maxAgeMs: 0) is int after && after != v)
+            {
+                _slot[v] = before;
+                _reportedVfo = after;
+                return new[] { "VS" + after };
+            }
+
+            // Both VFOs: the one the radio is on was just read, and the other
+            // may have been filled by a swap (VS) since the last report.
+            var replies = new List<string>(5);
+            if (_reportedVfo != v) replies.Add("VS" + v);
+            _reportedVfo = v;
+            for (int which = 0; which < 2; which++)
+            {
+                if (_slot[which] is not { } m) continue;
+                if (_reportedSlot[which]?.Hz != m.Hz) replies.Add(which == 0 ? FaReply(m.Hz) : FbReply(m.Hz));
+                if (_reportedSlot[which]?.Md != m.Md) replies.Add((which == 0 ? "MD0" : "MD1") + m.Md);
+                _reportedSlot[which] = m;
+            }
+            return replies;
         }
 
         private IEnumerable<string> ChangesSinceReported((long Hz, char Md) main)
@@ -264,9 +309,29 @@ namespace Yaesu_Web_Control.Services
             var letters = command[..2];
             var body = command[2..];
             var none = Array.Empty<string>();
+            // FT-817/818: FA, FB and MD act on the VFO they name.
+            var known = letters is "FA" or "FB" or "MD" ? await ReadVfoAsync(maxAgeMs: 100) : null;
 
             switch (letters)
             {
+                case "FA" when known is int va:
+                    return await VfoFrequencyAsync(0, va, body);
+
+                case "FB" when known is int vb:
+                    return await VfoFrequencyAsync(1, vb, body);
+
+                case "MD" when known is int vm && body.Length >= 1 && (body[0] == '0' || body[0] == '1'):
+                    return await VfoModeAsync(body[0] - '0', vm, body[1..]);
+
+                case "VS" when _readsVfo:
+                    if (body.Length == 0)
+                    {
+                        var v = await ReadVfoAsync(maxAgeMs: 100);
+                        return new[] { "VS" + (v ?? 0) };
+                    }
+                    if (body == "0" || body == "1") await SelectVfoAsync(body[0] - '0');
+                    return none;
+
                 case "FA":
                     if (body.Length == 0)
                     {
@@ -343,7 +408,12 @@ namespace Yaesu_Web_Control.Services
                 case "AI":
                     if (body.Length == 0) return new[] { _autoInformation ? "AI1" : "AI0" };
                     _autoInformation = body == "1";
-                    if (_autoInformation) _reported = null;
+                    if (_autoInformation)
+                    {
+                        _reported = null;
+                        _reportedVfo = null;
+                        _reportedSlot[0] = _reportedSlot[1] = null;
+                    }
                     return none;
 
                 case "DT":
@@ -365,6 +435,102 @@ namespace Yaesu_Web_Control.Services
         private static bool LooksLikeRead(string body) => body.Length <= 1;
 
         private string FaReply(long hz) => "FA" + hz.ToString("D9");
+        private string FbReply(long hz) => "FB" + hz.ToString("D9");
+
+        // FT-817/818: which VFO the radio is on, from its EEPROM. Null when
+        // this radio isn't read that way, or the read has never worked.
+        private async Task<int?> ReadVfoAsync(int maxAgeMs)
+        {
+            if (!_readsVfo || _vfoReadGivenUp) return null;
+            if (_vfo != null && (DateTime.UtcNow - _vfoReadUtc).TotalMilliseconds < maxAgeMs) return _vfo;
+
+            var radioWasAnswering = _consecutiveTimeouts == 0;
+            var reply = await ExchangeAsync(Ft847Cat.ReadEepromBlock(Ft847Cat.VfoEepromAddress), 2);
+            if (reply == null)
+            {
+                // A radio that answers 03 but never BB: fall back to one VFO.
+                if (_vfo == null && radioWasAnswering && ++_vfoReadFailures >= 3)
+                {
+                    _vfoReadGivenUp = true;
+                    _logger?.LogWarning("{Tag} the radio doesn't answer the EEPROM read, so YWC can't tell VFO A from B; it shows one VFO", _tag);
+                }
+                return _vfo;
+            }
+
+            _vfoReadFailures = 0;
+            var v = Ft847Cat.VfoFromEeprom(reply);
+            if (_vfo != v)
+            {
+                _logger?.LogDebug("{Tag} radio is on VFO {Vfo}", _tag, v == 0 ? "A" : "B");
+                _vfo = v;
+                _mainReadUtc = DateTime.MinValue;   // the cached 03 was the other VFO
+            }
+            _vfoReadUtc = DateTime.UtcNow;
+            return v;
+        }
+
+        // FA / FB on a radio whose VFO is known: live for the VFO it's on,
+        // remembered for the other. A set for the other VFO is dropped.
+        private async Task<IEnumerable<string>> VfoFrequencyAsync(int which, int on, string body)
+        {
+            if (body.Length == 0)
+            {
+                var hz = which == on ? (await ReadMainAsync(maxAgeMs: 100))?.Hz : _slot[which]?.Hz;
+                if (hz == null) return Array.Empty<string>();
+                return new[] { which == 0 ? FaReply(hz.Value) : FbReply(hz.Value) };
+            }
+            if (!long.TryParse(body, out var set) || set < _minHz || set > _maxHz) return Array.Empty<string>();
+            if (which != on)
+            {
+                _logger?.LogDebug("{Tag} VFO {Vfo} frequency not set: the radio is on the other VFO", _tag, which == 0 ? "A" : "B");
+                return Array.Empty<string>();
+            }
+            _port.Write(Ft847Cat.SetFrequencyBlock(set));
+            _mainReadUtc = DateTime.MinValue;
+            return Array.Empty<string>();
+        }
+
+        // MD0 / MD1 likewise.
+        private async Task<IEnumerable<string>> VfoModeAsync(int which, int on, string rest)
+        {
+            var p1 = which == 0 ? "MD0" : "MD1";
+            if (rest.Length == 0)
+            {
+                var md = which == on ? (await ReadMainAsync(maxAgeMs: 100))?.Md : _slot[which]?.Md;
+                return md == null ? Array.Empty<string>() : new[] { p1 + md.Value };
+            }
+            if (rest.Length != 1 || which != on) return Array.Empty<string>();
+            var asked = char.ToUpperInvariant(rest[0]);
+            var mode = Ft847Cat.ModeFromMd(asked, _model);
+            if (mode != null)
+            {
+                _port.Write(Ft847Cat.SetModeBlock(mode.Value));
+                _lastSetMd = asked;
+                _mainReadUtc = DateTime.MinValue;
+            }
+            return Array.Empty<string>();
+        }
+
+        // VS0; / VS1;: swap with 81 if the radio is on the other VFO. Never
+        // while transmitting, and only when the radio's VFO has been read.
+        private async Task SelectVfoAsync(int target)
+        {
+            var on = await ReadVfoAsync(maxAgeMs: 0);
+            if (on == null || on == target) return;
+
+            var tx = await ExchangeAsync(Ft847Cat.Block(Ft847Cat.ReadTxStatus), 1);
+            if (tx == null || Ft847Cat.IsTransmitting(tx[0]))
+            {
+                _logger?.LogInformation("{Tag} VFO not changed: the radio is transmitting or not answering", _tag);
+                return;
+            }
+
+            _port.Write(Ft847Cat.Block(Ft847Cat.ToggleVfo));
+            // Hamlib waits 50 ms for the swap before reading the EEPROM again.
+            await Task.Delay(60);
+            await ReadVfoAsync(maxAgeMs: 0);
+            await ReadMainAsync(maxAgeMs: 0);   // fills the new VFO's slot
+        }
 
         private async Task<(long Hz, char Md)?> ReadMainAsync(int maxAgeMs)
         {
@@ -393,6 +559,7 @@ namespace Yaesu_Web_Control.Services
 
             _main = (hz.Value, shown);
             _mainReadUtc = DateTime.UtcNow;
+            if (_vfo is int v && !_vfoReadGivenUp) _slot[v] = _main;
             return _main;
         }
 
