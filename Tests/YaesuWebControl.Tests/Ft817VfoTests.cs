@@ -156,10 +156,13 @@ public class Ft817VfoTests
         var first = await SendAsync(link, "AI1;", 2);
         Assert.Contains("VS0;", first);
 
-        // The operator presses A/B on the radio.
+        // The operator presses A/B on the radio. A real radio swaps at once;
+        // flipping the VFO bit first means a poll caught mid-change can only
+        // see B with A's old frequency, which the next poll corrects, never
+        // A with B's frequency.
+        radio.OnVfoB = true;
         (radio.FrequencyHz, radio.OtherFrequencyHz) = (radio.OtherFrequencyHz, radio.FrequencyHz);
         (radio.Mode, radio.OtherMode) = (radio.OtherMode, radio.Mode);
-        radio.OnVfoB = true;
 
         var seen = new List<string>();
         for (int i = 0; i < 20 && !(seen.Contains("VS1;") && seen.Contains("FB007074000;")); i++)

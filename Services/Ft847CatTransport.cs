@@ -266,8 +266,19 @@ namespace Yaesu_Web_Control.Services
         {
             if (!_autoInformation) return Array.Empty<string>();
             var vfo = await ReadVfoAsync(maxAgeMs: 0);
+            var before = vfo is int b ? _slot[b] : null;
             var main = await ReadMainAsync(maxAgeMs: 0);
             if (vfo is not int v) return main == null ? Array.Empty<string>() : ChangesSinceReported(main.Value);
+
+            // A/B pressed on the radio between the two reads: the 03 reply may
+            // be the other VFO's, so undo what it stored and report only the
+            // VFO change. The next poll reads the new VFO cleanly.
+            if (await ReadVfoAsync(maxAgeMs: 0) is int after && after != v)
+            {
+                _slot[v] = before;
+                _reportedVfo = after;
+                return new[] { "VS" + after };
+            }
 
             // Both VFOs: the one the radio is on was just read, and the other
             // may have been filled by a swap (VS) since the last report.
