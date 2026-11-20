@@ -150,8 +150,24 @@ public class AudioClickCentreTests
         // so the key lights while it is open and goes out when it closes.
         var page = Read("Pages/AudioWaterfall.cshtml");
         Assert.Contains("new URLSearchParams(location.search).get('window')", page);
-        Assert.Contains("new PopoutChild({ name, fallbackUrl: '/rtty-contest' })", page);
+        Assert.Contains("new PopoutChild({ name, fallbackUrl: name.startsWith('radio-') ? '/radio' : '/rtty-contest' })", page);
         Assert.Contains("popout.reattach()", page);
+    }
+
+    [Fact]
+    public void The_radio_page_has_an_audio_key_beside_scope()
+    {
+        // Bruce VK2RT, 2026-11-20: wanted on the Radio page too, and the menu
+        // item alone was too hard to find. The page names it, and the core
+        // panel puts AUDIO beside HOLD and SCOPE on each spectrum.
+        Assert.Contains("audioUrl: '/audio-waterfall',", Read("Pages/RadioPanel.cshtml"));
+        Assert.Contains("audioUrl: cfg.audioUrl,", Read("wwwroot/js/ui/radio-panel-yaesu.js"));
+        var panel = Read("core/js/radio-panel/radio-panel.js");
+        Assert.Contains("name: 'radio-audio',", panel);
+        Assert.Contains("'window=radio-audio'", panel);
+        Assert.Contains("if (audioHost) tools.append(audioKey());", panel);
+        // Without audioUrl (IWC) there is no key and no window.
+        Assert.Contains("const audioHost = opts.audioUrl ? new PopoutHost(", panel);
     }
 
     [Fact]

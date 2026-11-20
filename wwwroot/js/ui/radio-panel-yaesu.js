@@ -115,6 +115,7 @@ export function startYaesuRadioPanel(root, cfg) {
         dual,
         views: cfg.views ?? [],
         menu: cfg.menu ?? [],
+        audioUrl: cfg.audioUrl,
         lamps: [{ id: 'cat', label: 'CAT', click: true, title: "The radio's CAT link: click to disconnect or connect, as Classic's Connect key" }, { id: 'sdr', label: 'SDR' }, { id: 'dx', label: 'DX' }],
         statusChips: [{ id: 'wsjtx', label: 'WSJT-X TX', title: 'Lit while WSJT-X is transmitting through YWC' }],
         keys: limitedCat ? (cfg.vfoSelect ? [mainsubKey] : []) : [
