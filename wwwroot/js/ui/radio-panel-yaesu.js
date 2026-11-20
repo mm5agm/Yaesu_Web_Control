@@ -798,7 +798,9 @@ export function startYaesuRadioPanel(root, cfg) {
         const from = w.to ?? r.freq[vfo];
         if (!from || !deltaHz) return;
         const to = from + deltaHz;
-        if (to < 30000 || to > 75000000) return;
+        // The radio's own top frequency: 470 MHz on an FT-817, so the dial,
+        // the digit wheel and a spectrum click work on 2 m and 70 cm too.
+        if (to < 30000 || to > (num(cfg.maxHz) || 75_000_000)) return;
         w.to = to;
         w.until = Date.now() + 700;
         r.freq[vfo] = to;

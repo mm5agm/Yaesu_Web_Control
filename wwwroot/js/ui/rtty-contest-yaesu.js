@@ -161,6 +161,8 @@ export function startYaesuRttyContest(root, cfg) {
         freq: vfo => feed.state.freq[vfo],
         show: (vfo, hz) => { feed.showFrequency(vfo, hz); view.setFrequency(vfo, hz); },
         write: (vfo, hz) => post(`/api/cat/frequency/${vfo.toLowerCase()}`, { frequencyHz: hz }),
+        ...(cfg.minHz ? { minHz: cfg.minHz } : {}),
+        ...(cfg.maxHz ? { maxHz: cfg.maxHz } : {}),
     });
 
     // A band key: to the band's RTTY spot, or the radio's band memory, then the RTTY mode.

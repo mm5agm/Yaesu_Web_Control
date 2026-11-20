@@ -12,6 +12,14 @@ a different and much older format.
 
 ---
 
+## 2026-11-20 - v2.5.6-pre11 (pre-release)
+
+*The dial tunes on 2 m and 70 cm. Everything in v2.5.6-pre10 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Radio page: the dial works above 75 MHz**
+
+- On the radios that go above 75 MHz (the FT-817, FT-818, FT-857, FT-897, FT-847 and FT-991A), the big dial, the digit wheel and a click on the spectrum did nothing on 2 m and 70 cm, while + and - and the band keys still worked. They now tune up to the radio's own top frequency. The RTTY Contest page's dial keeps to the radio's range too. Thanks to Felix DF3FX for reporting it.
+
 ## 2026-11-19 - v2.5.6-pre10 (pre-release)
 
 *The FT-817, FT-818, FT-857 and FT-897 can be chosen as the radio. Everything in v2.5.6-pre9 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
