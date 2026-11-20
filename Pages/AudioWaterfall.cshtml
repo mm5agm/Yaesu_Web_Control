@@ -21,7 +21,7 @@
         .radio-audio-fall .radio-audio-fall-canvas { height: calc(100vh - 14rem); min-height: 16rem; }
         .radio-audio-fall .radio-audio-fall-status, .radio-audio-fall .radio-audio-fall-modes { color: #ccc; }
         .radio-audio-fall .radio-audio-fall-modes .radio-audio-fall-wsjtx { color: #81c784; }
-        /* Opened from AUDIO on the RTTY Contest page: the waterfall fills the window. */
+        /* Opened from AUDIO on the RTTY Contest or Radio page: the waterfall fills the window. */
         body.aw-window { padding: 0.4rem; }
         body.aw-window .aw-head nav, body.aw-window .aw-note { display: none; }
         body.aw-window .radio-audio-fall .radio-audio-fall-canvas { height: calc(100vh - 9rem); }
@@ -56,14 +56,15 @@
         import { attachRadioAudioWaterfall } from '@Url.Content("~/js/ui/radio-audio-waterfall.js")?v=@Yaesu_Web_Control.AppVersion.Current';
         attachRadioAudioWaterfall(document);
     </script>
-    @* Opened by AUDIO on the RTTY Contest page (?window=rtty-contest-audio): a
-       pop-out, so that page's key shows it open, and CLOSE closes it. *@
+    @* Opened by AUDIO on the RTTY Contest page (?window=rtty-contest-audio) or
+       the Radio page (?window=radio-audio): a pop-out, so that page's key shows
+       it open, and CLOSE closes it. *@
     <script type="module">
         import { PopoutChild } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
         const name = new URLSearchParams(location.search).get('window');
         if (name && /^[a-z0-9-]{1,40}$/.test(name)) {
             document.body.classList.add('aw-window');
-            const popout = new PopoutChild({ name, fallbackUrl: '/rtty-contest' }).start();
+            const popout = new PopoutChild({ name, fallbackUrl: name.startsWith('radio-') ? '/radio' : '/rtty-contest' }).start();
             document.getElementById('awClose').addEventListener('click', () => popout.reattach());
         }
     </script>

@@ -12,6 +12,20 @@ a different and much older format.
 
 ---
 
+## 2026-11-20 - v2.5.6-pre13 (pre-release)
+
+*The audio waterfall on the Radio page, and a rigctld fix for Hamlib programs. Everything in v2.5.6-pre12 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**The Radio page: an AUDIO key** [Radio panel](USER_MANUAL.md#523-radio-panel)
+
+- **AUDIO** now sits beside **HOLD** and **SCOPE** in the corner of the waterfall. It opens the audio waterfall in a window of its own: the radio's receive audio, 0 to 4 kHz, with a guess at each signal's mode. It's handy for checking a signal that looks wide. Click a signal there to tune to it. Before, it was only in the Radio page's MENU, and was hard to find. Thanks to Bruce VK2RT for asking, and for deciding the audio waterfall stays.
+
+**rigctld: Hamlib's layout exactly** [WSJT-X and other Hamlib programs](USER_MANUAL.md#91-wsjt-x)
+
+- YWC's answer to Hamlib's `dump_state` was missing the ITU region line, so Hamlib read the radio's HF receive range as the region and dropped it from the radio's list. Programs connected anyway; now Hamlib sees the radio's full receive range. If you had Log4OM showing the wrong frequency, please try it again.
+- A command that arrives split across two network packets is now put back together instead of being misread.
+- If a program is set to the radio's own Hamlib model (FTDX101MP and so on) with `localhost:4532` as its device, it sends Yaesu CAT to YWC's rigctld port, gets no answer and gives up. YWC's log now says so and names the fix: choose **NET rigctl** (model 2) as the rig. Found from an IWC user's fldigi trouble.
+
 ## 2026-11-20 - v2.5.6-pre12 (pre-release)
 
 *VFO A and B on the FT-817 and FT-818. Everything in v2.5.6-pre11 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

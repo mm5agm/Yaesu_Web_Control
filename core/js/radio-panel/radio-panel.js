@@ -26,6 +26,7 @@ import {
 import { mountPanelWindows } from './panel-windows.js';
 import { freqDigits, wheelDigits } from './freq-digits.js';
 import { turnable } from './turnable.js';
+import { PopoutHost } from '/js/popout/popout.js';
 
 const DESIGN_WIDTH = 1600;
 const SIZES = ['fit', '50', '67', '75', '90', '100', '110', '125', '150'];
@@ -156,6 +157,10 @@ function knob2Svg(size) {
  *   spectrumTuneTo(hz, paneId)             optional: the Hz a spectrum click at hz will put
  *                                          the dial on, when the app tunes somewhere else
  *                                          (an RTTY mark offset); the readout shows it
+ *   audioUrl                               optional: the app's audio waterfall page (the
+ *                                          radio's receive audio). With it each spectrum has
+ *                                          an AUDIO key that opens it in a window of its own,
+ *                                          told its name by ?window=radio-audio
  *   frequencyEntry (bool)                  show an ENT chip in each VFO box
  *   clock (bool)                           a UTC clock in the top bar, from the PC's clock
  *   fullscreenKey (bool)                   bare F goes full screen (not while typing)
@@ -205,6 +210,34 @@ export function mountRadioPanel(root, opts = {}) {
     const scaler = h('div', 'rp-scale');
     const panel = h('div', 'rp-panel');
     sizer.append(scaler); scaler.append(panel); root.append(sizer);
+
+    // AUDIO beside SCOPE: the app's audio waterfall in one window, shared by
+    // every pane's key, each lit while it is open (Bruce VK2RT, 2026-11-20).
+    const audioKeys = [];
+    const audioHost = opts.audioUrl ? new PopoutHost({
+        name: 'radio-audio',
+        url: opts.audioUrl + (opts.audioUrl.includes('?') ? '&' : '?') + 'window=radio-audio',
+        defaultSize: { width: 1000, height: 600 },
+        onChange: o => {
+            for (const k of audioKeys) {
+                k.classList.toggle('on', o);
+                k.title = o ? 'The audio waterfall is in its window: click to close it'
+                    : "Open the radio's receive audio in a waterfall window: click a signal there to tune to it";
+            }
+        },
+    }).start() : null;
+    const audioKey = () => {
+        const k = h('button', 'rp-wkey rp-spec-audio', 'AUDIO');
+        k.type = 'button';
+        k.title = "Open the radio's receive audio in a waterfall window: click a signal there to tune to it";
+        k.addEventListener('click', () => {
+            if (audioHost.isOpen) { audioHost.recall(); return; }
+            if (!audioHost.open())
+                k.title = 'The browser blocked the window: allow pop-ups for this address, then click again';
+        });
+        audioKeys.push(k);
+        return k;
+    };
 
     const button = (cls, kind, id, inert = false) => {
         const b = h('button', cls);
@@ -516,6 +549,7 @@ export function mountRadioPanel(root, opts = {}) {
         setKey.type = 'button';
         setKey.title = 'Range, waterfall speed and brightness, smoothing, passband';
         tools.append(holdKey, setKey);
+        if (audioHost) tools.append(audioKey());
         wf.append(tools);
         const sets = specSettings(d.id);
         box.append(spec, axis, wf, sets.el);
