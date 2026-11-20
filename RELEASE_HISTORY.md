@@ -12,6 +12,14 @@ a different and much older format.
 
 ---
 
+## 2026-11-20 - v2.5.6-pre14 (pre-release)
+
+*No app buttons in Docker. Everything in v2.5.6-pre13 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Docker: the app buttons are hidden** [Linux Docker](USER_MANUAL.md#23-linux-docker-including-raspberry-pi)
+
+- In Docker, the buttons that start WSJT-X, JTAlert, Log4OM, GridTracker and fldigi are now hidden. They couldn't work there: a container has no desktop and none of your programs. Application Setup says so and gives the settings to use instead. Start the programs on the host and point them at YWC's rigctld on port 4532 and UDP 2237. Thanks to Glenn on groups.io for finding it. Windows and macOS are unchanged.
+
 ## 2026-11-20 - v2.5.6-pre13 (pre-release)
 
 *The audio waterfall on the Radio page, and a rigctld fix for Hamlib programs. Everything in v2.5.6-pre12 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

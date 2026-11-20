@@ -20,6 +20,14 @@
     </div>
     <div class="card-body">
         <p class="text-muted">Configure up to 5 external application launcher buttons. You can customize the button name and command line for each.</p>
+        @if (Model.InContainer)
+        {
+            <div class="alert alert-info" id="appButtonsDockerNote">
+                YWC is running in Docker, so these buttons are hidden: a container can't start programs on your desktop.
+                Start WSJT-X, JTDX, GridTracker2 and your logger from the desktop, and point them at YWC
+                (Hamlib NET rigctl on port 4532, UDP multicast 239.255.0.1 port 2237).
+            </div>
+        }
 
         <form method="post">
             <div class="row g-4">

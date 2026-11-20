@@ -154,11 +154,14 @@ namespace Yaesu_Web_Control.Pages
 
             // Load app button visibility and names
             var settings = await _settingsService.GetSettingsAsync();
-            ShowApp1Button = settings.ShowWsjtxButton;
-            ShowApp2Button = settings.ShowJtalertButton;
-            ShowApp3Button = settings.ShowLog4omButton;
-            ShowApp4Button = settings.ShowGridtrackerButton;
-            ShowApp5Button = settings.ShowFldigiButton;
+            // In Docker the buttons can't start anything: the container has no
+            // desktop and none of the user's programs, so they're hidden there.
+            var canLaunchApps = !HostRuntime.IsContainer;
+            ShowApp1Button = canLaunchApps && settings.ShowWsjtxButton;
+            ShowApp2Button = canLaunchApps && settings.ShowJtalertButton;
+            ShowApp3Button = canLaunchApps && settings.ShowLog4omButton;
+            ShowApp4Button = canLaunchApps && settings.ShowGridtrackerButton;
+            ShowApp5Button = canLaunchApps && settings.ShowFldigiButton;
             ShowFrequencyArrowButtons = settings.ShowFrequencyArrowButtons;
             TxToggleKey = settings.TxToggleKey == " " ? "Space" : (settings.TxToggleKey ?? string.Empty);
             App1Name = settings.App1Name;
