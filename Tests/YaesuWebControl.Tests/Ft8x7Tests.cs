@@ -42,6 +42,17 @@ public class Ft8x7Tests
         }
     }
 
+    // The simulator adds to Received on the link's thread; copy it before reading.
+    private static List<byte[]> ReceivedSnapshot(Ft847Simulator radio)
+    {
+        while (true)
+        {
+            try { return radio.Received.ToList(); }
+            catch (InvalidOperationException) { }
+            catch (ArgumentException) { }
+        }
+    }
+
     public static TheoryData<string> Models => new() { "FT-817", "FT-818", "FT-857", "FT-897" };
 
     [Theory]
@@ -142,7 +153,11 @@ public class Ft8x7Tests
         await SendAsync(link, "TX1;", 0);
         Assert.DoesNotContain(radio.Received, b => b[4] == 0x08);
         await SendAsync(link, "TX0;", 0);
-        Assert.Contains(radio.Received, b => b[4] == Ft847Cat.PttOff);
+        // Nothing comes back for TX0, so SendAsync waits only briefly; on a
+        // slow CI runner the link can still be busy with its first poll.
+        for (int i = 0; i < 200 && !ReceivedSnapshot(radio).Any(b => b[4] == Ft847Cat.PttOff); i++)
+            await Task.Delay(10);
+        Assert.Contains(ReceivedSnapshot(radio), b => b[4] == Ft847Cat.PttOff);
         link.Dispose();
     }
 
