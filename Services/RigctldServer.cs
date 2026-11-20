@@ -143,6 +143,8 @@ namespace Yaesu_Web_Control.Services
                 : "rigctld-unknown";
             var stream = client.GetStream();
             var buffer = new byte[1024];
+            var pending = new StringBuilder();
+            var catWarned = false;
 
             try
             {
@@ -151,9 +153,25 @@ namespace Yaesu_Web_Control.Services
                     var bytesRead = await stream.ReadAsync(buffer, cancellationToken);
                     if (bytesRead == 0) break;
 
-                    // Split on newlines — Hamlib may pipeline multiple commands in one TCP write
                     var data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-                    var commands = data.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+                    // A program set to the radio's own Hamlib model (FTDX101MP
+                    // and so on) with this port as its device sends Yaesu CAT
+                    // ("FA;"), not rigctl text. Nothing here answers it, so the
+                    // program times out and hangs up after a few seconds. Say why.
+                    if (!catWarned && LooksLikeYaesuCat(data))
+                    {
+                        catWarned = true;
+                        _logger.LogWarning(
+                            "[{ClientId}] This program is sending Yaesu CAT commands, not rigctl commands. " +
+                            "In its rig settings choose Hamlib NET rigctl (model 2), not the radio's own model, " +
+                            "with localhost:{Port} as the device.", clientId, RigctldPort);
+                    }
+
+                    // Split on newlines. Hamlib may send several commands in one
+                    // TCP write, or one command across two; keep any tail with no
+                    // newline yet until the rest arrives.
+                    var commands = TakeLines(pending, data);
 
                     foreach (var rawCmd in commands)
                     {
@@ -192,6 +210,30 @@ namespace Yaesu_Web_Control.Services
                 _logger.LogInformation("[{ClientId}] Client disconnected", clientId);
             }
         }
+
+        // Appends a chunk read from the socket and returns every complete
+        // line in it; whatever follows the last newline stays in pending.
+        internal static List<string> TakeLines(StringBuilder pending, string chunk)
+        {
+            pending.Append(chunk);
+            var text = pending.ToString();
+            var end = text.LastIndexOf('\n');
+            if (end < 0)
+            {
+                // A client that never sends a newline mustn't grow this forever.
+                if (pending.Length > 4096) pending.Clear();
+                return new List<string>();
+            }
+            pending.Clear().Append(text, end + 1, text.Length - end - 1);
+            return text[..end].Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+        }
+
+        // Yaesu CAT: two capital letters, optional parameters, a semicolon,
+        // and no newline. rigctl text always ends in a newline and has no ';'.
+        private static readonly System.Text.RegularExpressions.Regex YaesuCat =
+            new(@"^([A-Z]{2}[0-9A-Z+\-]*;)+$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+        internal static bool LooksLikeYaesuCat(string chunk) => YaesuCat.IsMatch(chunk);
 
         private async Task<string> ProcessRigctldCommandAsync(string command, string clientId)
         {
@@ -631,15 +673,18 @@ namespace Yaesu_Web_Control.Services
             return "Yaesu;FTDX101MP;1.0.0;000000;3115";
         }
 
-        private static string GetDumpState()
+        internal static string GetDumpState()
         {
-            // Minimal Hamlib dump_state response. Same as v2.1.0 shipped —
-            // user reports Log4OM frequency display *was* working in a
-            // previous version with this response, so reverting any
-            // attempted "fixes" until we figure out what actually regressed.
+            // Minimal Hamlib dump_state response, as v2.1.0 shipped apart from
+            // the ITU region line. Hamlib's netrigctl reads protocol, model,
+            // then the region; before 2026-11-20 the region line was missing,
+            // so Hamlib took the HF RX range as the region and kept only 6 m.
+            // Found in IWC (D#51); Log4OM's frequency display problem may be
+            // related, so check it again with this in place.
             return string.Join("\n",
                 "0",            // protocol version
                 "2",            // rig model (2 = NET rigctl)
+                "0",            // ITU region
                 "1800000.000000 30000000.000000 0x1ff -1 -1 0x10000003 0x3",  // HF RX range
                 "50000000.000000 54000000.000000 0x1ff -1 -1 0x10000003 0x3", // 6m RX range
                 "0 0 0 0 0 0 0",  // end of RX ranges
