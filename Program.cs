@@ -869,7 +869,10 @@ try
 
     app.MapGet("/api/ports", () =>
     {
-        var ports = System.IO.Ports.SerialPort.GetPortNames();
+        // On Linux the stable /dev/serial/by-id names are offered as well.
+        var ports = RadioWebControl.Core.Services.SerialPortPaths.WithById(
+            System.IO.Ports.SerialPort.GetPortNames(), OperatingSystem.IsLinux() && Directory.Exists(RadioWebControl.Core.Services.SerialPortPaths.ByIdDir)
+                ? Directory.GetFiles(RadioWebControl.Core.Services.SerialPortPaths.ByIdDir) : Array.Empty<string>(), p => p);
         return new { ports, com6Present = ports.Contains("COM6") };
     });
 

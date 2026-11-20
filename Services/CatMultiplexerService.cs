@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.IO.Ports;
+using RadioWebControl.Core.Services;
 using System.Text;
 
 namespace Yaesu_Web_Control.Services
@@ -166,7 +167,7 @@ namespace Yaesu_Web_Control.Services
                     else
                     {
                         var ports = SerialPort.GetPortNames();
-                        if (!ports.Contains(portName))
+                        if (!SerialPortPaths.IsPresent(portName, ports))
                         {
                             _logger.LogError("Port {PortName} not found", portName);
                             return false;
@@ -188,7 +189,7 @@ namespace Yaesu_Web_Control.Services
                     var availablePorts = SerialPort.GetPortNames();
                     _logger.LogInformation("Available COM ports: {Ports}", string.Join(", ", availablePorts));
 
-                    if (!availablePorts.Contains(portName))
+                    if (!SerialPortPaths.IsPresent(portName, availablePorts))
                     {
                         _logger.LogError("Port {PortName} not found", portName);
                         return false;
