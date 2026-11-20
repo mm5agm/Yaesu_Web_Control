@@ -14,11 +14,15 @@ a different and much older format.
 
 ## 2026-11-20 - v2.5.6-pre15 (pre-release)
 
-*Segments on 2 m and 70 cm. Everything in v2.5.6-pre14 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+*Segments on 2 m and 70 cm, and Linux by-id port names work. Everything in v2.5.6-pre14 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
 
 **2 m and 70 cm segments** [Band and Segment Selection](USER_MANUAL.md#59-band-and-segment-selection)
 
 - The Segment drop-down now works on 2 m and 70 cm, for the FT-817, FT-818, FT-857, FT-897, FT-847 and FT-991A. It offers CW, FT8, SSB and FM at your region's calling frequencies. Before, it showed "--" on those bands. Japan has CW and FM only for now. The FTdx101 and FTdx10 don't cover these bands, so nothing changes for them.
+
+**Linux and Docker: /dev/serial/by-id ports work** [Linux Docker](USER_MANUAL.md#23-linux-docker-including-raspberry-pi)
+
+- The manual recommends a `/dev/serial/by-id/...` path for the radio's ports, because it doesn't change when the radio is switched off and on. YWC turned those paths away as "not found", for CAT and for the CW paddle's key line, because Linux's port list only has `ttyUSB` names. In Docker, with only the by-id path passed in, the list was empty. YWC now accepts any by-id path that exists, and Settings and the CW Paddle page list them. Not yet tried on a real Linux radio: please say if it works for you.
 
 ## 2026-11-20 - v2.5.6-pre14 (pre-release)
 

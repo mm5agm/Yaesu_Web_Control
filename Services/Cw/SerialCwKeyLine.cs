@@ -1,6 +1,7 @@
 using System.IO.Ports;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
+using RadioWebControl.Core.Services;
 using RadioWebControl.Core.Services.Cw;
 
 namespace Yaesu_Web_Control.Services.Cw
@@ -60,7 +61,13 @@ namespace Yaesu_Web_Control.Services.Cw
             if (OperatingSystem.IsMacOS())
                 names = names.Where(n => n.StartsWith("/dev/cu.", StringComparison.Ordinal)).ToList();
             else if (OperatingSystem.IsLinux())
+            {
                 described = LinuxNames();
+                // In Docker the by-id paths are the only names the radio has.
+                names = SerialPortPaths.WithById(names);
+                foreach (var n in names.Where(n => n.StartsWith(SerialPortPaths.ByIdDir + "/", StringComparison.Ordinal)))
+                    described.TryAdd(n, DescribeById(Path.GetFileName(n), n));
+            }
             if (OperatingSystem.IsWindows())
             {
                 try

@@ -3,6 +3,7 @@ using System.IO.Ports;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.SignalR;
+using RadioWebControl.Core.Services;
 using RadioWebControl.Core.Services.Cw;
 using Yaesu_Web_Control.Hubs;
 
@@ -188,7 +189,7 @@ namespace Yaesu_Web_Control.Services.Cw
                 }
                 if (CatPort() is { } cat && string.Equals(SerialCwKeyLine.RealPath(port), SerialCwKeyLine.RealPath(cat), StringComparison.OrdinalIgnoreCase))
                     return $"{port} is the CAT port. Choose the radio's Standard COM port.";
-                if (!SerialPort.GetPortNames().Contains(port, StringComparer.OrdinalIgnoreCase))
+                if (!SerialPortPaths.IsPresent(port, SerialPort.GetPortNames()))
                     return $"{port} is not on this PC.";
                 try
                 {
