@@ -103,6 +103,9 @@ namespace Yaesu_Web_Control.Pages
 
         /// <summary>The older Yaesu CAT (the FT-847 and FT-817/818/857/897): the pages hide what it cannot reach.</summary>
         public bool LimitedCat => RadioCapabilities.HasLimitedCat(RadioModel);
+
+        /// <summary>The radio can be told which VFO to receive on: on the FT-817/818 that is the one limited-CAT key the Radio page keeps.</summary>
+        public bool CanSelectRxVfo => RadioCapabilities.CanSelectRxVfo(RadioModel);
         public List<string> InstalledRoofingFilters { get; set; } = new() { "6", "7", "8", "9", "A" };
 
         // Accessibility — show ▲/▼ arrow buttons beside each VFO's frequency

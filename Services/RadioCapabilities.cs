@@ -216,8 +216,12 @@ public static class RadioCapabilities
     /// FT-991A has neither (its CAT command list has no FR and no VS); its
     /// only way to listen on B is to swap the VFOs with SV.
     /// </summary>
-    /// The five-byte CAT (FT-847, FT-8x7) reaches the main VFO only.
-    public static bool CanSelectRxVfo(string radioModel) => radioModel is not "FT-991A" && !UsesFiveByteCat(radioModel);
+    /// The five-byte CAT (FT-847, FT-857, FT-897) reaches the main VFO only.
+    /// The FT-817 and FT-818 are the exception: their transport reads the VFO
+    /// from the radio's EEPROM and swaps it with 81, and answers VS like the
+    /// FTdx10 does (Ft847Cat.ReadsVfoFromEeprom).
+    public static bool CanSelectRxVfo(string radioModel) =>
+        radioModel is not "FT-991A" && (!UsesFiveByteCat(radioModel) || Ft847Cat.ReadsVfoFromEeprom(radioModel));
 
     /// <summary>
     /// Nominal PA supply voltage — what the radio's own VDD meter is aligned

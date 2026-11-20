@@ -181,7 +181,8 @@ public class Ft8x7Tests
         Assert.False(RadioCapabilities.IsTunableFrequency(model, 500_000_000));
         Assert.True(RadioCapabilities.IsSingleReceiver(model));
         Assert.False(RadioCapabilities.HasAntennaSelector(model));
-        Assert.False(RadioCapabilities.CanSelectRxVfo(model));
+        // The FT-817 and FT-818 read their VFO from EEPROM; the FT-857 and FT-897 don't yet.
+        Assert.Equal(model is "FT-817" or "FT-818", RadioCapabilities.CanSelectRxVfo(model));
         Assert.False(RadioCapabilities.PollsTemperature(model));
         Assert.False(RadioCapabilities.HasRoofingFilterCat(model));
     }

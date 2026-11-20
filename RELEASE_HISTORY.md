@@ -12,6 +12,17 @@ a different and much older format.
 
 ---
 
+## 2026-11-20 - v2.5.6-pre12 (pre-release)
+
+*VFO A and B on the FT-817 and FT-818. Everything in v2.5.6-pre11 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT-817 and FT-818: VFO A and B** [The FT-817, FT-818, FT-857 and FT-897](USER_MANUAL.md#the-ft-817-ft-818-ft-857-and-ft-897)
+
+- The Radio page now shows **VFO-A** and **VFO-B** on the FT-817 and FT-818, and the **VFO A / B** key swaps between them. The radio's manual has no command that says which VFO it's on, so YWC reads it from the radio's own memory, the way Hamlib does. If you press A/B on the radio, YWC follows.
+- The VFO the radio is on is live. The other shows the frequency and mode it had when the radio was last on it; YWC swaps to it and back once when it connects, to fill it in.
+- YWC only tunes the VFO the radio is on, never swaps while you're transmitting, and only ever reads the radio's memory, never writes to it.
+- The FT-857 and FT-897 keep this somewhere else and some can't be read, so they still show one VFO. Not yet tried on a real radio. Thanks to Felix DF3FX for asking.
+
 ## 2026-11-20 - v2.5.6-pre11 (pre-release)
 
 *The dial tunes on 2 m and 70 cm. Everything in v2.5.6-pre10 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

@@ -189,5 +189,34 @@ namespace Yaesu_Web_Control.Services
 
         /// <summary>True when an F7 reply says the radio is transmitting (bit 7 clear).</summary>
         public static bool IsTransmitting(byte txStatus) => (txStatus & 0x80) == 0;
+
+        // ── VFO A and B on the FT-817 and FT-818 ──
+        //
+        // The manuals' only VFO command is 81, which swaps between A and B;
+        // nothing documented says which one the radio is on. The radio keeps
+        // it in its EEPROM, and BB (read EEPROM, undocumented) reads it:
+        // address 0055, bit 0 of the first reply byte, 0 = A, 1 = B. Hamlib's
+        // ft817.c (ft817_get_vfo) has read it this way for years; the address
+        // map is the FT8x7EE one (yo3ggx.ro/ft8x7ee). The FT-857 and FT-897
+        // keep it elsewhere (0068), and some FT-857s cannot be read at all,
+        // so they are left as they were until someone can try one.
+        //
+        // BC is the matching EEPROM WRITE. A wrong write can wipe the radio's
+        // calibration, so YWC never sends it; the tests prove it.
+
+        public const byte ToggleVfo = 0x81;
+        public const byte ReadEeprom = 0xBB;
+        public const byte WriteEeprom = 0xBC;   // never sent
+        public const ushort VfoEepromAddress = 0x0055;
+
+        /// <summary>True when YWC reads which VFO the radio is on (A or B) from its EEPROM: the FT-817 and FT-818.</summary>
+        public static bool ReadsVfoFromEeprom(string model) => model is "FT-817" or "FT-818";
+
+        /// <summary>A BB block reading two EEPROM bytes from <paramref name="address"/>.</summary>
+        public static byte[] ReadEepromBlock(ushort address) =>
+            new byte[] { (byte)(address >> 8), (byte)(address & 0xFF), 0, 0, ReadEeprom };
+
+        /// <summary>0 for VFO A, 1 for VFO B, from the reply to a BB read of address 0055.</summary>
+        public static int VfoFromEeprom(ReadOnlySpan<byte> reply) => reply[0] & 0x01;
     }
 }

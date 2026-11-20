@@ -20,7 +20,7 @@
     <style>html, body { margin: 0; height: 100%; background: #0b0d10; }</style>
     <script src="~/js/update/update-banner.js" asp-append-version="true"></script>
 </head>
-<body class="@(Model.LimitedCat ? "ywc-limited-cat" : null)">
+<body class="@(Model.LimitedCat ? (Model.CanSelectRxVfo ? "ywc-limited-cat ywc-vfo-ab" : "ywc-limited-cat") : null)">
     <div id="radioPanel"></div>
 
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
@@ -38,6 +38,7 @@
             maxPowerW: @Model.MaxPower,
             maxHz: @Model.MaxHz,
             limitedCat: @(Model.LimitedCat ? "true" : "false"),
+            vfoSelect: @(Model.CanSelectRxVfo ? "true" : "false"),
             scopeCat: @(Model.HasScopeCat ? "true" : "false"),
             bandPlan: '@Model.BandPlan',
             vdd: { min: @Model.VddDial.Min, max: @Model.VddDial.Max },

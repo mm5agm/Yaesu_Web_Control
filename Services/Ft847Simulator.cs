@@ -51,6 +51,18 @@ namespace Yaesu_Web_Control.Services
         /// <summary>Every complete block received, in order. For tests.</summary>
         public List<byte[]> Received { get; } = new();
 
+        // FT-8x7: VFO A and B. FrequencyHz and Mode are always the VFO the
+        // radio is on; 81 swaps them with the other VFO's. The FT-817 and
+        // FT-818 answer a BB read of 0055 with bit 0 = VFO B; the other bits
+        // of that byte hold other settings, so the simulator sets some.
+        public bool OnVfoB { get; set; }
+        public long OtherFrequencyHz { get; set; } = 7_074_000;
+        public byte OtherMode { get; set; } = 0x00;
+        public bool AnswersEeprom { get; set; } = true;  // false = a radio whose EEPROM can't be read
+
+        /// <summary>True if a BC (EEPROM write) block ever arrived. YWC must never send one.</summary>
+        public bool EepromWritten { get; private set; }
+
         public void Open() => _open = true;
         public void Close() => _open = false;
         public void Dispose() => Close();
@@ -115,6 +127,20 @@ namespace Yaesu_Web_Control.Services
                 case Ft847Cat.ReadTxStatus:
                     if (!AnswersReads) return null;
                     return new[] { (byte)((Transmitting ? 0 : 0x80) | (PowerMeter & meterMask)) };
+                case Ft847Cat.ToggleVfo when ft8x7:
+                    (FrequencyHz, OtherFrequencyHz) = (OtherFrequencyHz, FrequencyHz);
+                    (Mode, OtherMode) = (OtherMode, Mode);
+                    OnVfoB = !OnVfoB;
+                    return null;
+                case Ft847Cat.ReadEeprom when ft8x7:
+                    if (!AnswersReads || !AnswersEeprom) return null;
+                    var address = (b[0] << 8) | b[1];
+                    if (address == Ft847Cat.VfoEepromAddress && Ft847Cat.ReadsVfoFromEeprom(Model))
+                        return new[] { (byte)(0xA4 | (OnVfoB ? 1 : 0)), (byte)0x37 };
+                    return new byte[] { 0, 0 };
+                case Ft847Cat.WriteEeprom:
+                    EepromWritten = true;
+                    return null;
             }
             return null;
         }
