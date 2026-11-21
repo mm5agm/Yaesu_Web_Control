@@ -12,6 +12,16 @@ a different and much older format.
 
 ---
 
+## 2026-11-21 - v2.5.6-pre16 (pre-release)
+
+*The ACC scope on the FTdx10. Everything in v2.5.6-pre15 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**The FTdx10's own scope from its ACC socket** [ACC scope](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- With the ACC board, YWC now shows the FTdx10's own scope in the spectrum panels, as it does the FTdx101's. Set the radio model to FTdx10, press Scan in Settings → SDR Spectrum Display, and choose **ACC scope, Main** for VFO A. The FTdx10 has one receiver, so there is no ACC scope, Sub. Its Main audio scope is in the MULTI group too. The board, wiring and firmware are the same as for the FTdx101.
+- Thanks to [Eugene YO9VA](https://github.com/Eugen68), who captured and decoded the FTdx10's frames on his own radio ([Yaesu_ACC_Spectrum #80](https://github.com/mm5agm/Yaesu_ACC_Spectrum/pull/80)). I don't have an FTdx10, so YWC on one hasn't been tried yet: please say if it works for you.
+- The ACC scope's entries in the source lists now read **ACC scope, Main (radio's ACC socket)**, not "FTdx101 ACC socket".
+
 ## 2026-11-20 - v2.5.6-pre15 (pre-release)
 
 *Segments on 2 m and 70 cm, and Linux by-id port names work. Everything in v2.5.6-pre14 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

@@ -82,12 +82,50 @@ public class AccScopeTests
     [Theory]
     [InlineData("FTdx101MP", true)]
     [InlineData("FTdx101D", true)]
+    [InlineData("FTdx10", true)]
     [InlineData("FT-710", false)]
-    [InlineData("FTdx10", false)]
     [InlineData("FTDX5000MP", false)]
     [InlineData(null, false)]
-    public void Only_the_ftdx101_has_it(string? model, bool expected) =>
+    public void The_ftdx101_and_ftdx10_have_it(string? model, bool expected) =>
         Assert.Equal(expected, AccScope.ModelHasAcc(model));
+
+    [Theory]
+    [InlineData("FTdx101MP", true)]
+    [InlineData("FTdx101D", true)]
+    [InlineData("FTdx10", false)]      // one receiver: Main only
+    [InlineData("FT-710", false)]
+    [InlineData(null, false)]
+    public void Only_the_ftdx101_has_a_sub_scope(string? model, bool expected) =>
+        Assert.Equal(expected, AccScope.ModelHasAccSub(model));
+
+    [Fact]
+    public void The_labels_name_no_radio()
+    {
+        Assert.DoesNotContain("FTdx101", AccScope.MainLabel);
+        Assert.DoesNotContain("FTdx101", AccScope.SubLabel);
+        Assert.DoesNotContain("FTdx101 ACC socket", Read("Pages/Settings.cshtml"));
+    }
+
+    [Fact]
+    public void The_ftdx10_is_offered_main_only_and_a_saved_sub_is_refused()
+    {
+        var controller = Read("Controllers/SdrController.cs");
+        Assert.Matches(@"if \(AccScope\.ModelHasAccSub\(_settings\.GetCachedSettings\(\)\.RadioModel\)\)\s*all\.Add\(new SdrDeviceInfo\(AccScope\.SubKey", controller);
+
+        var manager = Read("Services/Sdr/SdrManager.cs");
+        Assert.Contains("if (sub && !AccScope.ModelHasAccSub(config.RadioModel))", manager);
+        Assert.Contains("AccScope.NoSubOnThisRadio", manager);
+        Assert.Contains("FTdx10", AccScope.NotAnAccRadio);
+    }
+
+    private static string Read(string relative)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Yaesu_Web_Control.csproj")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        return File.ReadAllText(Path.Combine(dir!.FullName, relative));
+    }
 
     [Fact]
     public void Main_row_is_the_span_points_in_rf_order_centred_on_the_vfo()

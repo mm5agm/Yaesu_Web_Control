@@ -156,6 +156,7 @@ namespace Yaesu_Web_Control.Controllers
             if (AccScope.ModelHasAcc(_settings.GetCachedSettings().RadioModel))
             {
                 all.Add(new SdrDeviceInfo(AccScope.MainKey, AccScope.MainLabel, "radio"));
+                if (AccScope.ModelHasAccSub(_settings.GetCachedSettings().RadioModel))
                 all.Add(new SdrDeviceInfo(AccScope.SubKey,  AccScope.SubLabel,  "radio"));
             }
 

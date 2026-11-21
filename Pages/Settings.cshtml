@@ -2311,6 +2311,7 @@
                             blank if that VFO has no SDR.
                             On an FTdx101MP or D, the radio's own scope is in these lists too: choose
                             <strong>ACC scope, Main</strong> for VFO A and <strong>ACC scope, Sub</strong> for VFO B.
+                            On an FTdx10 there is only <strong>ACC scope, Main</strong>, for VFO A.
                         </div>
 
                         <label for="sdrDeviceDropdownA" class="form-label small fw-semibold mb-1">VFO A SDR</label>
@@ -4166,9 +4167,9 @@
             if (!key) return '';
             // The radio's own scope, not an SDR (Ft710ScopeFrame.KeyPrefix).
             if (key.startsWith('yaesu-scope:')) return 'FT-710 internal scope [radio]';
-            // The FTdx101's own scope from its ACC socket (AccScope.KeyPrefix).
-            if (key === 'acc-scope:main') return 'ACC scope, Main (FTdx101 ACC socket) [radio]';
-            if (key === 'acc-scope:sub')  return 'ACC scope, Sub (FTdx101 ACC socket) [radio]';
+            // The radio's own scope from its ACC socket (AccScope.KeyPrefix).
+            if (key === 'acc-scope:main') return "ACC scope, Main (radio's ACC socket) [radio]";
+            if (key === 'acc-scope:sub')  return "ACC scope, Sub (radio's ACC socket) [radio]";
             if (key.startsWith('sdrplay:')) {
                 const { hwVer, serial } = parseSdrplayKey(key);
                 const model = hwVer != null ? (SDRPLAY_HW_VER_NAMES[hwVer] || `hw${hwVer}`) : null;
