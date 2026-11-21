@@ -4066,6 +4066,8 @@ The controls change what the radio draws: Center / Cursor / Fix, 3DSS vs waterfa
 
 **MULTI** (scope + oscilloscope + AF-FFT on the TFT) has no CAT command on any supported radio. The MULTI group in YWC is collapsed by default — expand it for AF-FFT ATT (0 / 10 / 20 dB) and OSC ATT / timebase, which apply once MULTI is already showing on the radio. Press MULTI on the TFT; YWC cannot turn it on. The radio keeps the three in one CAT setting, so YWC reads them first and changes only the one you pressed. If the radio doesn't answer that read, YWC takes the other two from the ACC board's frames, or from what it last read or set itself, rather than setting them to 0 *(fixed in v2.5.6-pre17: on an FTdx10, each button set the other two back to 0)*.
 
+The FTdx10 doesn't answer any scope read, so YWC doesn't ask it *(since v2.5.6-pre18)*. Its scope controls show what YWC last set rather than what the radio has. YWC saves the three AF-FFT and oscilloscope values when it changes them, so after a restart it starts from the last values it set, not 0. With the ACC board running, the board's frames show the radio's real settings and take priority. Without the board, a change made on the radio's own screen while YWC wasn't running isn't seen: press the button once in YWC, or set them on the radio again.
+
 SPAN, display mode, and SPEED on the front panel live-sync the highlighted buttons while the controls are visible (docked column or floating panel).
 
 If Radio Display is **off**, FTdx101 and FTdx10 still have a standalone **Radio Scope** card above the SDR panels with the same CAT controls. Enabling Radio Display hides that card so the buttons are not shown twice; use **Controls** on the video bar instead.

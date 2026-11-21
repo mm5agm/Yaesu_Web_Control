@@ -598,7 +598,10 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.AccScopeService>();
 // AccAudioService sends the ACC audio scope (AF-FFT and oscilloscope) to the pages showing it.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.AccAudioService>();
 // What the scope controls know of the AF-FFT / oscilloscope settings when the radio doesn't answer the read (#396).
-builder.Services.AddSingleton<Yaesu_Web_Control.Services.ScopeAfFftMemory>();
+// Kept on disk: the FTDX10 can't be asked for these, so after a restart the
+// last values YWC set are better than 0 (ACC #83).
+builder.Services.AddSingleton(_ => new Yaesu_Web_Control.Services.ScopeAfFftMemory(
+    Yaesu_Web_Control.Services.ScopeAfFftMemory.DefaultPath));
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.SdrManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Sdr.SdrManager>());
 #endif

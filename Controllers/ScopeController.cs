@@ -373,7 +373,7 @@ public class ScopeController : ControllerBase
 
     /// <summary>
     /// The radio's AF-FFT / oscilloscope settings before a change: read from
-    /// the radio, else from <see cref="ScopeAfFftMemory"/>. Only when nothing
+    /// the radio (if it answers SS reads), else from <see cref="ScopeAfFftMemory"/>. Only when nothing
     /// is known are they taken as 0, and that is logged as a warning, since it
     /// overwrites whatever the radio had.
     /// </summary>
@@ -385,12 +385,12 @@ public class ScopeController : ControllerBase
 
         if (_afFft.Current(p1) is { } known)
         {
-            _logger.LogInformation("Scope {Band}: no answer to SS{P1}7, so the AF-FFT / oscilloscope settings not being changed come from {Source}",
+            _logger.LogInformation("Scope {Band}: SS{P1}7 not read from the radio, so the AF-FFT / oscilloscope settings not being changed come from {Source}",
                 band, p1, known.Source);
             return known.Values;
         }
 
-        _logger.LogWarning("Scope {Band}: no answer to SS{P1}7 and no ACC frame or earlier value, so the AF-FFT / oscilloscope settings not being changed are sent as 0",
+        _logger.LogWarning("Scope {Band}: SS{P1}7 not read from the radio and no ACC frame or earlier value, so the AF-FFT / oscilloscope settings not being changed are sent as 0",
             band, p1);
         return ('0', '0', '0');
     }
@@ -410,6 +410,9 @@ public class ScopeController : ControllerBase
     /// </summary>
     private async Task<string?> ReadFieldAsync(char p1, char subCommand)
     {
+        // The FTDX10 never answers an SS read, so don't wait for it.
+        if (!RadioCapabilities.AnswersScopeReads(_radioState.RadioModel ?? "")) return null;
+
         for (var attempt = 0; attempt < 2; attempt++)
         {
             if (attempt > 0) await Task.Delay(RetryDelayMs);

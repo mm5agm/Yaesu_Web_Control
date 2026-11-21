@@ -440,6 +440,14 @@ public static class RadioCapabilities
     };
 
     /// <summary>
+    /// False when the radio ignores SS reads. The FTDX10 sends nothing back
+    /// for any of SS00; to SS08;, not even "?;", though SS writes work
+    /// (Eugene YO9VA, ACC #83). Asking costs a timeout and a retry for every
+    /// setting, so YWC doesn't ask.
+    /// </summary>
+    public static bool AnswersScopeReads(string radioModel) => radioModel != "FTdx10";
+
+    /// <summary>
     /// True when CAT can toggle the radio's MULTI layout (scope + oscilloscope
     /// + AF-FFT). No supported model exposes this: searched CAT manuals, EX
     /// DISPLAY/SCOPE menus, Hamlib, and this repo's mnemonic sweep. Kept as a
