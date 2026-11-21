@@ -32,6 +32,7 @@ public class ScopeController : ControllerBase
     private readonly ISettingsService _settingsService;
     private readonly RadioStateService _radioState;
     private readonly ILogger<ScopeController> _logger;
+    private readonly ScopeAfFftMemory _afFft;
 
     // SS frames are short and the radio answers them promptly, but they share
     // the port with the meter poll. One at a time, same as CatController, and
@@ -51,12 +52,14 @@ public class ScopeController : ControllerBase
         ICatClient catClient,
         ISettingsService settingsService,
         RadioStateService radioState,
-        ILogger<ScopeController> logger)
+        ILogger<ScopeController> logger,
+        ScopeAfFftMemory afFft)
     {
         _catClient       = catClient;
         _settingsService = settingsService;
         _radioState      = radioState;
         _logger          = logger;
+        _afFft           = afFft;
     }
 
     // ── Endpoints ────────────────────────────────────────────────────────────
@@ -219,7 +222,9 @@ public class ScopeController : ControllerBase
                 // Three axes packed into one SS P2=7 field. Writing any one of
                 // them with a single-character Set() would zero the other two,
                 // so we read the current field, overlay the digits the caller
-                // sent, and write the triple back.
+                // sent, and write the triple back. If the radio doesn't answer
+                // the read (an FTDX10 in #396), the current values come from
+                // the ACC board or what YWC last read or wrote, not zeros.
                 if (!RadioCapabilities.SupportsScopeAfFft(model))
                     return BadRequest(new { error = $"{model} has no AF-FFT / oscilloscope CAT control" });
                 if (!ScopeCommands.TryParseAfFftRequest(value, out var fftAtt, out var oscAtt, out var oscTime,
@@ -230,13 +235,14 @@ public class ScopeController : ControllerBase
                 try
                 {
                     await EnsureConnectedAsync();
-                    var current = await ReadFieldAsync(p1, ScopeCommands.AfFft);
-                    var (curFft, curOsc, curTime) = ScopeCommands.ParseAfFft(current);
+                    var (curFft, curOsc, curTime) = await CurrentAfFftAsync(p1, band,
+                        needed: !(hasFftAtt && hasOscAtt && hasOscTime));
                     if (!hasFftAtt)  fftAtt  = curFft;
                     if (!hasOscAtt)  oscAtt  = curOsc;
                     if (!hasOscTime) oscTime = curTime;
                     frame = ScopeCommands.SetAfFft(p1, fftAtt, oscAtt, oscTime);
                     await _catClient.SendCommandAsync(frame, "WebUI", CancellationToken.None);
+                    _afFft.Remember(p1, ScopeCommands.ParseAfFft(frame.Substring(4, 5)));
                     _logger.LogInformation("Scope {Band} affft -> {Frame}", band, frame);
                     await Task.Delay(SettleAfterWriteMs);
                     return Ok(await ReadStateAsync(p1, model));
@@ -316,12 +322,23 @@ public class ScopeController : ControllerBase
         if (RadioCapabilities.SupportsScopeAfFft(model))
         {
             var affft = await ReadFieldAsync(p1, ScopeCommands.AfFft);
-            var parsed = ScopeCommands.ParseAfFft(affft);
+            (char FftAtt, char OscAtt, char OscTime)? parsed = null;
             if (affft is not null)
             {
-                fftAtt  = parsed.FftAtt.ToString();
-                oscAtt  = parsed.OscAtt.ToString();
-                oscTime = parsed.OscTime.ToString();
+                parsed = ScopeCommands.ParseAfFft(affft);
+                _afFft.Remember(p1, parsed.Value);
+            }
+            else if (_afFft.Current(p1) is { } known)
+            {
+                // The radio didn't answer (#396, FTDX10): show what the ACC
+                // board or YWC's own last read or write says.
+                parsed = known.Values;
+            }
+            if (parsed is { } p)
+            {
+                fftAtt  = p.FftAtt.ToString();
+                oscAtt  = p.OscAtt.ToString();
+                oscTime = p.OscTime.ToString();
             }
         }
 
@@ -352,6 +369,30 @@ public class ScopeController : ControllerBase
             // about.
             level,
         };
+    }
+
+    /// <summary>
+    /// The radio's AF-FFT / oscilloscope settings before a change: read from
+    /// the radio, else from <see cref="ScopeAfFftMemory"/>. Only when nothing
+    /// is known are they taken as 0, and that is logged as a warning, since it
+    /// overwrites whatever the radio had.
+    /// </summary>
+    private async Task<(char FftAtt, char OscAtt, char OscTime)> CurrentAfFftAsync(char p1, string band, bool needed)
+    {
+        var field = await ReadFieldAsync(p1, ScopeCommands.AfFft);
+        if (field is not null) return ScopeCommands.ParseAfFft(field);
+        if (!needed) return ('0', '0', '0');
+
+        if (_afFft.Current(p1) is { } known)
+        {
+            _logger.LogInformation("Scope {Band}: no answer to SS{P1}7, so the AF-FFT / oscilloscope settings not being changed come from {Source}",
+                band, p1, known.Source);
+            return known.Values;
+        }
+
+        _logger.LogWarning("Scope {Band}: no answer to SS{P1}7 and no ACC frame or earlier value, so the AF-FFT / oscilloscope settings not being changed are sent as 0",
+            band, p1);
+        return ('0', '0', '0');
     }
 
     private async Task<char?> ReadValueAsync(char p1, char subCommand) =>

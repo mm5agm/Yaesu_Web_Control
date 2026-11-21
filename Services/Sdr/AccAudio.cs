@@ -1,4 +1,4 @@
-// Yaesu Web Control — the FTdx101's audio scope, from its ACC socket.
+// Yaesu Web Control — the FTdx101's or FTDX10's audio scope, from its ACC socket.
 //
 // Every frame from the ACC board carries both receivers' audio scopes as the
 // radio's MULTI screen draws them: an AF-FFT of 200 points, 20 Hz apart (0 to
@@ -20,9 +20,9 @@ public sealed record AccAudioReceiver(byte[] Fft, byte[] Osc);
 /// <summary>
 /// What a page gets on RadioStateUpdate as property "AccAudio": both
 /// receivers and the shared settings, or only <see cref="Problem"/> when
-/// there are no frames to show. On the FTdx10 Sub is null (one receiver) and
-/// <see cref="HasSettings"/> is false: nobody has found where its frames
-/// keep the attenuators and oscilloscope time, so the page doesn't show them.
+/// there are no frames to show. On the FTdx10 Sub is null (one receiver).
+/// Both radios send the attenuators and oscilloscope time: byte 3056 on the
+/// FTdx101, 3026 on the FTDX10 (library 0.4.1, Yaesu_ACC_Spectrum #83).
 /// </summary>
 public sealed record AccAudioFrame(
     AccAudioReceiver? Main,
@@ -30,26 +30,18 @@ public sealed record AccAudioFrame(
     int FftAtt,
     int OscAtt,
     int OscTime,
-    string? Problem,
-    bool HasSettings = true);
+    string? Problem);
 
 public static class AccAudio
 {
     /// <summary>A frame's audio scopes, ready to send.</summary>
-    public static AccAudioFrame Build(AccFrame frame) => frame.Radio == AccRadio.Ftdx101
-        ? new(
-            Receiver(frame.MainAudio),
-            Receiver(frame.SubAudio),
-            frame.MainAudio.FftAttenuator,
-            frame.MainAudio.OscAttenuator,
-            frame.MainAudio.OscTime,
-            null)
-        : new(
-            Receiver(frame.MainAudio),
-            frame.HasSub ? Receiver(frame.SubAudio) : null,
-            0, 0, 0,
-            null,
-            HasSettings: false);
+    public static AccAudioFrame Build(AccFrame frame) => new(
+        Receiver(frame.MainAudio),
+        frame.HasSub ? Receiver(frame.SubAudio) : null,
+        frame.MainAudio.FftAttenuator,
+        frame.MainAudio.OscAttenuator,
+        frame.MainAudio.OscTime,
+        null);
 
     /// <summary>Nothing to draw, and why.</summary>
     public static AccAudioFrame Problem(string problem) => new(null, null, 0, 0, 0, problem);

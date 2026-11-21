@@ -32,6 +32,7 @@ public sealed class AccAudioService : IDisposable
     private readonly IHubContext<RadioHub> _hub;
     private readonly ISettingsService _settings;
     private readonly ILogger<AccAudioService> _logger;
+    private readonly ScopeAfFftMemory _afFft;
 
     private readonly object _gate = new();
     private readonly HashSet<string> _subscribers = new(StringComparer.Ordinal);
@@ -43,12 +44,14 @@ public sealed class AccAudioService : IDisposable
         AccScopeService acc,
         IHubContext<RadioHub> hub,
         ISettingsService settings,
-        ILogger<AccAudioService> logger)
+        ILogger<AccAudioService> logger,
+        ScopeAfFftMemory afFft)
     {
         _acc      = acc;
         _hub      = hub;
         _settings = settings;
         _logger   = logger;
+        _afFft    = afFft;
     }
 
     /// <summary>
@@ -149,7 +152,11 @@ public sealed class AccAudioService : IDisposable
 
                 AccFrame? latest = null;
                 while (subscription.Frames.TryRead(out var frame)) latest = frame;
-                if (latest is null || ++count % SendEvery != 0) continue;
+                if (latest is null) continue;
+                // The scope controls fall back on these when the radio doesn't
+                // answer the SS P2=7 read (#396).
+                _afFft.FromAcc(latest.MainAudio.FftAttenuator, latest.MainAudio.OscAttenuator, latest.MainAudio.OscTime);
+                if (++count % SendEvery != 0) continue;
                 Send(AccAudio.Build(latest));
             }
         }
