@@ -12,6 +12,16 @@ a different and much older format.
 
 ---
 
+## 2026-11-21 - v2.5.6-pre18 (pre-release)
+
+*The FTdx10's scope controls no longer wait for the radio, and its AF-FFT and oscilloscope settings are kept between runs. Everything in v2.5.6-pre17 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Scope controls on the FTdx10** [CAT scope controls](USER_MANUAL.md#194-cat-scope-controls)
+
+- The FTdx10 doesn't answer any of the CAT reads for its scope settings, though it accepts the settings themselves. YWC waited for each answer and then asked again, so scope button presses and the scope panel were slow. YWC no longer asks the FTdx10.
+- YWC now saves the AF-FFT ATT, OSC ATT and OSC time values when it changes them. After a restart, the first press keeps the other two at the values YWC last set, instead of setting them to 0. With the ACC board, the radio's real settings come from the board as before.
+- Found and tested by [Eugene YO9VA](https://github.com/Eugen68) on his FTdx10 ([Yaesu_ACC_Spectrum #83](https://github.com/mm5agm/Yaesu_ACC_Spectrum/pull/83)).
+
 ## 2026-11-21 - v2.5.6-pre17 (pre-release)
 
 *The FTdx10's audio scope settings, and a fix for its AF-FFT and oscilloscope buttons. Everything in v2.5.6-pre16 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

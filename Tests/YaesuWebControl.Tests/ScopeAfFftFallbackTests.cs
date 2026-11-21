@@ -11,13 +11,16 @@ namespace YaesuWebControl.Tests;
 /// AF-FFT ATT, OSC ATT or OSC Time wrote the other two as 0. The current
 /// values now come from the radio, else the ACC board, else what YWC last
 /// read or wrote.
+///
+/// ACC #83: the FTDX10 never answers an SS read, so YWC no longer asks it,
+/// and the values YWC set are saved to disk for the next run.
 /// </summary>
 public class ScopeAfFftFallbackTests
 {
     [Fact]
     public async Task The_radio_answering_the_read_is_used_as_before()
     {
-        var (controller, cat, _) = New(ss07Answer: "SS0721300");
+        var (controller, cat, _) = New(ss07Answer: "SS0721300", model: "FTdx101MP");
 
         await controller.Set("main", "affft", new ScopeSetRequest { Value = "a0" });
 
@@ -86,12 +89,116 @@ public class ScopeAfFftFallbackTests
         Assert.Null(m.Current('0', t.AddSeconds(5)));
     }
 
-    private static (ScopeController, FakeCat, ScopeAfFftMemory) New(string? ss07Answer)
+    [Fact]
+    public async Task The_FTDX10_is_never_sent_a_scope_read()
+    {
+        var (controller, cat, _) = New(ss07Answer: "SS0721300");
+
+        await controller.GetState("main");
+        await controller.Set("main", "affft", new ScopeSetRequest { Value = "a0" });
+
+        // A read is "SS0" + sub-command + ";". Writes carry a value.
+        Assert.DoesNotContain(cat.Sent, s => s.Length == 5 && s.StartsWith("SS0"));
+        Assert.Contains("SS0700000;", cat.Sent);
+    }
+
+    [Fact]
+    public async Task The_FTdx101_is_still_asked()
+    {
+        var (controller, cat, _) = New(ss07Answer: "SS0721300", model: "FTdx101MP");
+
+        await controller.GetState("main");
+
+        Assert.Contains("SS07;", cat.Sent);
+    }
+
+    [Fact]
+    public async Task The_values_YWC_set_survive_a_restart()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ywc-affft-{Guid.NewGuid():N}.txt");
+        try
+        {
+            var (first, _, _) = New(ss07Answer: null, memory: new ScopeAfFftMemory(path));
+            await first.Set("main", "affft", new ScopeSetRequest { Value = "2" });     // AF-FFT 20 dB
+
+            // A new run: a new memory reading the same file.
+            var (second, cat, memory) = New(ss07Answer: null, memory: new ScopeAfFftMemory(path));
+            Assert.Contains("earlier run", memory.Current('0')!.Value.Source);
+
+            await second.Set("main", "affft", new ScopeSetRequest { Value = "t3" });   // 30 ms
+
+            Assert.Contains("SS0720300;", cat.Sent);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void A_fresh_acc_frame_beats_the_saved_values()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ywc-affft-{Guid.NewGuid():N}.txt");
+        try
+        {
+            new ScopeAfFftMemory(path).Remember('0', ('2', '0', '0'));
+            var m = new ScopeAfFftMemory(path);
+            m.FromAcc(1, 1, 1);
+
+            var current = m.Current('0')!.Value;
+            Assert.Equal(('1', '1', '1'), current.Values);
+            Assert.Equal("the ACC board", current.Source);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Main_and_Sub_are_saved_separately()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ywc-affft-{Guid.NewGuid():N}.txt");
+        try
+        {
+            var m = new ScopeAfFftMemory(path);
+            m.Remember('0', ('1', '2', '3'));
+            m.Remember('1', ('4', '0', '5'));
+
+            var again = new ScopeAfFftMemory(path);
+            Assert.Equal(('1', '2', '3'), again.Current('0')!.Value.Values);
+            Assert.Equal(('4', '0', '5'), again.Current('1')!.Value.Values);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void A_damaged_or_missing_file_means_nothing_saved()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ywc-affft-{Guid.NewGuid():N}.txt");
+        try
+        {
+            Assert.Null(new ScopeAfFftMemory(path).Current('0'));
+
+            File.WriteAllLines(path, ["rubbish", "0 2x0"]);
+            Assert.Null(new ScopeAfFftMemory(path).Current('0'));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private static (ScopeController, FakeCat, ScopeAfFftMemory) New(
+        string? ss07Answer, string model = "FTdx10", ScopeAfFftMemory? memory = null)
     {
         var (state, _) = ModeVfoRoutingTests.NewDispatcher(singleReceiver: true, activeVfo: 0);
-        state.RadioModel = "FTdx10";
+        state.RadioModel = model;
         var cat = FakeCat.Create(ss07Answer);
-        var memory = new ScopeAfFftMemory();
+        memory ??= new ScopeAfFftMemory();
         var controller = new ScopeController(
             (ICatClient)cat, null!, state, NullLogger<ScopeController>.Instance, memory);
         return (controller, cat, memory);
