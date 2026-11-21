@@ -1,6 +1,6 @@
-// Yaesu Web Control — the FTdx101's own scope, from its ACC socket.
+// Yaesu Web Control — the radio's own scope, from its ACC socket.
 //
-// The FTdx101 sends its Main and Sub scope rows out of the rear ACC socket as
+// The FTdx101 sends its Main and Sub scope rows (the FTdx10 its Main row) out of the rear ACC socket as
 // SPI. The ACC board (an ESP32-S3, github.com/mm5agm/Yaesu_ACC_Spectrum)
 // passes them to the PC over USB, and the YaesuAccScope library decodes them.
 // Each frame carries both receivers' rows AND where they sit: the VFO, the
@@ -24,8 +24,8 @@ public static class AccScope
     public const string MainKey = KeyPrefix + "main";
     public const string SubKey  = KeyPrefix + "sub";
 
-    public const string MainLabel = "ACC scope, Main (FTdx101 ACC socket)";
-    public const string SubLabel  = "ACC scope, Sub (FTdx101 ACC socket)";
+    public const string MainLabel = "ACC scope, Main (radio's ACC socket)";
+    public const string SubLabel  = "ACC scope, Sub (radio's ACC socket)";
 
     public static bool IsAccKey(string? key) =>
         key is not null && key.StartsWith(KeyPrefix, StringComparison.OrdinalIgnoreCase);
@@ -56,12 +56,29 @@ public static class AccScope
 
     /// <summary>
     /// Radios whose ACC socket sends the scope: the FTdx101MP and FTdx101D,
-    /// the only ones the ACC board has been built for. The FTdx10 may put
-    /// similar data on its ACC socket, but nobody has looked.
+    /// and the FTdx10 (YaesuAccScope 0.4.0, from Eugene YO9VA's captures,
+    /// Yaesu_ACC_Spectrum #80). The same board, wiring and firmware for all.
     /// </summary>
     public static bool ModelHasAcc(string? model) =>
+        ModelHasAccSub(model) ||
+        string.Equals(model, "FTdx10", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Radios whose ACC socket also sends a Sub receiver's scope and audio:
+    /// the FTdx101MP and FTdx101D. The FTdx10 has one receiver, so its
+    /// frames carry Main only (AccFrame.HasSub).
+    /// </summary>
+    public static bool ModelHasAccSub(string? model) =>
         string.Equals(model, "FTdx101MP", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(model, "FTdx101D", StringComparison.OrdinalIgnoreCase);
+
+    public const string NotAnAccRadio =
+        "The ACC scope is for the FTdx101MP, FTdx101D and FTdx10. Choose one of them as the radio model " +
+        "in Settings, or choose an SDR for this panel.";
+
+    public const string NoSubOnThisRadio =
+        "The FTdx10 sends only its Main scope from the ACC socket. Choose ACC scope, Main for this panel, " +
+        "or an SDR.";
 
     /// <summary>
     /// The audio scope (Main and Sub audio) comes from the ACC board, so the

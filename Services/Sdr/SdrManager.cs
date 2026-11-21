@@ -600,9 +600,15 @@ public sealed class SdrManager : BackgroundService
             if (!AccScope.ModelHasAcc(config.RadioModel))
             {
                 await BroadcastStatus(vfo, "disconnected", ct).ConfigureAwait(false);
-                await BroadcastDetail(vfo,
-                    "The ACC scope is for the FTdx101MP and FTdx101D. Choose one of them as the radio model " +
-                    "in Settings, or choose an SDR for this panel.", ct).ConfigureAwait(false);
+                await BroadcastDetail(vfo, AccScope.NotAnAccRadio, ct).ConfigureAwait(false);
+                await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+                return;
+            }
+
+            if (sub && !AccScope.ModelHasAccSub(config.RadioModel))
+            {
+                await BroadcastStatus(vfo, "disconnected", ct).ConfigureAwait(false);
+                await BroadcastDetail(vfo, AccScope.NoSubOnThisRadio, ct).ConfigureAwait(false);
                 await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
                 return;
             }

@@ -23,6 +23,8 @@
     // until the board sends frames, so no board means no audio scope.
     var accAudioCfg  = AccAudioSettings.GetCachedSettings();
     var hasAccAudio  = Yaesu_Web_Control.Services.Sdr.AccScope.AudioScopeWanted(radioModel, accAudioCfg.SdrDeviceKeyA, accAudioCfg.SdrDeviceKeyB);
+    // The FTdx10 has one receiver: no Sub audio pane.
+    var hasAccSubAudio = Yaesu_Web_Control.Services.Sdr.AccScope.ModelHasAccSub(radioModel);
     var spans = new (string Value, string Label)[]
     {
         ("0", "1k"), ("1", "2k"), ("2", "5k"), ("3", "10k"), ("4", "20k"),
@@ -200,11 +202,14 @@
                             <canvas class="acc-audio-canvas" role="img"
                                     aria-label="Main receiver: AF-FFT 0 to 4 kHz above its audio waterfall or the oscilloscope"></canvas>
                         </figure>
+                        @if (hasAccSubAudio)
+                        {
                         <figure class="acc-audio-pane" data-receiver="sub">
                             <figcaption>Sub audio</figcaption>
                             <canvas class="acc-audio-canvas" role="img"
                                     aria-label="Sub receiver: AF-FFT 0 to 4 kHz above its audio waterfall or the oscilloscope"></canvas>
                         </figure>
+                        }
                     </div>
                     <label class="acc-audio-osc-label form-check small mb-0" hidden title="Show the radio's oscilloscope under each AF-FFT, in place of the audio waterfall"><input type="checkbox" class="acc-audio-osc form-check-input"> Oscilloscope in place of the waterfall</label>
                     <div class="acc-audio-status form-text">Audio scope from the ACC board.</div>

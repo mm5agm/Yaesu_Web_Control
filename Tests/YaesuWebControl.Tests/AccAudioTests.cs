@@ -9,7 +9,7 @@ namespace YaesuWebControl.Tests;
 /// The FTdx101's audio scope from its ACC socket, as YWC sends it to the
 /// MULTI group: what a frame becomes, the JSON names acc-audio-scope.js reads,
 /// and the wiring from page to hub. Frames are built byte by byte at the
-/// offsets YaesuAccScope 0.3.0 reads (AudioScope in AccFrame.cs); the library
+/// offsets YaesuAccScope 0.4.0 reads (AudioScope in AccFrame.cs); the library
 /// has its own tests against real captures.
 /// </summary>
 public class AccAudioTests
@@ -128,10 +128,13 @@ public class AccAudioTests
         var partial = Read("Pages/Shared/_RadioScopeButtonsPartial.cshtml");
 
         Assert.Matches(@"hasAccAudio\s*=\s*Yaesu_Web_Control\.Services\.Sdr\.AccScope\.AudioScopeWanted\(radioModel, accAudioCfg\.SdrDeviceKeyA, accAudioCfg\.SdrDeviceKeyB\)", partial);
-        var gated = Regex.Match(partial, @"@if \(hasAccAudio\)\s*\{(?<body>.*?)</figure>\s*</div>", RegexOptions.Singleline);
+        var gated = Regex.Match(partial, @"@if \(hasAccAudio\)\s*\{(?<body>.*?)</figure>\s*\}?\s*</div>", RegexOptions.Singleline);
         Assert.True(gated.Success, "the ACC audio panes are not inside @if (hasAccAudio)");
         Assert.Contains("data-receiver=\"main\"", gated.Groups["body"].Value);
         Assert.Contains("data-receiver=\"sub\"", partial);
+        // The FTdx10 has one receiver: its page gets no Sub pane.
+        Assert.Matches(@"hasAccSubAudio\s*=\s*Yaesu_Web_Control\.Services\.Sdr\.AccScope\.ModelHasAccSub\(radioModel\)", partial);
+        Assert.Matches(@"@if \(hasAccSubAudio\)\s*\{\s*<figure class=""acc-audio-pane"" data-receiver=""sub"">", partial);
         // Found by class, never id: the card and the dialog can share a page.
         Assert.DoesNotMatch(@"<[^>]*acc-audio[^>]*\sid=", partial);
     }
@@ -141,10 +144,40 @@ public class AccAudioTests
     [InlineData("FTdx101D", "sdrplay:123", AccScope.SubKey, true)]
     [InlineData("FTdx101MP", "sdrplay:123", "sdrplay:456", false)]   // SDRs on both: no audio scope
     [InlineData("FTdx101MP", "", "", false)]
-    [InlineData("FTdx10", AccScope.MainKey, "", false)]              // no ACC scope on this radio
+    [InlineData("FTdx10", AccScope.MainKey, "", true)]               // Main only on this radio
+    [InlineData("FT-710", AccScope.MainKey, "", false)]              // no ACC scope on this radio
     public void The_audio_scope_is_offered_only_with_the_acc_scope_as_a_source(string model, string keyA, string keyB, bool wanted)
     {
         Assert.Equal(wanted, AccScope.AudioScopeWanted(model, keyA, keyB));
+    }
+
+    [Fact]
+    public void An_ftdx10_frame_has_main_audio_no_sub_and_no_settings()
+    {
+        // The FTdx10's frames: Main audio at the same offsets, the rest zero.
+        var raw = new byte[4096];
+        for (int i = 0; i < 200; i++)
+        {
+            raw[MainFftAt + i] = (byte)(i == 50 ? 255 - 200 : 255 - 40);
+            raw[MainOscAt + 2 * i]     = 150;
+            raw[MainOscAt + 2 * i + 1] = 106;
+        }
+        var f = AccAudio.Build(AccFrame.Parse(raw, AccRadio.Ftdx10));
+
+        Assert.NotNull(f.Main);
+        Assert.Equal(200, f.Main!.Fft.Length);
+        Assert.Null(f.Sub);
+        Assert.False(f.HasSettings);
+        Assert.Null(f.Problem);
+
+        // The page leaves out settings it can't know.
+        Assert.Contains("value.hasSettings === false", Read("wwwroot/js/ui/acc-audio-scope.js"));
+    }
+
+    [Fact]
+    public void An_ftdx101_frame_has_its_settings()
+    {
+        Assert.True(AccAudio.Build(Frame()).HasSettings);
     }
 
     [Fact]
