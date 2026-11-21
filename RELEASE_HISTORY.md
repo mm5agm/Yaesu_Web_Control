@@ -12,6 +12,18 @@ a different and much older format.
 
 ---
 
+## 2026-11-21 - v2.5.6-pre19 (pre-release)
+
+*Log4OM shows the radio's frequency again, and Hamlib split works through rigctld. Everything in v2.5.6-pre18 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Log4OM's live frequency** [Log4OM](USER_MANUAL.md#93-log4om)
+
+- Log4OM's CAT Status stayed OFFLINE with YWC's rigctld, so it never showed the radio's frequency. Log4OM asks in Hamlib's extended format: `;V ?` once, then `+\get_vfo_info` for VFO A and VFO B every 0.6 s. YWC answered all of them with an error, so Log4OM stopped asking. YWC now answers the extended format exactly as Hamlib's own rigctld does, and takes the VFO off the front of commands when the program uses VFO mode, as Log4OM does. Log4OM shows the frequency and mode and can tune VFO A. A command aimed at VFO B is refused rather than applied to A. ([#387](https://github.com/mm5agm/Yaesu_Web_Control/issues/387), [#18](https://github.com/mm5agm/Yaesu_Web_Control/issues/18))
+
+**rigctld's one-letter commands match Hamlib** [WSJT-X](USER_MANUAL.md#91-wsjt-x)
+
+- Some of YWC's one-letter rigctld commands meant something different from Hamlib's: `x`, `z`, `r` and `c` were split, split frequency, RIT and XIT here, and `s`, `S`, `i`, `I`, `j` and `J` were missing. Programs using Hamlib's NET rigctl send the Hamlib letters, so split and RIT commands from them failed. They now mean what they mean in Hamlib.
+
 ## 2026-11-21 - v2.5.6-pre18 (pre-release)
 
 *The FTdx10's scope controls no longer wait for the radio, and its AF-FFT and oscilloscope settings are kept between runs. Everything in v2.5.6-pre17 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

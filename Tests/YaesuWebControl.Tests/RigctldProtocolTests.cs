@@ -91,4 +91,100 @@ public sealed class RigctldProtocolTests
     [InlineData("M PKTUSB")]
     public void LooksLikeYaesuCat_IgnoresRigctlText(string sent)
         => Assert.False(RigctldServer.LooksLikeYaesuCat(sent));
+
+    // #387: Log4OM, set to Hamlib NET rigctl with VFO MODE ticked, sends
+    // ";V ?" and then polls "+\\get_vfo_info VFOA" and "VFOB". The expected
+    // replies are what Hamlib 4.6.2's own rigctld (Log4OM's bundled copy,
+    // dummy rig) sent back on 2026-11-21.
+
+    // Answers like a rig on 7.074 MHz USB, VFO B on 14.074, recording calls.
+    private static (Func<string, string[], string?, Task<string>> Plain, List<string> Calls) FakeRig()
+    {
+        var calls = new List<string>();
+        Task<string> Plain(string name, string[] args, string? vfo)
+        {
+            calls.Add($"{name}|{string.Join(' ', args)}|{vfo}");
+            var onB = RigctldServer.IsVfoB(vfo ?? (name == "get_vfo_info" ? args.FirstOrDefault() : null));
+            return Task.FromResult(name switch
+            {
+                "get_freq"     => onB ? "14074000" : "7074000",
+                "get_mode"     => "USB\n0",
+                "set_vfo"      => args.FirstOrDefault() == "?" ? "VFOA VFOB \nRPRT 0" : "RPRT 0",
+                "get_vfo_info" => RigctldServer.VfoInfo(onB ? "14074000" : "7074000", "USB", false),
+                "get_split_vfo"=> "0\nVFOA",
+                "get_level"    => "-54",
+                "set_freq"     => onB ? "RPRT -1" : "RPRT 0",
+                _              => "RPRT -1",
+            });
+        }
+        return (Plain, calls);
+    }
+
+    [Theory]
+    [InlineData(";V ?",                 "set_vfo: ?;VFOA VFOB \nRPRT 0")]
+    [InlineData("+\\get_vfo_info VFOA", "get_vfo_info: VFOA\nFreq: 7074000\nMode: USB\nWidth: 0\nSplit: 0\nSatMode: 0\nRPRT 0")]
+    [InlineData("+\\get_vfo_info VFOB", "get_vfo_info: VFOB\nFreq: 14074000\nMode: USB\nWidth: 0\nSplit: 0\nSatMode: 0\nRPRT 0")]
+    [InlineData(";f",                   "get_freq:;Frequency: 7074000;RPRT 0")]
+    [InlineData(";\\get_freq",          "get_freq:;Frequency: 7074000;RPRT 0")]
+    [InlineData("+f",                   "get_freq:\nFrequency: 7074000\nRPRT 0")]
+    [InlineData("|f",                   "get_freq:|Frequency: 7074000|RPRT 0")]
+    [InlineData(",f",                   "get_freq:,Frequency: 7074000,RPRT 0")]
+    [InlineData(";m",                   "get_mode:;Mode: USB;Passband: 0;RPRT 0")]
+    [InlineData(";s",                   "get_split_vfo:;Split: 0;TX VFO: VFOA;RPRT 0")]
+    [InlineData(";l STRENGTH",          "get_level: STRENGTH;-54;RPRT 0")]
+    [InlineData(";F 14074000",          "set_freq: 14074000;RPRT 0")]
+    [InlineData(";t",                   "get_ptt:;RPRT -1")]
+    [InlineData(";q",                   "RPRT 0")]
+    public async Task ExtendedCommands_AreAnsweredInHamlibsFormat(string line, string expected)
+        => Assert.Equal(expected, await RigctldServer.AnswerLineAsync(line, FakeRig().Plain));
+
+    [Theory]
+    [InlineData("f", "7074000")]
+    [InlineData("\\get_freq", "7074000")]
+    [InlineData("V ?", "VFOA VFOB \nRPRT 0")]
+    [InlineData("\\get_vfo_info VFOA", "7074000\nUSB\n0\n0\n0")]
+    [InlineData("s", "0\nVFOA")]
+    public async Task PlainCommands_AreUnchanged(string line, string expected)
+        => Assert.Equal(expected, await RigctldServer.AnswerLineAsync(line, FakeRig().Plain));
+
+    // Log4OM tunes with "F VFOA 8074000": the VFO comes first in VFO mode.
+    [Theory]
+    [InlineData("F VFOA 8074000", "set_freq|8074000|VFOA")]
+    [InlineData("\\set_freq VFOA 8074000", "set_freq|8074000|VFOA")]
+    [InlineData("f VFOA", "get_freq||VFOA")]
+    [InlineData("M VFOA USB 2400", "set_mode|USB 2400|VFOA")]
+    [InlineData("F 14074000", "set_freq|14074000|")]
+    [InlineData("S 1 VFOB", "set_split_vfo|1 VFOB|")]
+    [InlineData("V VFOB", "set_vfo|VFOB|")]
+    [InlineData("\\get_vfo_info VFOB", "get_vfo_info|VFOB|")]
+    public async Task TheVfoArgument_IsTakenOffBeforeTheValue(string line, string call)
+    {
+        var (plain, calls) = FakeRig();
+        await RigctldServer.AnswerLineAsync(line, plain);
+        Assert.Equal(call, Assert.Single(calls));
+    }
+
+    [Fact]
+    public async Task SettingVfoB_IsRefused_NotAppliedToA()
+        => Assert.Equal("RPRT -1", await RigctldServer.AnswerLineAsync("F VFOB 14074000", FakeRig().Plain));
+
+    // Hamlib's one-letter names, which netrigctl (WSJT-X, fldigi) sends.
+    [Theory]
+    [InlineData("s", "get_split_vfo")] [InlineData("S 1 VFOB", "set_split_vfo")]
+    [InlineData("i", "get_split_freq")] [InlineData("I 14076000", "set_split_freq")]
+    [InlineData("x", "get_split_mode")] [InlineData("X USB 2400", "set_split_mode")]
+    [InlineData("j", "get_rit")] [InlineData("J 100", "set_rit")]
+    [InlineData("z", "get_xit")] [InlineData("Z 100", "set_xit")]
+    [InlineData("_", "get_info")]
+    public async Task ShortLetters_MeanWhatTheyMeanInHamlib(string line, string name)
+    {
+        var (plain, calls) = FakeRig();
+        await RigctldServer.AnswerLineAsync(line, plain);
+        Assert.StartsWith(name + "|", Assert.Single(calls));
+    }
+
+    [Theory]
+    [InlineData("r")] [InlineData("c")] [InlineData("y")]
+    public async Task LettersWithNoCommandHere_GetRprtMinus1(string line)
+        => Assert.Equal("RPRT -1", await RigctldServer.AnswerLineAsync(line, FakeRig().Plain));
 }

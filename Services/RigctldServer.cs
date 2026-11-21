@@ -180,7 +180,8 @@ namespace Yaesu_Web_Control.Services
 
                         _logger.LogDebug("[{ClientId}] Received: {Command}", clientId, command);
 
-                        var response = await ProcessRigctldCommandAsync(command, clientId);
+                        var response = await AnswerLineAsync(command,
+                            (name, args, vfo) => ProcessRigctldCommandAsync(name, args, vfo, clientId));
 
                         if (!string.IsNullOrEmpty(response))
                         {
@@ -235,86 +236,183 @@ namespace Yaesu_Web_Control.Services
 
         internal static bool LooksLikeYaesuCat(string chunk) => YaesuCat.IsMatch(chunk);
 
-        private async Task<string> ProcessRigctldCommandAsync(string command, string clientId)
-        {
-            // Strip leading backslash — Hamlib long-form commands are prefixed with \
-            if (command.StartsWith("\\"))
-                command = command[1..];
+        // Hamlib's extended response protocol (rigctld's --help: "+;|,"). A
+        // command starting with one of these is answered as "name: args",
+        // then one "Label: value" per value, then "RPRT n", joined by that
+        // character ('+' means a newline). Log4OM uses it: ";V ?" once, then
+        // "+\get_vfo_info VFOA" and "VFOB" every 0.6 s. Before #387 each got
+        // RPRT -1, Log4OM stopped asking, and its frequency read OFFLINE.
+        private const string ExtendedPrefixes = "+;|,";
 
-            var parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // Hamlib's one-letter commands (rigctl_parse.c), case-sensitive.
+        // Before #387 x/z/r/c meant split / split freq / RIT / XIT here, but
+        // in Hamlib they are split mode / XIT / repeater shift / CTCSS, and
+        // the real s/S, i/I and j/J were missing, so netrigctl's split and
+        // RIT commands (WSJT-X "Rig" split) got RPRT -1.
+        private static readonly Dictionary<char, string> ShortNames = new()
+        {
+            ['f'] = "get_freq",       ['F'] = "set_freq",
+            ['m'] = "get_mode",       ['M'] = "set_mode",
+            ['v'] = "get_vfo",        ['V'] = "set_vfo",
+            ['t'] = "get_ptt",        ['T'] = "set_ptt",
+            ['s'] = "get_split_vfo",  ['S'] = "set_split_vfo",
+            ['i'] = "get_split_freq", ['I'] = "set_split_freq",
+            ['x'] = "get_split_mode", ['X'] = "set_split_mode",
+            ['j'] = "get_rit",        ['J'] = "set_rit",
+            ['z'] = "get_xit",        ['Z'] = "set_xit",
+            ['l'] = "get_level",      ['L'] = "set_level",
+            ['u'] = "get_func",       ['U'] = "set_func",
+            ['_'] = "get_info",
+            ['q'] = "quit",           ['Q'] = "quit",
+        };
+
+        // The labels Hamlib 4.6 puts on each value in an extended reply.
+        // get_level and get_func values have none.
+        private static readonly Dictionary<string, string[]> ReplyLabels = new()
+        {
+            ["get_freq"]       = new[] { "Frequency" },
+            ["get_mode"]       = new[] { "Mode", "Passband" },
+            ["get_vfo"]        = new[] { "VFO" },
+            ["get_ptt"]        = new[] { "PTT" },
+            ["get_split_vfo"]  = new[] { "Split", "TX VFO" },
+            ["get_split_freq"] = new[] { "TX Frequency" },
+            ["get_rit"]        = new[] { "RIT" },
+            ["get_xit"]        = new[] { "XIT" },
+            ["get_vfo_info"]   = new[] { "Freq", "Mode", "Width", "Split", "SatMode" },
+            ["get_powerstat"]  = new[] { "Power Status" },
+            ["get_info"]       = new[] { "Info" },
+        };
+
+        private static readonly HashSet<string> VfoNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "VFOA", "VFOB", "VFOC", "currVFO", "VFO", "MEM", "Main", "Sub",
+            "MainA", "MainB", "SubA", "SubB", "TX", "RX",
+        };
+
+        internal static bool IsVfoB(string? vfo) => vfo is not null &&
+            (vfo.Equals("VFOB", StringComparison.OrdinalIgnoreCase) ||
+             vfo.StartsWith("Sub", StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>
+        /// One line from a client to its reply. <paramref name="plain"/>
+        /// answers a long-form command (name, arguments, VFO or null) in
+        /// Hamlib's plain format; this adds the extended format when asked.
+        /// </summary>
+        internal static async Task<string> AnswerLineAsync(
+            string line, Func<string, string[], string?, Task<string>> plain)
+        {
+            char? sep = null;
+            if (line.Length > 0 && ExtendedPrefixes.Contains(line[0]))
+            {
+                sep = line[0] == '+' ? '\n' : line[0];
+                line = line[1..].TrimStart();
+            }
+            if (line.StartsWith('\\')) line = line[1..];
+
+            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0) return "RPRT 0";
 
-            var cmd = parts[0];
+            var name = parts[0].Length == 1
+                ? (ShortNames.TryGetValue(parts[0][0], out var shortName) ? shortName : null)
+                : parts[0].ToLowerInvariant();
+            if (name is null) return "RPRT -1";
+            if (name == "quit") return "RPRT 0";
 
-            // Short-form commands (single character) are CASE-SENSITIVE:
-            //   lowercase = get (f, m, t, …)   uppercase = set (F, M, T, …)
-            // Long-form commands (get_freq, set_freq, …) are case-insensitive.
-            if (cmd.Length == 1)
+            // VFO mode (rigctld -o, Log4OM's "VFO MODE" box): every command
+            // but set_vfo carries the VFO first, as in "F VFOA 14074000".
+            // get_vfo_info's only argument is the VFO, so it keeps it.
+            var args = parts[1..];
+            string? vfo = null;
+            if (name != "set_vfo" && name != "get_vfo_info" && args.Length > 0 && VfoNames.Contains(args[0]))
             {
-                return cmd switch
-                {
-                    "f" => await GetFrequencyAsync(clientId),
-                    "F" => parts.Length > 1 ? await SetFrequencyAsync(parts[1], clientId) : "RPRT -1",
-                    "m" => await GetModeAsync(clientId),
-                    "M" => parts.Length > 1 ? await SetModeAsync(parts[1], parts.Length > 2 ? parts[2] : null, clientId) : "RPRT -1",
-                    "v" => "VFOA",
-                    "V" => parts.Length > 1 ? SetVfo(parts[1]) : "RPRT -1",
-                    "t" => await GetPttAsync(clientId),
-                    "T" => parts.Length > 1 ? await SetPttAsync(parts[1], clientId) : "RPRT -1",
-                    "l" => parts.Length > 1 ? await GetLevelAsync(parts[1], clientId) : "RPRT -1",
-                    "L" => parts.Length > 2 ? SetLevel(parts[1], parts[2]) : "RPRT -1",
-                    "x" => GetSplit(),
-                    "X" => parts.Length > 1 ? SetSplit(parts[1]) : "RPRT -1",
-                    "z" => GetSplitFrequency(),
-                    "Z" => parts.Length > 1 ? SetSplitFrequency(parts[1]) : "RPRT -1",
-                    "r" => GetRit(),
-                    "R" => parts.Length > 1 ? SetRit(parts[1]) : "RPRT -1",
-                    "c" => GetXit(),
-                    "C" => parts.Length > 1 ? SetXit(parts[1]) : "RPRT -1",
-                    "u" => parts.Length > 1 ? await GetFuncAsync(parts[1], clientId) : "RPRT -1",
-                    "U" => parts.Length > 2 ? await SetFuncAsync(parts[1], parts[2], clientId) : "RPRT -1",
-                    "q" => "RPRT 0",
-                    _ => "RPRT -1"
-                };
+                vfo = args[0];
+                args = args[1..];
             }
 
-            // Long-form commands — case-insensitive
-            return cmd.ToLowerInvariant() switch
+            var reply = await plain(name, args, vfo);
+            return sep is char c ? FormatExtended(name, parts[1..], reply, c) : reply;
+        }
+
+        internal static string FormatExtended(string name, string[] args, string reply, char sep)
+        {
+            var head = args.Length > 0 ? $"{name}: {string.Join(' ', args)}" : $"{name}:";
+            var lines = reply.Split('\n').ToList();
+            var status = "RPRT 0";
+            if (lines[^1].StartsWith("RPRT"))
             {
-                "get_freq"      => await GetFrequencyAsync(clientId),
-                "set_freq"      => parts.Length > 1 ? await SetFrequencyAsync(parts[1], clientId) : "RPRT -1",
-                "get_mode"      => await GetModeAsync(clientId),
-                "set_mode"      => parts.Length > 1 ? await SetModeAsync(parts[1], parts.Length > 2 ? parts[2] : null, clientId) : "RPRT -1",
-                "get_vfo"       => "VFOA",
-                "set_vfo"       => parts.Length > 1 ? SetVfo(parts[1]) : "RPRT -1",
-                "get_ptt"       => await GetPttAsync(clientId),
-                "set_ptt"       => parts.Length > 1 ? await SetPttAsync(parts[1], clientId) : "RPRT -1",
-                "get_level"     => parts.Length > 1 ? await GetLevelAsync(parts[1], clientId) : "RPRT -1",
-                "set_level"     => parts.Length > 2 ? SetLevel(parts[1], parts[2]) : "RPRT -1",
-                "get_split_vfo" => GetSplit(),
-                "set_split_vfo" => parts.Length > 1 ? SetSplit(parts[1]) : "RPRT -1",
-                "get_split_freq"=> GetSplitFrequency(),
-                "set_split_freq"=> parts.Length > 1 ? SetSplitFrequency(parts[1]) : "RPRT -1",
-                "get_rit"       => GetRit(),
-                "set_rit"       => parts.Length > 1 ? SetRit(parts[1]) : "RPRT -1",
-                "get_xit"       => GetXit(),
-                "set_xit"       => parts.Length > 1 ? SetXit(parts[1]) : "RPRT -1",
-                "get_func"      => parts.Length > 1 ? await GetFuncAsync(parts[1], clientId) : "RPRT -1",
-                "set_func"      => parts.Length > 2 ? await SetFuncAsync(parts[1], parts[2], clientId) : "RPRT -1",
-                "get_info"      => GetInfo(),
-                "set_band"      => parts.Length > 1 ? await SetBandAsync(parts[1], clientId) : "RPRT -1",
-                "get_powerstat" => "1",
-                "chk_vfo"       => "CHKVFO 0",
-                "dump_state"    => GetDumpState(),
-                "get_mem"       => "RPRT -1",
-                "set_mem"       => "RPRT -1",
-                "get_band"      => "RPRT -1",
-                "get_filter"    => "RPRT -1",
-                "set_filter"    => "RPRT -1",
-                "quit"          => "RPRT 0",
-                _               => "RPRT -1"
+                status = lines[^1];
+                lines.RemoveAt(lines.Count - 1);
+            }
+
+            // Hamlib's own quirk, copied because clients are written against
+            // it: the VFO list from "V ?" is followed by a newline, not sep.
+            if (name == "set_vfo" && lines.Count > 0)
+                return $"{head}{sep}{string.Join(sep, lines)}\n{status}";
+
+            ReplyLabels.TryGetValue(name, out var labels);
+            var fields = lines.Select((value, i) =>
+                labels is not null && i < labels.Length ? $"{labels[i]}: {value}" : value);
+            return string.Join(sep, new[] { head }.Concat(fields).Append(status));
+        }
+
+        private async Task<string> ProcessRigctldCommandAsync(string name, string[] args, string? vfo, string clientId)
+        {
+            string? Arg(int i) => args.Length > i ? args[i] : null;
+
+            // Only VFO A can be set from here; a set aimed at VFO B is refused
+            // rather than quietly applied to A.
+            var onB = IsVfoB(vfo);
+
+            return name switch
+            {
+                "get_freq"       => onB ? _radioStateService.FrequencyB.ToString() : await GetFrequencyAsync(clientId),
+                "set_freq"       => !onB && Arg(0) is { } f ? await SetFrequencyAsync(f, clientId) : "RPRT -1",
+                "get_mode"       => onB ? $"{ToHamlibMode(_radioStateService.ModeB ?? "")}\n0" : await GetModeAsync(clientId),
+                "set_mode"       => !onB && Arg(0) is { } m ? await SetModeAsync(m, Arg(1), clientId) : "RPRT -1",
+                "get_vfo"        => "VFOA",
+                "set_vfo"        => Arg(0) == "?" ? "VFOA VFOB \nRPRT 0" : Arg(0) is { } v ? SetVfo(v) : "RPRT -1",
+                "get_vfo_info"   => await GetVfoInfoAsync(Arg(0), clientId),
+                "get_ptt"        => await GetPttAsync(clientId),
+                "set_ptt"        => Arg(0) is { } p ? await SetPttAsync(p, clientId) : "RPRT -1",
+                "get_level"      => Arg(0) is { } l ? await GetLevelAsync(l, clientId) : "RPRT -1",
+                "set_level"      => args.Length > 1 ? SetLevel(args[0], args[1]) : "RPRT -1",
+                "get_split_vfo"  => GetSplit(),
+                "set_split_vfo"  => Arg(0) is { } s ? SetSplit(s) : "RPRT -1",
+                "get_split_freq" => GetSplitFrequency(),
+                "set_split_freq" => Arg(0) is { } sf ? SetSplitFrequency(sf) : "RPRT -1",
+                "get_rit"        => GetRit(),
+                "set_rit"        => Arg(0) is { } r ? SetRit(r) : "RPRT -1",
+                "get_xit"        => GetXit(),
+                "set_xit"        => Arg(0) is { } x ? SetXit(x) : "RPRT -1",
+                "get_func"       => Arg(0) is { } fn ? await GetFuncAsync(fn, clientId) : "RPRT -1",
+                "set_func"       => args.Length > 1 ? await SetFuncAsync(args[0], args[1], clientId) : "RPRT -1",
+                "get_info"       => GetInfo(),
+                "set_band"       => Arg(0) is { } band ? await SetBandAsync(band, clientId) : "RPRT -1",
+                "get_powerstat"  => "1",
+                "chk_vfo"        => "CHKVFO 0",
+                "dump_state"     => GetDumpState(),
+                _                => "RPRT -1"
             };
         }
+
+        // get_vfo_info: frequency, mode, width, split, sat mode. Answered
+        // from the cached state, as get_freq is, because Log4OM asks for
+        // both VFOs every 0.6 s.
+        private async Task<string> GetVfoInfoAsync(string? vfo, string clientId)
+        {
+            var onB = IsVfoB(vfo);
+            var freq = onB ? _radioStateService.FrequencyB.ToString() : await GetFrequencyAsync(clientId);
+            if (freq.StartsWith("RPRT")) return freq;
+
+            var yaesuMode = onB ? _radioStateService.ModeB : _radioStateService.ModeA;
+            var mode = string.IsNullOrEmpty(yaesuMode) && !onB
+                ? (await GetModeAsync(clientId)).Split('\n')[0]
+                : ToHamlibMode(yaesuMode ?? "");
+            return VfoInfo(freq, mode, _splitEnabled);
+        }
+
+        internal static string VfoInfo(string freq, string mode, bool split) =>
+            $"{freq}\n{mode}\n0\n{(split ? 1 : 0)}\n0";
 
         // --- Command Implementations and Stubs ---
 
@@ -565,7 +663,8 @@ namespace Yaesu_Web_Control.Services
             return "VFOA";
         }
 
-        private string GetSplit() => _splitEnabled ? "1" : "0";
+        // Hamlib's get_split_vfo is two values: split on/off, then the TX VFO.
+        private string GetSplit() => _splitEnabled ? "1\nVFOB" : "0\nVFOA";
         private string SetSplit(string enabled)
         {
             _splitEnabled = enabled == "1";
@@ -575,7 +674,9 @@ namespace Yaesu_Web_Control.Services
         private string GetSplitFrequency() => _splitFrequency.ToString();
         private string SetSplitFrequency(string freqStr)
         {
-            if (long.TryParse(freqStr, out var freq) && IsTunable(freq))
+            // Hamlib sends "14076000.000000", as for set_freq.
+            if (double.TryParse(freqStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var hz)
+                && (long)Math.Round(hz) is var freq && IsTunable(freq))
             {
                 _splitFrequency = freq;
                 return "RPRT 0";

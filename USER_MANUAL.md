@@ -2565,15 +2565,17 @@ In JTAlert, go to **Settings → Logging → Log4OM V2** and set:
 
 ### 9.3 Log4OM
 
-Log4OM can receive QSO data from WSJT-X and JTAlert via UDP multicast, log QSOs with the correct frequency automatically, and (with one current limitation) display the radio's live frequency in its own status bar.
+Log4OM can receive QSO data from WSJT-X and JTAlert via UDP multicast, log QSOs with the correct frequency automatically, and show the radio's live frequency and mode through YWC's rigctld bridge.
 
 **Do not use Omni-rig.** Yaesu Web Control owns the serial port. If Omni-rig is also configured for the same radio it will conflict with the app and one will fail.
 
-**Known limitation — live frequency display in Log4OM:** Log4OM NextGen's live frequency readout in its main window does not currently update from YWC's rigctld bridge — Log4OM's **CAT Status: OFFLINE** indicator stays red even after the Hamlib settings below are configured. **This is cosmetic only**: when WSJT-X logs a QSO, the correct frequency is captured from the ADIF record and stored in Log4OM's log book without any user action. So the workflow "run WSJT-X, work stations, see them appear correctly in Log4OM's log" works end-to-end; you just don't see a live tuning readout inside Log4OM itself. Tracking on [Issue #18](https://github.com/mm5agm/Yaesu_Web_Control/issues/18); see that issue if you want to follow progress on enabling the live readout.
+**Live frequency in Log4OM (since v2.5.6-pre19):** with the Hamlib settings in Step 3, Log4OM's **CAT Status** goes green and its frequency and mode follow the radio. Before v2.5.6-pre19 it stayed **OFFLINE**: Log4OM asks rigctld in Hamlib's *extended* format (`;V ?`, then `+\get_vfo_info VFOA` and `VFOB` every 0.6 s), and YWC answered those with an error, so Log4OM gave up. If yours still says OFFLINE, update YWC and restart Log4OM. Only VFO A can be tuned from Log4OM; it can read VFO B. ([#387](https://github.com/mm5agm/Yaesu_Web_Control/issues/387), [#18](https://github.com/mm5agm/Yaesu_Web_Control/issues/18))
 
-![Log4OM Hamlib settings showing CAT Status OFFLINE — the documented limitation, not a setup error](pictures/Log4OM_Hamlib.png)
+![Log4OM Hamlib settings (taken before v2.5.6-pre19, so CAT Status still shows OFFLINE)](pictures/Log4OM_Hamlib.png)
 
 **Workaround — getting a live frequency in Log4OM (raised by Bill, W1WRH; confirmed and documented by Jacek, SP3L):**
+
+> Since v2.5.6-pre19 you don't need this for a live frequency: the rigctld settings in Step 3 give one. It's kept here for anyone already running it with OmniRig.
 
 If you specifically want Log4OM's own live frequency readout — for example when you're logging SSB by hand rather than through WSJT-X — there is a setup that gives *every* program, Log4OM included, a live, synchronised frequency. It sidesteps the rigctld path above entirely and instead uses **VSPE** (Virtual Serial Port Emulator) to split the radio's real COM port into two virtual ports: one for YWC and one for OmniRig. Neither application touches the physical port directly — the splitter feeds both.
 
@@ -2637,7 +2639,7 @@ To make this concrete, here is the full logging chain end-to-end. At the end of 
 
 ![WSJT-X Log QSO confirmation dialog — the single click that kicks off the chain that ends with the QSO in Log4OM](pictures/Log4OM_Confirm_Log.png)
 
-Once confirmed, the QSO immediately appears **in progress** in Log4OM — note the red OFFLINE CAT indicator top-left, yet the QSO panel is fully populated from the ADIF stream:
+Once confirmed, the QSO immediately appears **in progress** in Log4OM. (This screenshot is from before v2.5.6-pre19, so the CAT indicator top-left is a red OFFLINE; the QSO panel is filled from the ADIF stream either way.)
 
 ![Log4OM showing a QSO in progress with CAT OFFLINE — proof the ADIF logging path works independently of the missing live freq display](pictures/Log4OM_QSO_in_progress.png)
 
@@ -2689,7 +2691,7 @@ This allows JTAlert to exchange control messages with Log4OM bidirectionally.
 
 #### Step 3 — CAT interface (Hamlib)
 
-Configure Log4OM's CAT interface to point at YWC's rigctld bridge. This is the configuration that *should* show the live radio frequency in Log4OM's status bar — see the "Known limitation" callout above for the current state.
+Configure Log4OM's CAT interface to point at YWC's rigctld bridge. This shows the live radio frequency and mode in Log4OM (v2.5.6-pre19 or later).
 
 Go to **Hardware Configuration → CAT interface → Settings**:
 
