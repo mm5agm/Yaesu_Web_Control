@@ -6,10 +6,10 @@ using YaesuAccScope;
 namespace YaesuWebControl.Tests;
 
 /// <summary>
-/// The FTdx101's audio scope from its ACC socket, as YWC sends it to the
+/// The FTdx101's and FTDX10's audio scope from the ACC socket, as YWC sends it to the
 /// MULTI group: what a frame becomes, the JSON names acc-audio-scope.js reads,
 /// and the wiring from page to hub. Frames are built byte by byte at the
-/// offsets YaesuAccScope 0.4.0 reads (AudioScope in AccFrame.cs); the library
+/// offsets YaesuAccScope 0.4.1 reads (AudioScope in AccFrame.cs); the library
 /// has its own tests against real captures.
 /// </summary>
 public class AccAudioTests
@@ -152,9 +152,10 @@ public class AccAudioTests
     }
 
     [Fact]
-    public void An_ftdx10_frame_has_main_audio_no_sub_and_no_settings()
+    public void An_ftdx10_frame_has_main_audio_no_sub_and_its_settings()
     {
-        // The FTdx10's frames: Main audio at the same offsets, the rest zero.
+        // The FTdx10's frames: Main audio at the same offsets, the settings in
+        // byte 3026 with the FTdx101's bits (#396, Yaesu_ACC_Spectrum #83).
         var raw = new byte[4096];
         for (int i = 0; i < 200; i++)
         {
@@ -162,22 +163,17 @@ public class AccAudioTests
             raw[MainOscAt + 2 * i]     = 150;
             raw[MainOscAt + 2 * i + 1] = 106;
         }
+        raw[3026] = (2 << 5) | (1 << 3) | 3;   // AF-FFT 20 dB, OSC 10 dB, 30 ms
         var f = AccAudio.Build(AccFrame.Parse(raw, AccRadio.Ftdx10));
 
         Assert.NotNull(f.Main);
         Assert.Equal(200, f.Main!.Fft.Length);
         Assert.Null(f.Sub);
-        Assert.False(f.HasSettings);
+        Assert.Equal((2, 1, 3), (f.FftAtt, f.OscAtt, f.OscTime));
         Assert.Null(f.Problem);
 
-        // The page leaves out settings it can't know.
-        Assert.Contains("value.hasSettings === false", Read("wwwroot/js/ui/acc-audio-scope.js"));
-    }
-
-    [Fact]
-    public void An_ftdx101_frame_has_its_settings()
-    {
-        Assert.True(AccAudio.Build(Frame()).HasSettings);
+        // The page shows the settings line on every radio now.
+        Assert.DoesNotContain("hasSettings", Read("wwwroot/js/ui/acc-audio-scope.js"));
     }
 
     [Fact]

@@ -318,9 +318,7 @@ class Panel {
         this.show(true);
         this.panes.forEach(p => { const d = value[p.receiver]; if (d) p.add(d); });
         this.lastAt = Date.now();
-        this.setStatus(value.hasSettings === false
-            ? 'Audio scope from the ACC board.'
-            : settingsText(value.fftAtt, value.oscAtt, value.oscTime));
+        this.setStatus(settingsText(value.fftAtt, value.oscAtt, value.oscTime));
     }
 
     show(on) {

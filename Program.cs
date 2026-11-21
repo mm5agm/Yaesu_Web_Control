@@ -597,6 +597,8 @@ builder.Services.AddHostedService<MeterPollingService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.AccScopeService>();
 // AccAudioService sends the ACC audio scope (AF-FFT and oscilloscope) to the pages showing it.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.AccAudioService>();
+// What the scope controls know of the AF-FFT / oscilloscope settings when the radio doesn't answer the read (#396).
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.ScopeAfFftMemory>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.SdrManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Sdr.SdrManager>());
 #endif

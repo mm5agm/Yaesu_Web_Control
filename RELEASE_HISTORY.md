@@ -12,6 +12,18 @@ a different and much older format.
 
 ---
 
+## 2026-11-21 - v2.5.6-pre17 (pre-release)
+
+*The FTdx10's audio scope settings, and a fix for its AF-FFT and oscilloscope buttons. Everything in v2.5.6-pre16 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**AF-FFT ATT, OSC ATT and OSC time no longer reset each other** [CAT scope controls](USER_MANUAL.md#194-cat-scope-controls)
+
+- On an FTdx10, pressing any of the three set the other two back to 0. The radio keeps them in one CAT setting, so YWC reads it before changing one, and the FTdx10 didn't answer that read. YWC now takes the other two from the ACC board's frames, or from what it last read or set itself, and only falls back to 0 when it knows nothing, with a warning in the log. Reported by [Eugene YO9VA](https://github.com/Eugen68) ([#396](https://github.com/mm5agm/Yaesu_Web_Control/issues/396)).
+
+**The FTdx10's audio scope shows its settings** [Audio scope](USER_MANUAL.md#ftdx101-the-radios-own-scope-from-its-acc-socket-experimental)
+
+- With the ACC board, the line under the FTdx10's audio scope now shows the attenuators and timebase, as on the FTdx101. Eugene found where the FTdx10's frames keep them ([Yaesu_ACC_Spectrum #83](https://github.com/mm5agm/Yaesu_ACC_Spectrum/pull/83)); YWC uses YaesuAccScope 0.4.1.
+
 ## 2026-11-21 - v2.5.6-pre16 (pre-release)
 
 *The ACC scope on the FTdx10. Everything in v2.5.6-pre15 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
