@@ -514,6 +514,8 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 ## 5. Main Control Panel
 
+**Sliders and the mouse wheel.** Every slider on this page moves one step for each notch of the mouse wheel while the mouse is over it, with **Shift** held ten steps, for finer adjustment than dragging. Scrolling the page past a slider doesn't change it: if the page was scrolling a moment before, the wheel keeps scrolling the page. The sliders that set a transmit level (Power, MIC Gain, PROC Level, Mon level, the VOX sliders and the remote audio TX gain) only take the wheel after you click or tab to them, so a stray wheel can't raise the power.
+
 ### 5.1 Top Bar
 
 The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.6**) are shown in the top-left corner.
@@ -832,6 +834,8 @@ You can enter digits by clicking the on-screen buttons **or by typing on your ph
 | Key | Action |
 |-----|--------|
 | **0–9** | Enter a digit at the cursor position and advance the cursor one place to the right |
+| **.** | Decimal point: the digits typed so far are the megahertz, and the rest is zeroed. Type **3 . 6 3** for 3.630 MHz, or **1 4 . 0 7 4** for 14.074 MHz |
+| **000** | Zero the last three digits (the hertz) |
 | **◀ / ▶** | Move the cursor left or right without changing any digit |
 | **⌫** | Zero the digit at the cursor and move the cursor left |
 | **CLR** | Reset all digits to zero |
@@ -839,7 +843,7 @@ You can enter digits by clicking the on-screen buttons **or by typing on your ph
 | **✕** (title bar) | Close the keyboard without changing the frequency |
 | **Esc** | Close the keyboard without changing the frequency |
 
-The same actions are available from the physical keyboard: digit keys type digits; **← →** move the cursor; **Backspace** zeros the current digit; **Delete** clears all digits; **Enter** sends the frequency; **Esc** closes the keyboard.
+The same actions are available from the physical keyboard: digit keys type digits; **.** or **,** is the decimal point; **← →** move the cursor; **Backspace** zeros the current digit; **Delete** clears all digits; **Enter** sends the frequency; **Esc** closes the keyboard.
 
 If you enter a frequency outside the radio's range (0.030–75.000 MHz) an error message appears and the frequency is not sent.
 
