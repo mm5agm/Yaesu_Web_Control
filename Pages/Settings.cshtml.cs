@@ -71,6 +71,11 @@ namespace Yaesu_Web_Control.Pages
 
         public List<string> NetworkAddresses { get; set; } = new();
 
+        /// <summary>The N1MM CAT port's state, for its Settings section.</summary>
+        public (bool Listening, int Port, int Clients)? N1mmStatus =>
+            HttpContext?.RequestServices.GetService(typeof(Yaesu_Web_Control.Services.N1mm.N1mmCatServer))
+                is Yaesu_Web_Control.Services.N1mm.N1mmCatServer s ? s.Status : null;
+
         public SettingsModel(
             ISettingsService settingsService,
             ILogger<SettingsModel> logger,
@@ -269,6 +274,9 @@ namespace Yaesu_Web_Control.Pages
                 current.TxAlertSwrLimit   = TxAlertLimits.ClampSwr(Settings.TxAlertSwrLimit);
                 current.TxAlertAlcEnabled = Settings.TxAlertAlcEnabled;
                 current.TxAlertAlcPercent = TxAlertLimits.ClampAlcPercent(Settings.TxAlertAlcPercent);
+                current.N1mmCatServerEnabled      = Settings.N1mmCatServerEnabled;
+                current.N1mmCatServerPort         = Yaesu_Web_Control.Services.N1mm.N1mmCatServer.ClampPort(Settings.N1mmCatServerPort);
+                current.N1mmCatServerAllowNetwork = Settings.N1mmCatServerAllowNetwork;
                 // The same range MeterPollingService holds it to.
                 current.MeterPollIntervalMs = Math.Clamp(Settings.MeterPollIntervalMs, 50, 1000);
                 current.WebAddress        = Settings.WebAddress;

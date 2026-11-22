@@ -46,6 +46,16 @@
         public double TxAlertAlcPercent { get; set; } = 50;
 
         /// <summary>
+        /// The TCP CAT port for N1MM Logger+ (Services/N1mm/N1mmCatServer).
+        /// Off by default: it passes N1MM's commands, transmit included, to
+        /// the radio. Port 1024-65535. AllowNetwork listens on every
+        /// interface instead of this PC only, for N1MM on another PC.
+        /// </summary>
+        public bool N1mmCatServerEnabled { get; set; } = false;
+        public int N1mmCatServerPort { get; set; } = 4535;
+        public bool N1mmCatServerAllowNetwork { get; set; } = false;
+
+        /// <summary>
         /// When true, the SDR workers stop about 3 s after the last browser
         /// disconnects, so another program can open the SDR straight away,
         /// and start again when a browser reconnects. Default false: the SDRs

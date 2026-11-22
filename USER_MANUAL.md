@@ -65,6 +65,7 @@
    - 9.2 [JTAlert](#92-jtalert)
    - 9.3 [Log4OM](#93-log4om)
    - 9.4 [GridTracker](#94-gridtracker)
+   - 9.5 [N1MM Logger+](#95-n1mm-logger)
 10. [Meter Calibration](#10-meter-calibration)
     - 10.1 [Calibrating the S-Meter (receive)](#101-calibrating-the-s-meter-receive)
     - 10.2 [Calibrating the Power meter (transmit)](#102-calibrating-the-power-meter-transmit)
@@ -2778,6 +2779,32 @@ GridTracker is a separate desktop app that draws a live world map of WSJT-X grid
 **GridTracker Logging settings** — the **Logging** tab shows where GridTracker forwards finished QSOs. The default *App Log(s)* feed (`wsjtx_log.adi`) is enough for the WSJT-X → Log4OM ADIF path documented in §9.3 — no additional logger needs to be configured here unless you also want GridTracker to push QSOs to QRZ, ClubLog, HRDLOG, etc.
 
 ![GridTracker Logging tab](pictures/Gridtracker_Logging.png)
+
+---
+
+### 9.5 N1MM Logger+
+
+*New in v2.5.6-pre21, for testing. Off unless you turn it on.*
+
+N1MM Logger+ wants a CAT port of its own, and Yaesu Web Control already has the radio's COM port. So Yaesu Web Control offers N1MM a **TCP CAT port** instead: N1MM connects to it as if it were the radio, and Yaesu Web Control passes N1MM's commands to the radio and its answers back. No port splitter or virtual COM port is needed.
+
+**In Yaesu Web Control:** open **Settings**, then **N1MM Logger+**. Tick **Turn on the CAT port for N1MM** and click **Save Settings**. The port is **4535** unless you change it. It starts within a few seconds, with no restart.
+
+**In N1MM:** open **Config, Configure Ports, Mode Control, Winkey, etc.** On the **Hardware** tab, on the radio's line:
+
+- **Port**: **TCP**.
+- **Radio**: your radio's own model, for example **FTDX101D** for an FTdx101MP or D.
+- **IP Addr:Port**: `127.0.0.1:4535`.
+
+**What N1MM can do:** whatever it can do with the radio on its own COM port, transmit included (N1MM keys the radio by CAT, as with a splitter). Yaesu Web Control never sends N1MM's voice-memory or transmit commands itself. Two safety nets: if N1MM's connection drops while it has the radio keyed, or it holds transmit for over 3 minutes, Yaesu Web Control sends receive.
+
+**Notes:**
+
+- **Auto information stays on.** Yaesu Web Control needs the radio's auto information to hear frequency changes, so N1MM's AI commands aren't passed on, and N1MM is told AI is off. N1MM polls, as it does by default.
+- **Keying on the Standard port.** N1MM keys CW and FSK with DTR and RTS on the radio's second (Standard) COM port. Yaesu Web Control only opens that port while it is keying CW itself (the CW Send and CW Paddle pages), so otherwise N1MM can open it.
+- **N1MM on another PC:** tick **Allow N1MM on another PC**, and in N1MM use this PC's address instead of `127.0.0.1`. Leave it off otherwise, since any PC on your network could then control the radio.
+- **The five-byte CAT radios** (FT-847, FT-817, FT-818, FT-857, FT-897) don't get the port: their CAT isn't the text that N1MM sends to the newer radios.
+- If N1MM sends something that isn't Yaesu CAT, the log says so once. Check that N1MM's Radio is your Yaesu model.
 
 ---
 
