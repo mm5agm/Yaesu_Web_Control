@@ -589,6 +589,9 @@ builder.Services.AddSingleton<AudioFilterMapService>();
 
 // Add after existing service registrations
 builder.Services.AddHostedService<MeterPollingService>();
+// High SWR / high ALC pop-up (Discussion #257): watches the meters above, serves /api/txalert.
+builder.Services.AddSingleton<TxAlertService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TxAlertService>());
 
 #if WINDOWS
 // SDR spectrum display — reads IQ samples, computes FFT, broadcasts via SignalR

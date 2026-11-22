@@ -48,6 +48,7 @@
    - 6.8 [Remote Audio](#68-remote-audio)
    - 6.9 [Radio Display](#69-radio-display)
    - 6.10 [CW Reader Mode](#610-cw-reader-mode)
+   - 6.11 [Transmit alerts (high SWR, high ALC)](#611-transmit-alerts-high-swr-high-alc)
 7. [Application Setup](#7-application-setup)
    - 7.1 [External App Buttons](#71-external-app-buttons)
    - 7.2 [WSJT-X UDP Settings](#72-wsjt-x-udp-settings)
@@ -2192,6 +2193,25 @@ These two settings decide what the **Reader Mode** button on the CW reader does 
 | Use APF in Reader Mode | Default **on**. Turns the Audio Peak Filter on at your current APF frequency while Reader Mode is active. APF narrows the audio still further around the CW note, which is exactly what the decoder wants; some operators find it rings, so it can be turned off here. |
 
 I have set the default to 250 Hz because that is what fixed it on my own bench. My FTdx101MP's built-in decoder could not read a signal I could copy by ear with the filters wide open, and was still poor at 600 Hz. What a decoder is fed matters more than how it decodes, and a 2.4 kHz filter full of adjacent signals will defeat any decoder there is.
+
+---
+
+### 6.11 Transmit alerts (high SWR, high ALC)
+
+A large red box at the top of the page when you transmit into a high SWR, or overdrive a data mode. It is there for the times when another program is keying the radio (N1MM, WSJT-X, a logger) and you are not watching the meters. It shows on every Yaesu Web Control page and pop-out window, whichever program put the radio into transmit, as long as one of those pages is open.
+
+While the reading is over your limit the box pulses and shows the reading. When it drops back, or you stop transmitting, the box stays with the peak and the time, so you can still see what happened if you were looking away. **Dismiss** closes it in every open tab; the next high reading opens a new one. An alert you don't dismiss goes by itself after five minutes. Each alert is also written to the log as a warning.
+
+Yaesu Web Control only reads the meters. It never stops the transmission or changes the power: what to do about the alert is up to you.
+
+| Setting | Description |
+|---------|-------------|
+| Show transmit alerts | Default **on**. Turns both alerts off together. |
+| SWR alert above | Default **2.5 : 1**, from 1.5 to 5.0. In every mode. YWC reads the SWR meter through your meter calibration ([§10](#10-meter-calibration)), so the figure in the box is the one on the SWR gauge. |
+| Alert on high ALC in DATA and PSK modes | Default **on**. Only in DATA-L, DATA-U, DATA-FM and PSK, where the PC's audio drives the radio and ALC means the audio is too high. Not in RTTY (the radio's FSK keys it, there is no audio), and not in SSB, where some ALC on voice peaks is normal. |
+| ALC alert above | Default **50%** of the meter, from 10 to 100. For a clean data signal, turn the audio from the PC down until the ALC barely moves. |
+
+The reading has to stay over the limit for 0.4 seconds before the box appears, so the brief kick an amplifier or tuner can give at the start of a transmission doesn't set it off.
 
 ---
 
