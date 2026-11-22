@@ -505,6 +505,9 @@ builder.Services.AddSingleton<FrequencyRejectionNotifier>();
 
 // Register the rigctld server as a background service
 builder.Services.AddHostedService<RigctldServer>();
+// TCP CAT port for N1MM Logger+ (off until turned on in Settings).
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.N1mm.N1mmCatServer>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.N1mm.N1mmCatServer>());
 
 // Register your settings service
 builder.Services.AddSingleton<ISettingsService, SettingsService>();

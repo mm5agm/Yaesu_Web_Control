@@ -2062,6 +2062,54 @@
         </div>
     </details>
 
+    <!-- N1MM Logger+ CAT port (YWC #394) -->
+    <details class="settings-section" id="n1mmSettings" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-diagram-3" aria-hidden="true"></i>&nbsp;N1MM Logger+</summary>
+        <div class="section-body">
+                <p class="form-text mt-0">
+                    Lets N1MM Logger+ control the radio while Yaesu Web Control has its COM port, with no port
+                    splitter. In N1MM, open <strong>Config, Configure Ports</strong>. On the radio's line set
+                    <strong>Port</strong> to <strong>TCP</strong>, <strong>Radio</strong> to your radio's model
+                    (<strong>FTDX101D</strong> for an FTdx101MP or D) and <strong>IP Addr:Port</strong> to
+                    <code>127.0.0.1:</code> and the port below.
+                </p>
+                <p class="form-text">
+                    N1MM's commands go to the radio as N1MM sends them, transmit included, the same as with a
+                    splitter. If N1MM's connection drops while it has the radio keyed, or keeps it keyed for
+                    over 3 minutes, Yaesu Web Control sends receive.
+                </p>
+                <div class="mb-3 form-check form-switch">
+                    <input class="form-check-input" type="checkbox" asp-for="Settings.N1mmCatServerEnabled" />
+                    <label class="form-check-label" asp-for="Settings.N1mmCatServerEnabled">Turn on the CAT port for N1MM</label>
+                </div>
+                <div class="mb-3">
+                    <label asp-for="Settings.N1mmCatServerPort" class="form-label">Port</label>
+                    <input asp-for="Settings.N1mmCatServerPort" class="form-control" type="number" min="1024" max="65535" step="1" style="max-width: 10em" />
+                    <div class="form-text">
+                        <strong>Default:</strong> 4535. Not 4532, which is the rigctld port for WSJT-X and loggers.
+                        @if (Model.N1mmStatus is { } st)
+                        {
+                            <br /><span id="n1mmStatus">@(st.Listening ? $"Listening on port {st.Port}. N1MM connections: {st.Clients}." : "Not listening.")</span>
+                        }
+                    </div>
+                </div>
+                <div class="mb-3 form-check form-switch">
+                    <input class="form-check-input" type="checkbox" asp-for="Settings.N1mmCatServerAllowNetwork" />
+                    <label class="form-check-label" asp-for="Settings.N1mmCatServerAllowNetwork">Allow N1MM on another PC</label>
+                    <div class="form-text">
+                        Off: only N1MM on this PC can connect. On: any PC on your network can, so leave it off
+                        unless N1MM runs elsewhere, and then use this PC's address instead of 127.0.0.1.
+                    </div>
+                </div>
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page. The port changes within a few seconds, no restart needed.</span>
+            </div>
+        </div>
+    </details>
+
     <!-- Web / HTTP -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
         <summary><i class="bi bi-globe" aria-hidden="true"></i>&nbsp;Web / HTTP</summary>
