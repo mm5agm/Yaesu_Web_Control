@@ -12,6 +12,23 @@ a different and much older format.
 
 ---
 
+## 2026-11-22 - v2.5.6-pre21 (pre-release)
+
+*RTL-SDR and HackRF receivers are found again, and N1MM Logger+ can share the radio with YWC. Everything in v2.5.6-pre20 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**RTL-SDR and HackRF fixed** [SDR Spectrum Display](USER_MANUAL.md#63-sdr-spectrum-display)
+
+- The installer has shipped the wrong `libusb-1.0.dll`, the USB library the SDR drivers use, since April. It was too old for the HackRF driver, so `hackrf.dll` failed to load ("The specified procedure could not be found") and the SDR scan could crash before it reached an RTL-SDR. It now ships the right one. ([Discussion #404](https://github.com/mm5agm/Yaesu_Web_Control/discussions/404))
+- A new check in the tests reads every SDR driver file the installer ships and fails if one needs something another doesn't provide, so this can't slip through again.
+- SDRplay receivers weren't affected.
+
+**N1MM Logger+ CAT port (for testing)** [N1MM Logger+](USER_MANUAL.md#95-n1mm-logger)
+
+- N1MM can now control the radio through YWC over the network, with no virtual COM port pair. In N1MM, Config → Configure Ports: Port = TCP, Radio = your Yaesu model (FTDX101D for an FTdx101MP), IP Addr:Port = 127.0.0.1:4535. In YWC, **Settings → N1MM Logger+** turns it on. It is off to start with. ([#394](https://github.com/mm5agm/Yaesu_Web_Control/issues/394))
+- N1MM sends the radio's own CAT commands and YWC passes them on, so both see the same radio. YWC keeps the radio's auto information on for itself.
+- Transmit safety: if N1MM disconnects while it has the radio keyed, or holds CAT transmit for over 3 minutes, YWC sends the radio back to receive.
+- New and not yet tried with N1MM itself. Reports welcome.
+
 ## 2026-11-22 - v2.5.6-pre20 (pre-release)
 
 *A warning you can't miss when the SWR or ALC is too high, whichever program is transmitting. Everything in v2.5.6-pre19 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
