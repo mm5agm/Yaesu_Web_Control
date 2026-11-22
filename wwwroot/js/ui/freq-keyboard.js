@@ -79,6 +79,30 @@ function pressClear() {
     renderDisplay();
 }
 
+// The decimal point: the digits typed since the cursor was at the left are
+// the megahertz, so 3 . 6 3 gives 3.630000 and 14 . 074 gives 14.074000.
+// They move right into the megahertz places, the rest is zeroed, and the
+// cursor goes to the first digit after the point. With the cursor already
+// past the point it only moves there.
+function pressPoint() {
+    clearError();
+    const mhzLen = _digits.length - 6;
+    if (_cursor <= mhzLen) {
+        const typed = _digits.slice(0, _cursor);
+        _digits = Array(_digits.length).fill('0');
+        typed.forEach((d, i) => { _digits[mhzLen - typed.length + i] = d; });
+    }
+    _cursor = mhzLen;
+    renderDisplay();
+}
+
+// 000: zero the last three digits, the hertz, leaving the cursor where it is.
+function pressZeros() {
+    clearError();
+    for (let i = _digits.length - 3; i < _digits.length; i++) _digits[i] = '0';
+    renderDisplay();
+}
+
 function pressBackspace() {
     clearError();
     _digits[_cursor] = '0';
@@ -122,6 +146,14 @@ function initPhysicalKeyboard() {
             e.preventDefault();
             e.stopPropagation();
             pressDigit(e.key);
+            return;
+        }
+
+        // The decimal point; a comma too, for a European keyboard or keypad.
+        if (e.key === '.' || e.key === ',' || e.code === 'NumpadDecimal') {
+            e.preventDefault();
+            e.stopPropagation();
+            pressPoint();
             return;
         }
 
@@ -345,6 +377,8 @@ export function initFreqKeyboard() {
     document.getElementById('freqKbLeft').addEventListener('click',      () => moveCursor(-1));
     document.getElementById('freqKbRight').addEventListener('click',     () => moveCursor(1));
     document.getElementById('freqKbBackspace').addEventListener('click', pressBackspace);
+    document.getElementById('freqKbPoint')?.addEventListener('click',    pressPoint);
+    document.getElementById('freqKbZeros')?.addEventListener('click',    pressZeros);
     document.getElementById('freqKbClear').addEventListener('click',     pressClear);
     document.getElementById('freqKbEnter').addEventListener('click',     pressEnter);
 

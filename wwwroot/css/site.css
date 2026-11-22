@@ -1048,8 +1048,16 @@ dialog[open]:not(:modal) {
 }
 .fkb-clear:hover { background: #553d18; }
 
+.fkb-point,
+.fkb-zeros {
+    background: #2a2a3e;
+    color: #e0e0e0;
+}
+.fkb-point:hover,
+.fkb-zeros:hover { background: #3a3a5e; }
+
 .fkb-enter {
-    grid-column: span 2;
+    grid-column: span 4;
     background: #1a4a1a;
     color: #88ff88;
     font-size: 1rem;

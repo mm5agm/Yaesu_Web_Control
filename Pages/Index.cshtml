@@ -2440,7 +2440,9 @@
         <button class="fkb-key fkb-num" data-digit="2" aria-label="2" title="2" data-a11y-key="keyboard.digit2">2</button>
         <button class="fkb-key fkb-num" data-digit="3" aria-label="3" title="3" data-a11y-key="keyboard.digit3">3</button>
         <button class="fkb-key fkb-backspace" id="freqKbBackspace" aria-label="Backspace" title="Backspace" data-a11y-key="keyboard.backspace">⌫</button>
+        <button class="fkb-key fkb-point" id="freqKbPoint" aria-label="Decimal point" title="Decimal point: the digits typed so far are megahertz" data-a11y-key="keyboard.point">.</button>
         <button class="fkb-key fkb-num" data-digit="0" aria-label="0" title="0" data-a11y-key="keyboard.digit0">0</button>
+        <button class="fkb-key fkb-zeros" id="freqKbZeros" aria-label="Zero the last three digits" title="Zero the last three digits" data-a11y-key="keyboard.zeros">000</button>
         <button class="fkb-key fkb-clear" id="freqKbClear" aria-label="Clear all digits"  title="Clear all digits"  data-a11y-key="keyboard.clear">CLR</button>
         <button class="fkb-key fkb-enter" id="freqKbEnter" aria-label="Enter frequency"   title="Enter frequency"   data-a11y-key="keyboard.enter">↵ Enter</button>
     </div>
@@ -2748,6 +2750,7 @@
         import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer, autoModeForHz } from "/js/ui/band-plan.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { loadLabels }           from "/js/ui/a11y-labels.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { attachSliderWheel }    from "/js/controls/slider-wheel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { DxSpotsPanel }         from "/js/dx/dx-spots-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         // Side-effect import: publishes window.radioFeatureSetup, which the
@@ -2803,6 +2806,11 @@
         });
         document.addEventListener('DOMContentLoaded', function () {
             initFreqKeyboard();
+            // The wheel over a slider moves it a step (#145). Transmit levels only
+            // take it once clicked or tabbed to, so a stray wheel can't raise power.
+            attachSliderWheel(document, { focusOnly: ['powerSlider', 'powerSliderA', 'powerSliderB',
+                'micGainSlider', 'procLevelSlider', 'monLevelSlider', 'voxGainSlider', 'voxDelaySlider',
+                'antiVoxSlider', 'remoteAudioTxGain'] });
             initMemoriesPanel();
 
             // Radio-scope CAT controls. Bind each host (standalone card and/or

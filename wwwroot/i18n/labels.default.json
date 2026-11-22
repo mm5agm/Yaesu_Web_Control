@@ -64,6 +64,8 @@
     "cursorLeft": "Move cursor left",
     "cursorRight":"Move cursor right",
     "backspace":  "Backspace — clear digit and move left",
+    "point":      "Decimal point",
+    "zeros":      "Zero the last three digits",
     "clear":      "Clear all digits",
     "enter":      "Enter frequency"
   },
