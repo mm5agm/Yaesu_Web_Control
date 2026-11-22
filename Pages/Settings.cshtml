@@ -2017,6 +2017,51 @@
         </div>
     </details>
 
+    <!-- Transmit alerts (Discussion #257) -->
+    <details class="settings-section" id="txAlertSettings" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>&nbsp;Transmit alerts (high SWR, high ALC)</summary>
+        <div class="section-body">
+                <p class="form-text mt-0">
+                    A large red box at the top of every page while you transmit into a high SWR, or overdrive a
+                    data mode. It works whichever program is keying the radio (N1MM, WSJT-X, a logger), as long as a
+                    Yaesu Web Control page is open. After the transmission it stays, with the peak, until you dismiss
+                    it. Yaesu Web Control only reads the meters; it never stops the transmission itself.
+                </p>
+                <div class="mb-3 form-check form-switch">
+                    <input class="form-check-input" type="checkbox" asp-for="Settings.TxAlertEnabled" />
+                    <label class="form-check-label" asp-for="Settings.TxAlertEnabled">Show transmit alerts</label>
+                </div>
+                <div class="mb-3">
+                    <label asp-for="Settings.TxAlertSwrLimit" class="form-label">SWR alert above (: 1)</label>
+                    <input asp-for="Settings.TxAlertSwrLimit" class="form-control" type="number" min="1.5" max="5" step="0.1" style="max-width: 10em" />
+                    <div class="form-text">
+                        In every mode. Read from the SWR meter with your meter calibration.
+                        <br /><strong>Default:</strong> 2.5 &nbsp;|&nbsp; <strong>Range:</strong> 1.5&ndash;5.0
+                    </div>
+                </div>
+                <div class="mb-3 form-check form-switch">
+                    <input class="form-check-input" type="checkbox" asp-for="Settings.TxAlertAlcEnabled" />
+                    <label class="form-check-label" asp-for="Settings.TxAlertAlcEnabled">Alert on high ALC in DATA and PSK modes</label>
+                </div>
+                <div class="mb-3">
+                    <label asp-for="Settings.TxAlertAlcPercent" class="form-label">ALC alert above (% of the meter)</label>
+                    <input asp-for="Settings.TxAlertAlcPercent" class="form-control" type="number" min="10" max="100" step="1" style="max-width: 10em" />
+                    <div class="form-text">
+                        Only in DATA-L, DATA-U, DATA-FM and PSK, where the audio from the PC drives the radio and ALC
+                        means too much audio. Not in RTTY (FSK keys the radio, there is no audio) and not in SSB, where
+                        some ALC is normal.
+                        <br /><strong>Default:</strong> 50% &nbsp;|&nbsp; <strong>Range:</strong> 10&ndash;100%
+                    </div>
+                </div>
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
+        </div>
+    </details>
+
     <!-- Web / HTTP -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
         <summary><i class="bi bi-globe" aria-hidden="true"></i>&nbsp;Web / HTTP</summary>

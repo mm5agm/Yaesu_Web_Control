@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using RadioWebControl.Core.Services.TxAlert;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Hosting;
@@ -264,6 +265,10 @@ namespace Yaesu_Web_Control.Pages
                 current.SerialPort        = Settings.SerialPort;
                 current.BaudRate          = Settings.BaudRate;
                 current.PowerOffAtExit    = Settings.PowerOffAtExit;
+                current.TxAlertEnabled    = Settings.TxAlertEnabled;
+                current.TxAlertSwrLimit   = TxAlertLimits.ClampSwr(Settings.TxAlertSwrLimit);
+                current.TxAlertAlcEnabled = Settings.TxAlertAlcEnabled;
+                current.TxAlertAlcPercent = TxAlertLimits.ClampAlcPercent(Settings.TxAlertAlcPercent);
                 // The same range MeterPollingService holds it to.
                 current.MeterPollIntervalMs = Math.Clamp(Settings.MeterPollIntervalMs, 50, 1000);
                 current.WebAddress        = Settings.WebAddress;

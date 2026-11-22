@@ -88,5 +88,6 @@
         conn.onreconnected(() => window.radioScopeControls.forEach(c => c.refresh()));
         conn.start().catch(err => console.error('[radio-scope]', err));
     </script>
+<script type="module" src="~/js/txalert/tx-alert.js" asp-append-version="true"></script>
 </body>
 </html>

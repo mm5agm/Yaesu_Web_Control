@@ -33,6 +33,19 @@
         public bool PowerOffAtExit { get; set; } = false;
 
         /// <summary>
+        /// The high SWR / high ALC pop-up on every page (Discussion #257).
+        /// On by default: it only appears while transmitting into a bad load
+        /// or overdriving a data mode, which is exactly when to be told.
+        /// SWR limit is a ratio (1.5-5.0); the ALC limit is a percentage of
+        /// the meter's scale (10-100) and is only watched in DATA and PSK
+        /// modes. See core Services/TxAlert/TxAlertMonitor.
+        /// </summary>
+        public bool TxAlertEnabled { get; set; } = true;
+        public double TxAlertSwrLimit { get; set; } = 2.5;
+        public bool TxAlertAlcEnabled { get; set; } = true;
+        public double TxAlertAlcPercent { get; set; } = 50;
+
+        /// <summary>
         /// When true, the SDR workers stop about 3 s after the last browser
         /// disconnects, so another program can open the SDR straight away,
         /// and start again when a browser reconnects. Default false: the SDRs
