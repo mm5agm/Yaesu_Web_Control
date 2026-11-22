@@ -12,6 +12,14 @@ a different and much older format.
 
 ---
 
+## 2026-11-22 - v2.5.6-pre23 (pre-release)
+
+*More detail in the log when the SDR scan crashes. Everything in v2.5.6-pre22 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**SDR scan diagnostics** [SDR Spectrum Display](USER_MANUAL.md#63-sdr-spectrum-display)
+
+- When the SDR scan crashes and YWC scans each driver on its own, the USB library the drivers share (libusb) now writes its own step-by-step record to the log. The last lines before a crash show which USB device it had reached. It's only on for those re-scans, so a scan that works logs nothing extra. ([Discussion #404](https://github.com/mm5agm/Yaesu_Web_Control/discussions/404))
+
 ## 2026-11-22 - v2.5.6-pre22 (pre-release)
 
 *The SDR scan names the driver that crashes it, and finer control on the Classic page. Everything in v2.5.6-pre21 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

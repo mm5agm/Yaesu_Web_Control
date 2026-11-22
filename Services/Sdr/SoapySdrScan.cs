@@ -180,7 +180,17 @@ internal static class SoapySdrScan
             RedirectStandardError  = true,
         };
         psi.ArgumentList.Add("--enumerate");
-        if (driver != null) psi.ArgumentList.Add(driver);
+        if (driver != null)
+        {
+            psi.ArgumentList.Add(driver);
+            // The one-driver scans only run after the whole scan crashed. With
+            // libusb's own debug output on, the log shows the last USB device
+            // it reached before the crash (#404: every driver crashed on its
+            // own, even airspy and hackrf with only RTL-SDRs plugged in, so
+            // the suspect is libusb's device list). libusb writes it to
+            // stderr unbuffered, so it survives the crash.
+            psi.Environment["LIBUSB_DEBUG"] = "4";
+        }
         string tag = driver == null ? "scan" : "scan " + driver;
 
         string stdout;
