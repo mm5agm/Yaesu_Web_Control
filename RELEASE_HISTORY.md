@@ -12,6 +12,17 @@ a different and much older format.
 
 ---
 
+## 2026-11-22 - v2.5.6-pre20 (pre-release)
+
+*A warning you can't miss when the SWR or ALC is too high, whichever program is transmitting. Everything in v2.5.6-pre19 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**High SWR and high ALC alerts** [Transmit alerts](USER_MANUAL.md#611-transmit-alerts-high-swr-high-alc)
+
+- When the SWR stays over your limit for 0.4 s while the radio is transmitting, a large red box appears at the top centre of every YWC page, pop-out windows included, with the reading in big numbers. It pulses while the reading is over the limit. After the transmission it stays, showing the peak and the time, until you click **Dismiss** or five minutes pass. Dismissing closes it in every tab. ([Discussion #257](https://github.com/mm5agm/Yaesu_Web_Control/discussions/257))
+- High ALC gets the same box, but only in the DATA and PSK modes, where the audio comes from the PC and too much of it makes a wide signal. Not in RTTY FSK, SSB or CW.
+- It works when N1MM, WSJT-X or any other program keys the radio, because YWC reads the meters itself. It only reads; it never transmits or changes the power. The log has a line when an alert starts and when it ends.
+- **Settings → Transmit alerts** switches each alert on or off and sets the limits: SWR 2.5 : 1 and ALC 50% to start with.
+
 ## 2026-11-21 - v2.5.6-pre19 (pre-release)
 
 *Log4OM shows the radio's frequency again, and Hamlib split works through rigctld. Everything in v2.5.6-pre18 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
