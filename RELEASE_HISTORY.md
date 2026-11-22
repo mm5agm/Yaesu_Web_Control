@@ -12,6 +12,25 @@ a different and much older format.
 
 ---
 
+## 2026-11-22 - v2.5.6-pre22 (pre-release)
+
+*The SDR scan names the driver that crashes it, and finer control on the Classic page. Everything in v2.5.6-pre21 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**SDR scan: each driver on its own after a crash** [SDR Spectrum Display](USER_MANUAL.md#63-sdr-spectrum-display)
+
+- SoapySDR asks every SDR driver for devices in one go, so when one driver crashed the scan, the others' devices were lost too and nothing said which driver it was. Now, when the scan crashes, YWC scans each driver (RTL-SDR, HackRF, Airspy and so on) again on its own. The ones that work list their devices as usual, and the note on the Settings page and the log name the one that crashed. ([Discussion #404](https://github.com/mm5agm/Yaesu_Web_Control/discussions/404))
+- If you see that note, please report it with the log.
+
+**Classic page: mouse wheel on sliders** [Main Control Panel](USER_MANUAL.md#5-main-control-panel)
+
+- Every slider moves one step for each notch of the mouse wheel while the mouse is over it, ten with **Shift** held. Scrolling the page past a slider doesn't change it. ([#145](https://github.com/mm5agm/Yaesu_Web_Control/issues/145))
+- The transmit sliders (Power, MIC Gain, PROC, Mon level, VOX and the remote audio TX gain) only take the wheel after you click on them, so a stray wheel can't raise the power.
+
+**Classic page: frequency keypad** [Frequency Display and Tuning](USER_MANUAL.md#56-frequency-display-and-tuning)
+
+- A new **.** key: type `3.630` for 3.630 MHz or `14.074` for 14.074 MHz, with no leading zero. The **.** or **,** key on your keyboard does the same. ([#148](https://github.com/mm5agm/Yaesu_Web_Control/issues/148))
+- A new **000** key zeroes the last three digits.
+
 ## 2026-11-22 - v2.5.6-pre21 (pre-release)
 
 *RTL-SDR and HackRF receivers are found again, and N1MM Logger+ can share the radio with YWC. Everything in v2.5.6-pre20 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
