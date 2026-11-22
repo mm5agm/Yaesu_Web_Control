@@ -53,6 +53,15 @@ public class Ft8x7Tests
         }
     }
 
+    // A set gets no reply, so SendAsync can't know when the radio has it. On a
+    // slow CI runner the link can still be busy with its first poll, so wait
+    // (up to 2 s) for the radio to show the change instead of a fixed time.
+    private static async Task WaitUntilAsync(Func<bool> done)
+    {
+        for (int i = 0; i < 200 && !done(); i++)
+            await Task.Delay(10);
+    }
+
     public static TheoryData<string> Models => new() { "FT-817", "FT-818", "FT-857", "FT-897" };
 
     [Theory]
@@ -75,6 +84,7 @@ public class Ft8x7Tests
         Assert.Equal(new[] { "FA145500000;", "MD04;" }, await SendAsync(link, "FA;MD0;", 2));
 
         await SendAsync(link, "FA007074000;MD01;", 0);
+        await WaitUntilAsync(() => radio.FrequencyHz == 7_074_000 && radio.Mode == 0x00);
         Assert.Equal(7_074_000, radio.FrequencyHz);
         Assert.Equal(0x00, radio.Mode);
         Assert.False(radio.Locked);
@@ -123,6 +133,7 @@ public class Ft8x7Tests
     {
         var (link, radio) = Open("FT-857");
         await SendAsync(link, $"MD0{md};", 0);
+        await WaitUntilAsync(() => radio.Mode == Ft847Cat.DigMode);
         Assert.Equal(Ft847Cat.DigMode, radio.Mode);
         Assert.Equal(new[] { $"MD0{md};" }, await SendAsync(link, "MD0;", 1));
         link.Dispose();
@@ -153,10 +164,7 @@ public class Ft8x7Tests
         await SendAsync(link, "TX1;", 0);
         Assert.DoesNotContain(radio.Received, b => b[4] == 0x08);
         await SendAsync(link, "TX0;", 0);
-        // Nothing comes back for TX0, so SendAsync waits only briefly; on a
-        // slow CI runner the link can still be busy with its first poll.
-        for (int i = 0; i < 200 && !ReceivedSnapshot(radio).Any(b => b[4] == Ft847Cat.PttOff); i++)
-            await Task.Delay(10);
+        await WaitUntilAsync(() => ReceivedSnapshot(radio).Any(b => b[4] == Ft847Cat.PttOff));
         Assert.Contains(ReceivedSnapshot(radio), b => b[4] == Ft847Cat.PttOff);
         link.Dispose();
     }
