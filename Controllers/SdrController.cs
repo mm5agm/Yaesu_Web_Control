@@ -79,6 +79,10 @@ namespace Yaesu_Web_Control.Controllers
             {
                 var soapy = scan.Devices;
 
+                // One driver crashed and the others were scanned on their own
+                // (#404): the note names it.
+                if (scan.Message != null) notes.Add(scan.Message);
+
                 // Always record the raw enumerate result — a plain device count plus
                 // the driver of each hit. When a user reports "my RTL-SDR works in
                 // other apps but not here", this one line separates "SoapySDR saw it

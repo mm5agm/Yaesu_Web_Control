@@ -23,7 +23,7 @@
 //
 // A second, one-shot mode:
 //
-//   Yaesu_Sdr_Worker.exe --enumerate
+//   Yaesu_Sdr_Worker.exe --enumerate [driver]
 //
 // runs the SoapySDR device scan and prints one JSON object to stdout (see
 // EnumerateResult). YWC main uses this instead of calling SoapySDR in its own
@@ -44,8 +44,9 @@ internal static class Program
         // SdrplayDllResolver and issue #53.
         Yaesu_Web_Control.Services.Sdr.SdrplayDllResolver.Register();
 
-        if (args.Length == 1 && args[0].Equals("--enumerate", StringComparison.OrdinalIgnoreCase))
-            return RunEnumerate();
+        // --enumerate [driver]: with a driver, only that one probes (#404).
+        if (args.Length is 1 or 2 && args[0].Equals("--enumerate", StringComparison.OrdinalIgnoreCase))
+            return RunEnumerate(args.Length == 2 ? args[1] : null);
 
         WorkerOptions? opts;
         try { opts = ParseArgs(args); }
@@ -76,7 +77,7 @@ internal static class Program
         Yaesu_Web_Control.Services.Sdr.SdrDeviceInfo[] Devices,
         string? Diagnostics);
 
-    private static int RunEnumerate()
+    private static int RunEnumerate(string? driver)
     {
         // Say where SoapySDR.dll resolved from *before* enumerating, on
         // stderr, so that when the scan takes the process down the parent's
@@ -125,7 +126,7 @@ internal static class Program
         EnumerateResult result;
         try
         {
-            var devices = Yaesu_Web_Control.Services.Sdr.SoapySdrInterop.EnumerateDevices();
+            var devices = Yaesu_Web_Control.Services.Sdr.SoapySdrInterop.EnumerateDevices(driver);
             // The plugin diagnostics are only interesting when nothing was
             // found, and they cost another round of native calls. They repeat
             // the search-path lines above and add which native DLLs the
@@ -208,11 +209,12 @@ internal static class Program
             "Usage:\n" +
             "  Yaesu_Sdr_Worker.exe --device-key KEY --vfo A|B --port N \\\n" +
             "                       --if-hz HZ --sample-rate HZ --fft-size N\n" +
-            "  Yaesu_Sdr_Worker.exe --enumerate\n" +
+            "  Yaesu_Sdr_Worker.exe --enumerate [driver]\n" +
             "\n" +
             "--enumerate runs the SoapySDR device scan in this process and prints\n" +
             "one JSON object to stdout, so a scan that crashes takes down this\n" +
-            "process and not Yaesu Web Control.\n" +
+            "process and not Yaesu Web Control. With a driver (rtlsdr, hackrf ...)\n" +
+            "only that driver looks for devices.\n" +
             "\n" +
             "Arguments:\n" +
             "  --device-key   SDR device key (e.g. sdrplay:hw6-2405242660, or a\n" +

@@ -133,11 +133,45 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// Throws <see cref="DllNotFoundException"/> when SoapySDR.dll (or one of its
         /// own dependencies) cannot be loaded — the caller decides how to report it.
         /// </summary>
-        public static IReadOnlyList<SdrDeviceInfo> EnumerateDevices()
+        /// <param name="driver">Only ask this driver ("rtlsdr", "hackrf" ...), or
+        /// null for all. SoapySDR still loads every module, but only the named
+        /// driver probes for devices, so a scan that crashes can be repeated a
+        /// driver at a time to find which one did it (#404).</param>
+        public static IReadOnlyList<SdrDeviceInfo> EnumerateDevices(string? driver = null)
         {
             var devices = new List<SdrDeviceInfo>();
 
-            IntPtr listPtr = NativeEnumerate(IntPtr.Zero, out nuint count);
+            IntPtr listPtr;
+            nuint count;
+            if (string.IsNullOrEmpty(driver))
+            {
+                listPtr = NativeEnumerate(IntPtr.Zero, out count);
+            }
+            else
+            {
+                // A one-entry SoapySDRKwargs { driver=<name> }, built here and
+                // freed here; the enumerate only reads it.
+                IntPtr key  = Marshal.StringToHGlobalAnsi("driver");
+                IntPtr val  = Marshal.StringToHGlobalAnsi(driver);
+                IntPtr keys = Marshal.AllocHGlobal(IntPtr.Size);
+                IntPtr vals = Marshal.AllocHGlobal(IntPtr.Size);
+                IntPtr args = Marshal.AllocHGlobal(Marshal.SizeOf<SoapySDRKwargsNative>());
+                try
+                {
+                    Marshal.WriteIntPtr(keys, key);
+                    Marshal.WriteIntPtr(vals, val);
+                    Marshal.StructureToPtr(new SoapySDRKwargsNative { Size = 1, Keys = keys, Vals = vals }, args, false);
+                    listPtr = NativeEnumerate(args, out count);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(args);
+                    Marshal.FreeHGlobal(vals);
+                    Marshal.FreeHGlobal(keys);
+                    Marshal.FreeHGlobal(val);
+                    Marshal.FreeHGlobal(key);
+                }
+            }
             if (listPtr == IntPtr.Zero || count == 0)
                 return devices;
 
@@ -151,10 +185,10 @@ namespace Yaesu_Web_Control.Services.Sdr
                 NativeFree(strPtr);
 
                 var pairs     = ParseKwargs(kwargs);
-                string driver = pairs.GetValueOrDefault("driver", "unknown");
+                string found  = pairs.GetValueOrDefault("driver", "unknown");
                 string label  = pairs.GetValueOrDefault("label",  kwargs);
 
-                devices.Add(new SdrDeviceInfo(Key: kwargs, Label: label, Driver: driver));
+                devices.Add(new SdrDeviceInfo(Key: kwargs, Label: label, Driver: found));
             }
 
             NativeKwargsListClear(listPtr, count);
