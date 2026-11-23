@@ -83,6 +83,10 @@ export function startYaesuRadioPanel(root, cfg) {
     // put the source in the name ("MAIN · ACC SCOPE").
     const sourceText = { A: 'SDR A', B: 'SDR B' };
     const maxPowerW = num(cfg.maxPowerW) || 100;
+    // PO's dial reads 0-200 W. A QRP radio (FT-817 5 W, FT-818 6 W) would
+    // barely move the needle on it, so below 100 W the dial is the radio's own
+    // 0-max and the needle is scaled to match (Felix DF3FX, D#379).
+    const poFullScale = maxPowerW < 100 ? maxPowerW : 200;
     // VDD and TEMP are read every two seconds in receive too (RM8 / RM9), on
     // the models whose Classic page shows them. The VDD dial is the model's
     // (40-55 V on the FTdx101MP, 10-16 V on the 13.8 V radios).
@@ -155,7 +159,10 @@ export function startYaesuRadioPanel(root, cfg) {
         dualDial: true,
         clarTurn: !limitedCat,
         meters: limitedCat ? ['PO'] : ['PO', 'SWR', 'ALC', 'COMP', 'IDD', ...(vddDial ? ['VDD'] : []), ...(paTemp ? ['TEMP'] : [])],
-        meterScales: vddDial ? { VDD: rangeLegends(vddDial.min, vddDial.max) } : {},
+        meterScales: {
+            ...(vddDial ? { VDD: rangeLegends(vddDial.min, vddDial.max) } : {}),
+            ...(poFullScale !== 200 ? { PO: rangeLegends(0, poFullScale) } : {}),
+        },
         liveMeters: ['VDD', 'TEMP'],
         vfoKeys: limitedCat ? [] : [
             { id: 'ab', label: 'A▸B', title: 'Copy VFO A to VFO B' }, { id: 'ba', label: 'B▸A', title: 'Copy VFO B to VFO A' },
@@ -879,6 +886,7 @@ export function startYaesuRadioPanel(root, cfg) {
             COMP: Math.max(0, Math.min(20, calibrateNumeric('Compression', num(raw.COMP)))),
             IDD: calibrateNumeric('IDD', num(raw.IDD)),
         };
+        v.PO *= 200 / poFullScale;   // txMeterFraction's PO is out of 200 W
         for (const [k, val] of Object.entries(v)) panel.setTxMeter(k, txMeterFraction(k, val));
     }
 

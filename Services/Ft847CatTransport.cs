@@ -232,21 +232,32 @@ namespace Yaesu_Web_Control.Services
             _port.Dispose();
         }
 
+        // The poll runs every pollMs whether or not commands are coming in.
+        // It used to run only after pollMs with no command, but YWC's meter
+        // poll sends one every 200 ms, so it never ran: a mode or A/B change
+        // made on the radio was never seen, and the frequency only caught up
+        // through the meter poll's slow FA backstop (Felix DF3FX, D#379).
         private async Task WorkAsync(CancellationToken ct)
         {
+            var lastPoll = DateTime.UtcNow;
             while (!ct.IsCancellationRequested)
             {
                 string? command = null;
-                try
+                var untilPoll = _pollMs - (int)(DateTime.UtcNow - lastPoll).TotalMilliseconds;
+                if (untilPoll > 0)
                 {
-                    using var wait = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    wait.CancelAfter(_pollMs);
-                    command = await _commands.Reader.ReadAsync(wait.Token);
+                    try
+                    {
+                        using var wait = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        wait.CancelAfter(untilPoll);
+                        command = await _commands.Reader.ReadAsync(wait.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        if (ct.IsCancellationRequested) return;
+                    }
                 }
-                catch (OperationCanceledException)
-                {
-                    if (ct.IsCancellationRequested) return;
-                }
+                if (command == null) lastPoll = DateTime.UtcNow;
 
                 try
                 {
@@ -340,7 +351,7 @@ namespace Yaesu_Web_Control.Services
                     }
                     if (long.TryParse(body, out var hz) && hz >= _minHz && hz <= _maxHz)
                     {
-                        _port.Write(Ft847Cat.SetFrequencyBlock(hz));
+                        await SendSetAsync(Ft847Cat.SetFrequencyBlock(hz));
                         _mainReadUtc = DateTime.MinValue;
                     }
                     return none;
@@ -368,7 +379,7 @@ namespace Yaesu_Web_Control.Services
                         var mode = Ft847Cat.ModeFromMd(md, _model);
                         if (mode != null)
                         {
-                            _port.Write(Ft847Cat.SetModeBlock(mode.Value));
+                            await SendSetAsync(Ft847Cat.SetModeBlock(mode.Value));
                             _lastSetMd = md;
                             _mainReadUtc = DateTime.MinValue;
                         }
@@ -389,7 +400,14 @@ namespace Yaesu_Web_Control.Services
                         var tx = await ExchangeAsync(Ft847Cat.Block(Ft847Cat.ReadTxStatus), 1);
                         if (tx == null) return none;
                         // Receiving, the meter bits are not a power reading.
-                        var po = Ft847Cat.IsTransmitting(tx[0]) ? Ft847Cat.MeterTo255(tx[0], _model) : 0;
+                        if (!Ft847Cat.IsTransmitting(tx[0])) return new[] { "RM5000000" };
+                        var po = Ft847Cat.MeterTo255(tx[0], _model);
+                        // The FT-817 and FT-818: power from BD, as Hamlib reads it.
+                        if (Ft847Cat.ReadsPowerWithBd(_model))
+                        {
+                            var bd = await ExchangeAsync(Ft847Cat.Block(Ft847Cat.ReadTxMetering), 2);
+                            if (bd != null) po = Ft847Cat.PowerFromBd(bd);
+                        }
                         return new[] { $"RM5{po:D3}000" };
                     }
                     return new[] { "?" };
@@ -401,7 +419,7 @@ namespace Yaesu_Web_Control.Services
                         if (tx == null) return none;
                         return new[] { Ft847Cat.IsTransmitting(tx[0]) ? "TX2" : "TX0" };
                     }
-                    if (body == "0") _port.Write(Ft847Cat.Block(Ft847Cat.PttOff));
+                    if (body == "0") await SendSetAsync(Ft847Cat.Block(Ft847Cat.PttOff));
                     else _logger?.LogWarning("{Tag} {Command} ignored: CAT PTT on is not enabled for the {Model}", _tag, command, _model);
                     return none;
 
@@ -485,7 +503,7 @@ namespace Yaesu_Web_Control.Services
                 _logger?.LogDebug("{Tag} VFO {Vfo} frequency not set: the radio is on the other VFO", _tag, which == 0 ? "A" : "B");
                 return Array.Empty<string>();
             }
-            _port.Write(Ft847Cat.SetFrequencyBlock(set));
+            await SendSetAsync(Ft847Cat.SetFrequencyBlock(set));
             _mainReadUtc = DateTime.MinValue;
             return Array.Empty<string>();
         }
@@ -504,7 +522,7 @@ namespace Yaesu_Web_Control.Services
             var mode = Ft847Cat.ModeFromMd(asked, _model);
             if (mode != null)
             {
-                _port.Write(Ft847Cat.SetModeBlock(mode.Value));
+                await SendSetAsync(Ft847Cat.SetModeBlock(mode.Value));
                 _lastSetMd = asked;
                 _mainReadUtc = DateTime.MinValue;
             }
@@ -525,7 +543,7 @@ namespace Yaesu_Web_Control.Services
                 return;
             }
 
-            _port.Write(Ft847Cat.Block(Ft847Cat.ToggleVfo));
+            await SendSetAsync(Ft847Cat.Block(Ft847Cat.ToggleVfo));
             // Hamlib waits 50 ms for the swap before reading the EEPROM again.
             await Task.Delay(60);
             await ReadVfoAsync(maxAgeMs: 0);
@@ -599,6 +617,40 @@ namespace Yaesu_Web_Control.Services
                     _logger?.LogWarning("[FT-847] no reply to five reads in a row. Check the null-modem cable, menu 37 CAT RATE against YWC's baud rate, and that the FC-20 tuner cable is unplugged");
             }
             return null;
+        }
+
+        // A set block. On the FT-8x7 the radio answers it with a one-byte
+        // ack, which is read here so it can't land in the next read's reply
+        // (see Ft847Cat.AcksSets). No ack is not an error: Hamlib carries on
+        // too, and a missing ack is not a missing radio, so it doesn't count
+        // towards the five-timeouts warning.
+        private async Task SendSetAsync(byte[] block)
+        {
+            if (!Ft847Cat.AcksSets(_model))
+            {
+                _port.Write(block);
+                return;
+            }
+
+            var tcs = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (_rxLock)
+            {
+                _rx.Clear();
+                _expect = 1;
+                _pending = tcs;
+            }
+
+            _port.Write(block);
+            var done = await Task.WhenAny(tcs.Task, Task.Delay(_replyTimeoutMs));
+
+            lock (_rxLock)
+            {
+                _pending = null;
+                _rx.Clear();
+            }
+
+            if (done != tcs.Task)
+                _logger?.LogDebug("{Tag} no ack for {Bytes}", _tag, Convert.ToHexString(block));
         }
 
         private void OnBytes(byte[] data)

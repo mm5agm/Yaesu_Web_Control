@@ -13,7 +13,10 @@ namespace Yaesu_Web_Control.Services
     /// Given an FT-817, FT-818, FT-857 or FT-897 as its model, it acts as one:
     /// CAT is always on, 00 and 80 lock and unlock the front panel (recorded
     /// in <see cref="Locked"/> so the tests can prove YWC never sends them),
-    /// and the meters are four bits.
+    /// and the meters are four bits. Like the real radio (Hamlib's
+    /// ft817_read_ack) it answers every block that isn't a read with one 00
+    /// byte, <see cref="AckDelayMs"/> later. The FT-817 and FT-818 also answer
+    /// BB, the transmit metering read: two bytes keyed, one not.
     /// </summary>
     public sealed class Ft847Simulator : IFt847Port
     {
@@ -48,6 +51,13 @@ namespace Yaesu_Web_Control.Services
         public int PowerMeter { get; set; }           // 0-31 (FT-8x7: 0-15)
         public bool AnswersReads { get; set; } = true; // false = early "FT-847UNI"
 
+        /// <summary>FT-8x7: how long after a set block its 00 ack leaves. A
+        /// slow ack is what moved Felix's 03 replies along a byte (D#379).</summary>
+        public int AckDelayMs { get; set; } = 5;
+
+        /// <summary>FT-817/818: the power the BD read reports, 0-8 (0-5 W on the FT-817).</summary>
+        public int PowerBd { get; set; }
+
         /// <summary>Every complete block received, in order. For tests.</summary>
         public List<byte[]> Received { get; } = new();
 
@@ -71,7 +81,7 @@ namespace Yaesu_Web_Control.Services
         {
             if (!_open) throw new InvalidOperationException("The simulated FT-847 is not open.");
 
-            var replies = new List<byte[]>();
+            var replies = new List<(byte[] Bytes, int DelayMs)>();
             lock (_lock)
             {
                 _partial.AddRange(block);
@@ -81,18 +91,24 @@ namespace Yaesu_Web_Control.Services
                     _partial.RemoveRange(0, 5);
                     Received.Add(b);
                     var reply = Handle(b);
-                    if (reply != null) replies.Add(reply);
+                    if (reply != null) replies.Add((reply, 5));
+                    else if (Ft847Cat.IsFt8x7(Model) && !IsRead(b[4])) replies.Add((new byte[] { 0x00 }, AckDelayMs));
                 }
             }
 
             // A reply leaves a few milliseconds later on another thread, like a serial port.
-            foreach (var reply in replies)
+            foreach (var (reply, delayMs) in replies)
                 _ = Task.Run(async () =>
                 {
-                    await Task.Delay(5);
+                    await Task.Delay(delayMs);
                     if (_open) BytesReceived?.Invoke(reply);
                 });
         }
+
+        // The FT-8x7 reads, which answer with data and no ack.
+        private static bool IsRead(byte opcode) =>
+            opcode is Ft847Cat.ReadMainFrequencyAndMode or Ft847Cat.ReadRxStatus
+                   or Ft847Cat.ReadTxStatus or Ft847Cat.ReadEeprom or Ft847Cat.ReadTxMetering;
 
         private byte[]? Handle(byte[] b)
         {
@@ -138,6 +154,11 @@ namespace Yaesu_Web_Control.Services
                     if (address == Ft847Cat.VfoEepromAddress && Ft847Cat.ReadsVfoFromEeprom(Model))
                         return new[] { (byte)(0xA4 | (OnVfoB ? 1 : 0)), (byte)0x37 };
                     return new byte[] { 0, 0 };
+                case Ft847Cat.ReadTxMetering when Ft847Cat.ReadsPowerWithBd(Model):
+                    if (!AnswersReads) return null;
+                    // Keyed: power in the top nibble of byte 0, ALC/SWR/mod after.
+                    // Not keyed the radio sends one byte.
+                    return Transmitting ? new[] { (byte)((PowerBd & 0x0F) << 4), (byte)0x00 } : new byte[] { 0x00 };
                 case Ft847Cat.WriteEeprom:
                     EepromWritten = true;
                     return null;

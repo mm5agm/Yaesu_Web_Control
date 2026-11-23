@@ -112,8 +112,11 @@ public class Ft8x7Tests
         radio.SMeter = 0;
         Assert.Equal(new[] { "SM0000;" }, await SendAsync(link, "SM0;", 1));
 
+        // Full scale: the FT-857/897 from the F7 bits, the FT-817/818 from BD
+        // (Ft817AckTests), as Hamlib reads them.
         radio.Transmitting = true;
         radio.PowerMeter = 15;
+        radio.PowerBd = 15;
         Assert.Equal(new[] { "TX2;", "RM5255000;" }, await SendAsync(link, "TX;RM5;", 2));
         link.Dispose();
     }
