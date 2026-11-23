@@ -12,6 +12,16 @@ a different and much older format.
 
 ---
 
+## 2026-11-23 - v2.5.6-pre25 (pre-release)
+
+*A host-network option for Docker, for WSJT-X and JTDX decodes. Nothing changes for Windows or macOS. Everything in v2.5.6-pre24 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Docker: host network for the decodes** [Linux Docker](USER_MANUAL.md#23-linux-docker-including-raspberry-pi)
+
+- `docker-compose.yml` now has a `network_mode: host` line, commented out. Uncomment it and the decodes from WSJT-X or JTDX (UDP multicast on 239.255.0.1 port 2237) reach YWC, which they can't through Docker's normal bridge network. YWC on 8080 and 8443, rigctld on 4532 and the N1MM CAT port on 4535 are then on the host's own address. Glenn confirmed host mode works on Ubuntu. ([#390](https://github.com/mm5agm/Yaesu_Web_Control/issues/390))
+- For the normal bridge network, there are commented-out port lines for rigctld (4532) and the N1MM CAT port (4535).
+- **Two radios:** one container per radio, with its own data folder and serial port; the comments show the ports to give the second one.
+
 ## 2026-11-23 - v2.5.6-pre24 (pre-release)
 
 *FT-817 fixes from the first test on a real radio, and a PC load panel in Diagnostics. Everything in v2.5.6-pre23 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

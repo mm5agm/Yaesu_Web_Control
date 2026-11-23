@@ -29,9 +29,29 @@ services:
     image: ghcr.io/mm5agm/yaesu_web_control:latest
     container_name: ywc
     restart: unless-stopped
+    # Network: Docker's normal bridge network (the ports below) is fine for the
+    # browser and for rig control, but UDP multicast doesn't pass through it, so
+    # WSJT-X / JTDX decodes on 239.255.0.1 port 2237 never reach YWC, and
+    # programs on the host can't hear YWC's own multicast either. For those,
+    # uncomment network_mode: host. The container then uses the host's network
+    # directly: YWC on 8080/8443, rigctld on 4532 and the N1MM CAT server on
+    # 4535 are all on the host's own address, and the ports: section is ignored.
+    # Glenn confirmed host mode works on Ubuntu (issue #390).
+    # network_mode: host
+    #
+    # Two radios: run one container per radio, each with its own
+    # container_name, YWC_DATA_DIR and YWC_SERIAL_DEVICE. Only one can use
+    # host mode; give the other bridge ports that don't clash, e.g.
+    # YWC_HTTP_PORT=8081, YWC_HTTPS_PORT=8444 and "4533:4532" for rigctld.
     ports:
       - "${YWC_HTTP_PORT:-8080}:8080"
       - "${YWC_HTTPS_PORT:-8443}:8443"
+      # Optional: Hamlib NET rigctl (WSJT-X, JTDX, loggers) and the N1MM CAT
+      # server, for programs on the host or other machines in bridge mode.
+      # N1MM runs on a Windows PC, so in either mode also tick Allow N1MM on
+      # another PC in Settings, N1MM Logger+.
+      # - "${YWC_RIGCTLD_PORT:-4532}:4532"
+      # - "${YWC_N1MM_CAT_PORT:-4535}:4535"
     environment:
       TZ: ${TZ:-UTC}
       # Official ASP.NET images set this; keep it explicit for custom bases.
