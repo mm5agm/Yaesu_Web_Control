@@ -488,7 +488,9 @@ namespace Yaesu_Web_Control.Services
         }
 
         // FA / FB on a radio whose VFO is known: live for the VFO it's on,
-        // remembered for the other. A set for the other VFO is dropped.
+        // remembered for the other. A set for the other VFO swaps to it, sets
+        // and swaps back, as Hamlib does for a radio that can't reach its other
+        // VFO directly (Discussion #379: the Home band keys did nothing on B).
         private async Task<IEnumerable<string>> VfoFrequencyAsync(int which, int on, string body)
         {
             if (body.Length == 0)
@@ -498,13 +500,11 @@ namespace Yaesu_Web_Control.Services
                 return new[] { which == 0 ? FaReply(hz.Value) : FbReply(hz.Value) };
             }
             if (!long.TryParse(body, out var set) || set < _minHz || set > _maxHz) return Array.Empty<string>();
-            if (which != on)
+            await OnVfoAsync(which, on, async () =>
             {
-                _logger?.LogDebug("{Tag} VFO {Vfo} frequency not set: the radio is on the other VFO", _tag, which == 0 ? "A" : "B");
-                return Array.Empty<string>();
-            }
-            await SendSetAsync(Ft847Cat.SetFrequencyBlock(set));
-            _mainReadUtc = DateTime.MinValue;
+                await SendSetAsync(Ft847Cat.SetFrequencyBlock(set));
+                _mainReadUtc = DateTime.MinValue;
+            });
             return Array.Empty<string>();
         }
 
@@ -517,16 +517,38 @@ namespace Yaesu_Web_Control.Services
                 var md = which == on ? (await ReadMainAsync(maxAgeMs: 100))?.Md : _slot[which]?.Md;
                 return md == null ? Array.Empty<string>() : new[] { p1 + md.Value };
             }
-            if (rest.Length != 1 || which != on) return Array.Empty<string>();
+            if (rest.Length != 1) return Array.Empty<string>();
             var asked = char.ToUpperInvariant(rest[0]);
             var mode = Ft847Cat.ModeFromMd(asked, _model);
-            if (mode != null)
+            if (mode == null) return Array.Empty<string>();
+            await OnVfoAsync(which, on, async () =>
             {
                 await SendSetAsync(Ft847Cat.SetModeBlock(mode.Value));
                 _lastSetMd = asked;
                 _mainReadUtc = DateTime.MinValue;
-            }
+            });
             return Array.Empty<string>();
+        }
+
+        // Run a set on VFO `which`. On the other VFO: swap to it, set, read
+        // it back (so its slot holds the new value) and swap back. Nothing is
+        // set if the swap didn't happen (transmitting, or no answer).
+        private async Task OnVfoAsync(int which, int on, Func<Task> set)
+        {
+            if (which == on)
+            {
+                await set();
+                return;
+            }
+            await SelectVfoAsync(which);
+            if (_vfo != which)
+            {
+                _logger?.LogDebug("{Tag} VFO {Vfo} not set: the radio didn't change VFO", _tag, which == 0 ? "A" : "B");
+                return;
+            }
+            await set();
+            await ReadMainAsync(maxAgeMs: 0);
+            await SelectVfoAsync(on);
         }
 
         // VS0; / VS1;: swap with 81 if the radio is on the other VFO. Never

@@ -12,6 +12,16 @@ a different and much older format.
 
 ---
 
+## 2026-11-23 - v2.5.6-pre26 (pre-release)
+
+*FT-817 and FT-818: the Home page follows VFO A and B. Everything in v2.5.6-pre25 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT-817 and FT-818** [The FT-817, FT-818, FT-857 and FT-897](USER_MANUAL.md#the-ft-817-ft-818-ft-857-and-ft-897)
+
+- **Home shows VFO A and B.** It showed only VFO A, as it does for the FT-847, FT-857 and FT-897. Now both VFOs are there, with a frame round the one the radio is on, and the **RX A / B** keys swap between them. The TX keys stay hidden: split isn't on these radios' CAT. ([#379](https://github.com/mm5agm/Yaesu_Web_Control/discussions/379))
+- **Band keys work on VFO B.** With the radio on VFO B, a band key for VFO A did nothing. Now a band, frequency or mode for the VFO the radio isn't on swaps to it, sets it and swaps back, as Hamlib does, so the radio stays on the VFO it was on. Never while transmitting.
+- **TX key:** with CAT PTT off (it always is on these radios), the TX key no longer shows the radio as transmitting.
+
 ## 2026-11-23 - v2.5.6-pre25 (pre-release)
 
 *A host-network option for Docker, for WSJT-X and JTDX decodes. Nothing changes for Windows or macOS. Everything in v2.5.6-pre24 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

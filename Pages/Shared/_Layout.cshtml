@@ -60,7 +60,7 @@
         window.MeterFormatters = MeterFormatters;
     </script>
 </head>
-<body class="@(Yaesu_Web_Control.Services.RadioCapabilities.HasLimitedCat(LayoutRadioState.RadioModel) ? "ywc-limited-cat" : null)">
+<body class="@(Yaesu_Web_Control.Services.RadioCapabilities.HasLimitedCat(LayoutRadioState.RadioModel) ? (Yaesu_Web_Control.Services.RadioCapabilities.CanSelectRxVfo(LayoutRadioState.RadioModel) ? "ywc-limited-cat ywc-vfo-ab" : "ywc-limited-cat") : null)">
     @* sticky-top is on <header>, not the inner <nav>. Position: sticky tracks
        the nearest scrolling containing block (here, <body>). If sticky-top is
        on the nav instead, the containing block becomes <header>, which is only
