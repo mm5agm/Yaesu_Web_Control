@@ -28,7 +28,7 @@ namespace Yaesu_Web_Control.Services
         private readonly RadioStateService _radioStateService;
         private bool _autoInformationEnabled = false;
 
-        private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _pendingResponses = new();
+        private readonly PendingReplies _pendingResponses = new();
         private TaskCompletionSource<bool>? _initializationCompletionSource;
 
         // Debounced post-VS re-query for single-receiver radios (cancel-and-
@@ -111,11 +111,7 @@ namespace Yaesu_Web_Control.Services
                 return; // Do not fall through to _pendingResponses
             }
 
-            if (_pendingResponses.TryRemove(prefix, out var tcs))
-            {
-                tcs.TrySetResult(message.TrimEnd(';'));
-            }
-            else
+            if (!_pendingResponses.TryAnswer(prefix, message.TrimEnd(';')))
             {
                 _messageDispatcher.DispatchMessage(message);
             }
@@ -329,29 +325,26 @@ namespace Yaesu_Web_Control.Services
             return text.Substring(0, 2);
         }
 
+        // A plain read already waiting for its answer isn't sent again; the
+        // caller shares that answer (see PendingReplies).
         public async Task<string?> SendCommandAsync(string command, string clientId, CancellationToken cancellationToken = default, int timeoutMs = 150)
         {
             if (_link?.IsOpen != true)
                 return null;
 
-            var prefix = ReplyKey(command);
-            var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _pendingResponses[prefix] = tcs;
-            await SendToSerialPortAsync(command, cancellationToken);
+            return await _pendingResponses.AskAsync(ReplyKey(command), command.EndsWith(";") ? command : command + ";",
+                () => SendToSerialPortAsync(command, cancellationToken), timeoutMs, cancellationToken);
+        }
 
-            var timeoutTask = Task.Delay(timeoutMs, cancellationToken);
-            var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
-
-            _pendingResponses.TryRemove(prefix, out _);
-
-            if (completedTask == tcs.Task)
-            {
-                return await tcs.Task;
-            }
-            else
-            {
-                return null;
-            }
+        // As SendCommandAsync, and the answer also updates YWC's own state.
+        // For N1MM's reads: an answer N1MM takes, such as FA after a tune, is
+        // one the dispatcher would otherwise never see.
+        public async Task<string?> SendReadAndDispatchAsync(string command, string clientId, CancellationToken cancellationToken, int timeoutMs)
+        {
+            var response = await SendCommandAsync(command, clientId, cancellationToken, timeoutMs);
+            if (!string.IsNullOrEmpty(response))
+                _messageDispatcher.DispatchMessage(response + ";");
+            return response;
         }
 
         private async Task ProcessCommandQueueAsync(CancellationToken cancellationToken)
