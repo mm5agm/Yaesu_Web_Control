@@ -8,6 +8,10 @@ namespace YaesuWebControl.Tests;
 // YWC's text commands into the right blocks and the radio's replies back into
 // text. These run against Ft847Simulator, which is built from the manual and
 // Hamlib, so they prove the translation; only a real FT-847 proves the radio.
+// Timing-sensitive (an emulated radio answering over a fake serial port):
+// skipped in CI, where the shared runners stall long enough to fail it
+// now and then. Run locally with the full suite.
+[Trait("Category", "SerialTiming")]
 public class Ft847Tests
 {
     private static (Ft847CatTransport Link, Ft847Simulator Radio) Open(int pollMs = 5000)

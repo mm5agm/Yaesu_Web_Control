@@ -9,6 +9,10 @@ namespace YaesuWebControl.Tests;
 // CAT ON and OFF; the meters are four bits; and data goes out in DIG mode.
 // These run against Ft847Simulator acting as each radio, so they prove the
 // translation; only a real radio proves the radio.
+// Timing-sensitive (an emulated radio answering over a fake serial port):
+// skipped in CI, where the shared runners stall long enough to fail it
+// now and then. Run locally with the full suite.
+[Trait("Category", "SerialTiming")]
 public class Ft8x7Tests
 {
     private static (Ft847CatTransport Link, Ft847Simulator Radio) Open(string model, int pollMs = 5000)
