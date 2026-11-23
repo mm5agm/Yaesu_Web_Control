@@ -135,17 +135,49 @@ public class Ft817VfoTests
         link.Dispose();
     }
 
+    // Discussion #379: on VFO B, the Home band keys sent FA and nothing
+    // happened. A set for the other VFO now swaps to it, sets it and swaps
+    // back, as Hamlib does, so the radio stays on the VFO it was on.
     [Fact]
-    public async Task ASet_ForTheVfoTheRadioIsNotOn_IsDropped()
+    public async Task ASet_ForTheOtherVfo_SwapsSetsAndSwapsBack()
     {
         var (link, radio) = Open();
-        radio.OnVfoB = true;
-        await SendAsync(link, "FA021074000;MD01;", 0);
+        await SendAsync(link, "VS1;", 0);               // on B: 7.074 LSB, A is 14.074 USB
+        Assert.True(radio.OnVfoB);
+        var swapsBefore = Count(radio, Ft847Cat.ToggleVfo);
+
+        await SendAsync(link, "FA021074000;MD03;", 0);  // A: 21.074 CW
+        for (int i = 0; i < 200 && !(radio.OnVfoB && radio.OtherFrequencyHz == 21_074_000 && radio.OtherMode == 0x02); i++)
+            await Task.Delay(10);
+
+        Assert.True(radio.OnVfoB);
+        Assert.Equal(7_074_000, radio.FrequencyHz);     // B untouched
+        Assert.Equal(21_074_000, radio.OtherFrequencyHz);
+        Assert.Equal(0x02, radio.OtherMode);
+        Assert.Equal(0, (Count(radio, Ft847Cat.ToggleVfo) - swapsBefore) % 2);
+        Assert.Equal(new[] { "FA021074000;", "MD03;" }, await SendAsync(link, "FA;MD0;", 2));
+
+        await SendAsync(link, "FB010136000;", 0);       // the VFO it's on: no swap
+        var swaps = Count(radio, Ft847Cat.ToggleVfo);
+        for (int i = 0; i < 200 && radio.FrequencyHz != 10_136_000; i++)
+            await Task.Delay(10);
+        Assert.Equal(10_136_000, radio.FrequencyHz);
+        Assert.Equal(swaps, Count(radio, Ft847Cat.ToggleVfo));
+        link.Dispose();
+    }
+
+    [Fact]
+    public async Task ASet_ForTheOtherVfo_IsNotSentWhileTransmitting()
+    {
+        var (link, radio) = Open();
+        await SendAsync(link, "VS;", 1);
+        radio.Transmitting = true;
+        await SendAsync(link, "FB021074000;MD13;", 0);
+        await Task.Delay(200);
+        Assert.False(radio.OnVfoB);
+        Assert.Equal(0, Count(radio, Ft847Cat.ToggleVfo));
         Assert.Equal(0, Count(radio, Ft847Cat.SetMainFrequency));
         Assert.Equal(0, Count(radio, Ft847Cat.SetMainMode));
-
-        await SendAsync(link, "FB010136000;", 0);
-        Assert.Equal(10_136_000, radio.FrequencyHz);
         link.Dispose();
     }
 

@@ -266,6 +266,13 @@ namespace Yaesu_Web_Control.Controllers
             _logger.LogInformation("[API] ToggleTransmit called: transmit={Transmit}", request.Transmit);
             try
             {
+                if (request.Transmit && RadioCapabilities.UsesFiveByteCat(_radioStateService.RadioModel))
+                {
+                    // Ft847CatTransport never sends PTT on, so don't claim it
+                    // happened (Discussion #379 log: "transmitting=true" after TX1 was ignored).
+                    _logger.LogInformation("[API] ToggleTransmit: CAT PTT on is not enabled for the {Model}", _radioStateService.RadioModel);
+                    return Ok(new { message = "CAT PTT on is not enabled for this radio", transmitting = false });
+                }
                 if (request.Transmit)
                 {
                     _logger.LogInformation("Turning TX ON...");

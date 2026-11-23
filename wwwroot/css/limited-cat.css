@@ -42,21 +42,25 @@
 
 /* ── Classic page: VFO B, split and the VFO buttons ──
  * VFO B is kept in the app only; the radio's sub VFO and split are not on
- * its CAT. VFO A takes the full width, as it does when B is hidden. */
-.ywc-limited-cat #vfoBCol,
-.ywc-limited-cat #vfoBToggleBtn,
+ * its CAT. VFO A takes the full width, as it does when B is hidden.
+ * The FT-817 and FT-818 (ywc-vfo-ab) keep VFO B and the RX A/B keys: YWC
+ * reads which VFO they're on, and the frame shows it (Discussion #379).
+ * Split is still not on their CAT, so the TX keys go. */
+.ywc-limited-cat:not(.ywc-vfo-ab) #vfoBCol,
+.ywc-limited-cat:not(.ywc-vfo-ab) #vfoBToggleBtn,
+.ywc-limited-cat:not(.ywc-vfo-ab) #rxTxSplitGroup,
+.ywc-limited-cat #rxTxSplitGroup .tx-vfo-select,
 .ywc-limited-cat #swapVfoBtn,
 .ywc-limited-cat #copyBtoABtn,
 .ywc-limited-cat #copyAtoBBtn,
 .ywc-limited-cat #splitBtn,
 .ywc-limited-cat #quickSplitBtn,
-.ywc-limited-cat #rxTxSplitGroup,
 /* the radio's power switch: no CAT for it */
 .ywc-limited-cat #radioPowerBtn {
     display: none !important;
 }
 
-.ywc-limited-cat #vfoACol {
+.ywc-limited-cat:not(.ywc-vfo-ab) #vfoACol {
     flex: 0 0 100% !important;
     max-width: 100% !important;
 }
