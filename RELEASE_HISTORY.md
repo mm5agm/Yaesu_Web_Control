@@ -12,6 +12,14 @@ a different and much older format.
 
 ---
 
+## 2026-11-23 - v2.5.6-pre31 (pre-release)
+
+*RTL-SDR, Airspy and HackRF devices should now start streaming. Everything in v2.5.6-pre30 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**SDR spectrum** [SDR Spectrum Display](USER_MANUAL.md#63-sdr-spectrum-display)
+
+- **SoapySDR devices are asked for their receive side.** YWC used the wrong number for "receive", which SoapySDR reads as "transmit". So an RTL-SDR was found and opened, then refused to stream, and the log said only "setupStream returned null stream". YWC now asks for the receive side. If a device still refuses, the log gives the driver's own reason. ([D#404](https://github.com/mm5agm/Yaesu_Web_Control/discussions/404))
+
 ## 2026-11-23 - v2.5.6-pre30 (pre-release)
 
 *N1MM Logger+ gets every answer quickly, and RTL-SDR, Airspy and HackRF scans should no longer crash. Everything in v2.5.6-pre29 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
