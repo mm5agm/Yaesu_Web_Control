@@ -12,6 +12,19 @@ a different and much older format.
 
 ---
 
+## 2026-11-23 - v2.5.6-pre30 (pre-release)
+
+*N1MM Logger+ gets every answer quickly, and RTL-SDR, Airspy and HackRF scans should no longer crash. Everything in v2.5.6-pre29 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**N1MM Logger+** [N1MM Logger+](USER_MANUAL.md#95-n1mm-logger)
+
+- **N1MM's reads are answered, and quickly.** When N1MM and YWC asked the radio the same thing at once (both read the transmit state), one of them could lose the answer and wait a second for nothing. That slowed N1MM's band buttons, and a run of missed answers is what makes N1MM show "Click to Reset Radio". In a bench test that polls like N1MM, 5 of 136 polls went unanswered before this fix and none after, and the slowest poll dropped from about 1 s to 74 ms. Each answer now goes back to N1MM as soon as the radio gives it, and the log counts any read the radio didn't answer in time. ([#394](https://github.com/mm5agm/Yaesu_Web_Control/issues/394))
+
+**SDR spectrum** [SDR Spectrum Display](USER_MANUAL.md#63-sdr-spectrum-display)
+
+- **The SoapySDR scan brings its own Visual C++ runtime.** The RTL-SDR, Airspy and HackRF drivers need Microsoft's Visual C++ runtime. YWC used whatever copy Windows had, and an older one crashes every scan, even with nothing plugged in. The runtime now comes with YWC, and the log shows which copy loaded. ([D#404](https://github.com/mm5agm/Yaesu_Web_Control/discussions/404))
+- **Disable SDR / Clear Device saves straight away.** It used to empty the boxes only, so unless Save Settings was pressed too, the old device stayed saved and YWC kept trying to open it. ([D#404](https://github.com/mm5agm/Yaesu_Web_Control/discussions/404))
+
 ## 2026-11-23 - v2.5.6-pre29 (pre-release)
 
 *Launch buttons always have a name, and the release date is right. Everything in v2.5.6-pre28 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
