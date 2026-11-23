@@ -129,6 +129,12 @@ const CONDITIONS = {
     'size:1': ss => !ss.is3dss && (ss.size | 0) === 1,
     'size:2': ss => !ss.is3dss && (ss.size | 0) === 2,
 };
+// `active:A` / `active:B` hold while that VFO is the active one (the scope's
+// band): the FTdx101 draws the active VFO's frequency large.
+const VFO_CONDITIONS = {
+    'active:A': vfo => vfo === 'A',
+    'active:B': vfo => vfo === 'B',
+};
 
 // Per-model zone tables. rect = [left, top, right, bottom] as fractions of
 // the frame (normalizeZone also accepts pixels and x/y/w/h). `scope.plot` is
@@ -167,10 +173,56 @@ const FTDX101_DIGITS = [
     ['f1',    0.440, 0.492, 1],
 ];
 
-function digitZones(digits, top, bottom) {
+// The radio draws the active VFO's frequency large and the other one small
+// (Colin 2026-11-23: with SUB active VFO A shrinks and VFO B grows), so each
+// VFO has a large and a small table and hideWhen shows the one that matches.
+// Same rule throughout: each dot goes to the digit before it.
+// VFO A small, measured 2026-11-23 on a live FTdx101MP frame with SUB active
+// (10.135.370, glyphs x 0.139-0.444, y 0.335-0.395).
+const FTDX101_DIGITS_A_SMALL = [
+    ['afS10M',  0.125, 0.160, 10_000_000],
+    ['afS1M',   0.160, 0.208, 1_000_000],
+    ['afS100k', 0.208, 0.245, 100_000],
+    ['afS10k',  0.245, 0.284, 10_000],
+    ['afS1k',   0.284, 0.333, 1_000],
+    ['afS100',  0.333, 0.374, 100],
+    ['afS10',   0.374, 0.410, 10],
+    ['afS1',    0.410, 0.448, 1],
+];
+// VFO B small (MAIN active), measured 2026-11-23 on
+// pictures/Radio_Display_Docked.png (18.100.000, glyphs x 0.644-0.948,
+// y 0.350-0.388).
+const FTDX101_DIGITS_B = [
+    ['bf10M',  0.630, 0.664, 10_000_000],
+    ['bf1M',   0.664, 0.716, 1_000_000],
+    ['bf100k', 0.716, 0.753, 100_000],
+    ['bf10k',  0.753, 0.790, 10_000],
+    ['bf1k',   0.790, 0.838, 1_000],
+    ['bf100',  0.838, 0.878, 100],
+    ['bf10',   0.878, 0.913, 10],
+    ['bf1',    0.913, 0.952, 1],
+];
+// VFO B large (SUB active), measured 2026-11-23 on Colin's FTdx101MP frame
+// (14.075.614, glyphs x 0.606-0.988, y 0.333-0.391).
+const FTDX101_DIGITS_B_LARGE = [
+    ['bfL10M',  0.598, 0.632, 10_000_000],
+    ['bfL1M',   0.632, 0.696, 1_000_000],
+    ['bfL100k', 0.696, 0.749, 100_000],
+    ['bfL10k',  0.749, 0.793, 10_000],
+    ['bfL1k',   0.793, 0.852, 1_000],
+    ['bfL100',  0.852, 0.898, 100],
+    ['bfL10',   0.898, 0.940, 10],
+    ['bfL1',    0.940, 0.993, 1],
+];
+
+// `vfo` ties a zone to one VFO's readout. Zones without it act on the VFO
+// the scope shows (_vfo()).
+function digitZones(digits, top, bottom, vfo, hideWhen) {
     const out = {};
-    for (const [id, l, r, step] of digits)
-        out[id] = { rect: [l, top, r, bottom], action: 'freq.digit', step };
+    for (const [id, l, r, step] of digits) {
+        out[id] = { rect: [l, top, r, bottom], action: 'freq.digit', step, vfo };
+        if (hideWhen) out[id].hideWhen = hideWhen;
+    }
     return out;
 }
 
@@ -209,7 +261,9 @@ const LAYOUTS = {
                 lit: ['declvl', 'decoff'], min: 2,
                 dark: ['dss3', 'mono', 'multi', 'expand', 'hold'],
             },
-            keep: ['meter', 'ant', 'att', 'ipo', 'rfil', 'agc', 'multifn', ...FTDX101_DIGITS.map(d => d[0])],
+            keep: ['meter', 'ant', 'att', 'ipo', 'rfil', 'agc', 'antB', 'attB', 'ipoB', 'rfilB', 'agcB', 'multifn',
+                   ...FTDX101_DIGITS.map(d => d[0]), ...FTDX101_DIGITS_B.map(d => d[0]),
+                   ...FTDX101_DIGITS_A_SMALL.map(d => d[0]), ...FTDX101_DIGITS_B_LARGE.map(d => d[0])],
             zones: {
                 declvl: { rect: [0.003, 0.847, 0.124, 0.902], action: 'none',
                           hint: 'DEC LVL has no CAT command — touch it on the radio, then turn MULTI to set the decode threshold' },
@@ -218,17 +272,28 @@ const LAYOUTS = {
             },
         },
         zones: {
-            // Both meters, top left: the S/PO/COMP/TEMP arc and the
-            // ALC/VDD/ID/SWR arc. Bench-checked on the FTdx101MP 2026-09-23
-            // (0.499 had cut the SWR meter in half). Right of it is the
-            // filter display.
-            meter:  { rect: [0.000, 0.095, 0.700, 0.300], action: 'meter.select' },
-            ...digitZones(FTDX101_DIGITS, 0.325, 0.400),
-            ant:    { rect: [0.003, 0.416, 0.196, 0.476], action: 'readout.ant' },
-            att:    { rect: [0.199, 0.416, 0.392, 0.476], action: 'readout.att' },
-            ipo:    { rect: [0.395, 0.416, 0.591, 0.476], action: 'readout.ipo' },
-            rfil:   { rect: [0.594, 0.416, 0.787, 0.476], action: 'readout.rfil' },
-            agc:    { rect: [0.790, 0.416, 0.986, 0.476], action: 'readout.agc' },
+            // The meters: the S/PO/COMP/TEMP arc and the ALC/VDD/ID/SWR arc,
+            // x 0.51-0.84, with VFO A's filter display left of them. 0.700
+            // stopped short of the SWR meter's right-hand scales (Colin
+            // 2026-11-23); 0.850 stops before VFO B's filter display.
+            meter:  { rect: [0.000, 0.095, 0.850, 0.300], action: 'meter.select' },
+            ...digitZones(FTDX101_DIGITS, 0.325, 0.400, 'A', ['active:B']),
+            ...digitZones(FTDX101_DIGITS_A_SMALL, 0.325, 0.400, 'A', ['active:A']),
+            ...digitZones(FTDX101_DIGITS_B, 0.325, 0.400, 'B', ['active:B']),
+            ...digitZones(FTDX101_DIGITS_B_LARGE, 0.325, 0.400, 'B', ['active:A']),
+            // Ten cells: ANT ATT IPO R.FIL AGC for VFO A, then the same for
+            // VFO B (measured 2026-11-23 on Radio_Display_Docked.png; the old
+            // five cells across the whole width sat over the wrong settings).
+            ant:    { rect: [0.003, 0.416, 0.097, 0.476], action: 'readout.ant',  vfo: 'A' },
+            att:    { rect: [0.099, 0.416, 0.197, 0.476], action: 'readout.att',  vfo: 'A' },
+            ipo:    { rect: [0.199, 0.416, 0.297, 0.476], action: 'readout.ipo',  vfo: 'A' },
+            rfil:   { rect: [0.299, 0.416, 0.397, 0.476], action: 'readout.rfil', vfo: 'A' },
+            agc:    { rect: [0.399, 0.416, 0.497, 0.476], action: 'readout.agc',  vfo: 'A' },
+            antB:   { rect: [0.505, 0.416, 0.602, 0.476], action: 'readout.ant',  vfo: 'B' },
+            attB:   { rect: [0.604, 0.416, 0.701, 0.476], action: 'readout.att',  vfo: 'B' },
+            ipoB:   { rect: [0.703, 0.416, 0.802, 0.476], action: 'readout.ipo',  vfo: 'B' },
+            rfilB:  { rect: [0.804, 0.416, 0.901, 0.476], action: 'readout.rfil', vfo: 'B' },
+            agcB:   { rect: [0.903, 0.416, 0.997, 0.476], action: 'readout.agc',  vfo: 'B' },
             cursor: { rect: [0.003, 0.847, 0.119, 0.902], action: 'scope.placement' },
             span:   { rect: [0.122, 0.847, 0.242, 0.902], action: 'scope.span' },
             dss3:   { rect: [0.245, 0.847, 0.364, 0.902], action: 'scope.3dss' },
@@ -306,6 +371,7 @@ function normalizeLayout(raw, builtin) {
         if (!zone.hint && base?.hint) zone.hint = base.hint;
         if (!zone.hideWhen && base?.hideWhen) zone.hideWhen = base.hideWhen;
         if (zone.step === undefined && base?.step !== undefined) zone.step = base.step;
+        if (!zone.vfo && base?.vfo) zone.vfo = base.vfo;
         if (!zone.action) zone.action = 'none';
         out.zones[id] = zone;
     }
@@ -715,7 +781,7 @@ export class RadioDisplayHotspots {
         const screen = this._screenNow();
         if (screen === 'decode') {
             for (const [id, zone] of this._decodeZones())
-                if (inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
+                if (!this._otherVfoSize(zone) && inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
             return null;
         }
         if (screen !== 'scope') return null;
@@ -735,10 +801,16 @@ export class RadioDisplayHotspots {
         return [...kept, ...Object.entries(D.zones || {})];
     }
 
+    /** True when the zone is a frequency table for the font size the radio isn't drawing now. */
+    _otherVfoSize(zone) {
+        return !!zone?.hideWhen?.some(c => VFO_CONDITIONS[c]?.(this._vfo()));
+    }
+
     /** True when one of the zone's hideWhen conditions holds for the scope now. */
     _zoneHidden(zone) {
         const conds = zone?.hideWhen;
         if (!conds || !conds.length) return false;
+        if (this._otherVfoSize(zone)) return true;
         const ss = this.getScopeControl()?.state;
         if (!ss) return false;   // unknown state: leave the zone live
         return conds.some(c => CONDITIONS[c]?.(ss));
@@ -807,7 +879,7 @@ export class RadioDisplayHotspots {
         if (zone?.action !== 'freq.digit' || !(zone.step > 0)) return;
         e.preventDefault();
         if (!e.deltaY) return;
-        const vfo = this._vfo();
+        const vfo = this._zoneVfo(zone);
         const from = this._digitTarget?.vfo === vfo ? this._digitTarget.hz : this.state[vfo].hz;
         if (!(from > 0)) { this._flash('Frequency not known yet'); return; }
         const to = from + (e.deltaY < 0 ? zone.step : -zone.step);
@@ -900,7 +972,7 @@ export class RadioDisplayHotspots {
     /** Run a zone's action: cycle a readout, drive the scope, or say why not. */
     _activate(zone) {
         const action = ACTIONS[zone.action] || ACTIONS.none;
-        if (action.key) return this._cycleReadout(action.key);
+        if (action.key) return this._cycleReadout(action.key, this._zoneVfo(zone));
         if (action.popup === 'meters') return this._openMeterPopup(zone);
         if (action.call) {
             const sc = this.getScopeControl();
@@ -930,17 +1002,23 @@ export class RadioDisplayHotspots {
         const zone = hit.zone;
         const action = ACTIONS[zone?.action] || ACTIONS.none;
         if (action.key) {
-            const s = this.state[this._vfo()];
+            const s = this.state[this._zoneVfo(zone)];
             return `${action.label} ${s[action.key] || '?'} — click to cycle`;
         }
         if (zone?.action === 'freq.digit') {
-            const hz = this._digitTarget?.hz ?? this.state[this._vfo()].hz;
+            const vfo = this._zoneVfo(zone);
+            const hz = (this._digitTarget?.vfo === vfo ? this._digitTarget.hz : null) ?? this.state[vfo].hz;
             return `${hz > 0 ? formatHz(hz) + ' — ' : ''}wheel ± ${formatStep(zone.step)}`;
         }
         return zone?.hint || action.hint || hit.id;
     }
 
     // ── frequency under the cursor ───────────────────────────────────────────
+
+    /** The VFO a zone acts on: its own, or else the scope's. */
+    _zoneVfo(zone) {
+        return zone?.vfo === 'A' || zone?.vfo === 'B' ? zone.vfo : this._vfo();
+    }
 
     /** Which VFO the displayed scope belongs to: 'A' or 'B'. */
     _vfo() {
@@ -1140,8 +1218,7 @@ export class RadioDisplayHotspots {
         return this._post(`/api/cat/frequency/${vfo}`, { frequencyHz: hz });
     }
 
-    _cycleReadout(key) {
-        const vfo = this._vfo();
+    _cycleReadout(key, vfo = this._vfo()) {
         const s = this.state[vfo];
         const v = vfo.toLowerCase();
         const next = (ring, cur) => {
@@ -1371,8 +1448,10 @@ export class RadioDisplayHotspots {
         const screen = this._measureDrag || this._measureQueue.length ? 'scope' : this._screenNow();
         if (screen !== 'scope') {
             if (screen === 'decode')
-                for (const [id, zone] of this._decodeZones())
+                for (const [id, zone] of this._decodeZones()) {
+                    if (this._otherVfoSize(zone)) continue;
                     box(zone.rect, (zone.action || '').startsWith('readout.') ? '#0f0' : '#aaa', id);
+                }
             g.fillStyle = '#f66';
             g.fillText(screen === 'decode'
                 ? 'decode screen: readouts live, scope zones off, DEC LVL / DEC OFF are hints only'
@@ -1380,8 +1459,11 @@ export class RadioDisplayHotspots {
             return;
         }
         // Green = readout, yellow = scope soft-key, grey = no CAT action;
-        // dashed = hidden by a hideWhen condition right now.
+        // dashed = hidden by a hideWhen condition right now. A frequency
+        // table for the other font size is not drawn at all: it overlaps the
+        // live one and hides which tile is which.
         for (const [id, zone] of Object.entries(L.zones || {})) {
+            if (this._otherVfoSize(zone)) continue;
             const a = zone.action || 'none';
             const colour = a.startsWith('readout.') ? '#0f0' : a === 'none' ? '#aaa' : '#ff0';
             box(zone.rect, colour, id, this._zoneHidden(zone));
