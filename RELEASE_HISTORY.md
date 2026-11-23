@@ -12,6 +12,18 @@ a different and much older format.
 
 ---
 
+## 2026-11-23 - v2.5.6-pre29 (pre-release)
+
+*Launch buttons always have a name, and the release date is right. Everything in v2.5.6-pre28 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Application launch buttons** [Application Setup](USER_MANUAL.md#7-application-setup)
+
+- **A launch button can't lose its name.** On Application Setup, an empty Button Name box shows the default name in grey, so it looked filled in, and saving it gave a Home button with no text: a thin red line. An empty name now means the default (WSJT-X, JTAlert, Log4OM, GridTracker, Fldigi), and settings already saved that way are mended when YWC starts. ([#420](https://github.com/mm5agm/Yaesu_Web_Control/issues/420))
+
+**About and Diagnostics**
+
+- **The release date is the day the build was made.** Every pre-release showed a date set by hand, so pre28 said 2026-11-16 when it came out on 2026-11-23. ([#420](https://github.com/mm5agm/Yaesu_Web_Control/issues/420))
+
 ## 2026-11-23 - v2.5.6-pre28 (pre-release)
 
 *FTdx101: the Radio Display's tiles cover both VFOs. Everything in v2.5.6-pre27 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
