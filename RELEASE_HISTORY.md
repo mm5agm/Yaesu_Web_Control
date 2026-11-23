@@ -12,6 +12,17 @@ a different and much older format.
 
 ---
 
+## 2026-11-23 - v2.5.6-pre28 (pre-release)
+
+*FTdx101: the Radio Display's tiles cover both VFOs. Everything in v2.5.6-pre27 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FTdx101 Radio Display** [Radio Display](USER_MANUAL.md#19-radio-display)
+
+- **VFO B's frequency has tiles.** Only VFO A's digits had them. Now each digit of VFO B can be stepped with the mouse wheel too.
+- **Large and small digits.** The radio draws the active VFO's frequency large and the other one small. Each VFO now has tiles for both sizes, and the page uses the set that matches, by whether the scope shows MAIN or SUB. Checked on an FTdx101MP both ways round.
+- **ANT, ATT, IPO, R.FIL and AGC for each VFO.** These tiles were five cells stretched across both VFOs. Now there are five for VFO A and five for VFO B, and a click changes the setting on the VFO it is under.
+- **The meter tile** reaches the SWR meter's right-hand scales (dB, VDD, A).
+
 ## 2026-11-23 - v2.5.6-pre27 (pre-release)
 
 *Docker and macOS: the scope works again. Nothing changes on Windows. Everything in v2.5.6-pre26 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
