@@ -9,6 +9,10 @@ namespace YaesuWebControl.Tests;
 // answers VS / FA / FB / MD0 / MD1 like the FTdx10. These run against
 // Ft847Simulator, so they prove the translation; Felix DF3FX's FT-817 proves
 // the radio.
+// Timing-sensitive (an emulated radio answering over a fake serial port):
+// skipped in CI, where the shared runners stall long enough to fail it
+// now and then. Run locally with the full suite.
+[Trait("Category", "SerialTiming")]
 public class Ft817VfoTests
 {
     private static (Ft847CatTransport Link, Ft847Simulator Radio) Open(string model = "FT-817", int pollMs = 5000)
