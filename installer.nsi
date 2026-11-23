@@ -68,6 +68,11 @@ Section "Install"
     File "soapysdr-dist\runtime\libwinpthread-1.dll"
     File "soapysdr-dist\runtime\pthreadVC2.dll"
     File "soapysdr-dist\runtime\pthreadVC3.dll"
+    ; Visual C++ runtime, app-local: an older msvcp140.dll on the PC crashes
+    ; every SoapySDR scan (D#404).
+    File "soapysdr-dist\runtime\msvcp140.dll"
+    File "soapysdr-dist\runtime\vcruntime140.dll"
+    File "soapysdr-dist\runtime\vcruntime140_1.dll"
 
     SetOutPath "$INSTDIR\SoapySDR\lib\SoapySDR\modules0.8-3"
     File "soapysdr-dist\plugins\airspySupport.dll"
