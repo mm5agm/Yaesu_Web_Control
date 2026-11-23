@@ -101,12 +101,20 @@
         public string GridtrackerCommandLine { get; set; } = @"""C:\Program Files\GridTracker2\GridTracker2.exe""";
         public string FldigiCommandLine { get; set; } = @"""C:\Program Files\Fldigi-4.2.11\fldigi.exe""";
 
-        // External Applications - Custom Names (user can rename buttons)
-        public string App1Name { get; set; } = "WSJT-X";
-        public string App2Name { get; set; } = "JTAlert";
-        public string App3Name { get; set; } = "Log4OM";
-        public string App4Name { get; set; } = "GridTracker";
-        public string App5Name { get; set; } = "Fldigi";
+        // External Applications - Custom Names (user can rename buttons).
+        // A blank name means the default: the Applications page shows the
+        // default as grey placeholder text in an empty box, so a box saved
+        // empty looked filled in and gave a button with no text, a thin red
+        // line on Home (#420). Settings saved that way are mended on load.
+        private string _app1Name = "WSJT-X", _app2Name = "JTAlert", _app3Name = "Log4OM",
+                       _app4Name = "GridTracker", _app5Name = "Fldigi";
+        public string App1Name { get => _app1Name; set => _app1Name = NameOr(value, "WSJT-X"); }
+        public string App2Name { get => _app2Name; set => _app2Name = NameOr(value, "JTAlert"); }
+        public string App3Name { get => _app3Name; set => _app3Name = NameOr(value, "Log4OM"); }
+        public string App4Name { get => _app4Name; set => _app4Name = NameOr(value, "GridTracker"); }
+        public string App5Name { get => _app5Name; set => _app5Name = NameOr(value, "Fldigi"); }
+        private static string NameOr(string? value, string fallback) =>
+            string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 
         // External Applications - Show/Hide buttons (optional apps)
         public bool ShowWsjtxButton { get; set; } = true;
