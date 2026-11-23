@@ -11,8 +11,12 @@ namespace Yaesu_Web_Control.Services.Sdr
     {
         private const string DllName = "SoapySDR";
 
-        // SoapySDR direction constants
-        internal const int RX = 0;
+        // SoapySDR direction constants, from SoapySDR/Constants.h:
+        // SOAPY_SDR_TX = 0, SOAPY_SDR_RX = 1. RX was 0 here until #404, so
+        // every call asked for the transmit side: an RTL-SDR refuses a TX
+        // stream ("RTL-SDR is RX only") and setupStream returned null.
+        internal const int TX = 0;
+        internal const int RX = 1;
 
         // SoapySDR IQ sample format: complex float 32 (two interleaved floats per sample)
         internal const string CF32 = "CF32";
@@ -95,13 +99,19 @@ namespace Yaesu_Web_Control.Services.Sdr
             [MarshalAs(UnmanagedType.U1)] bool automatic);
 
         // channels is a pointer to a size_t array; for single-channel use ref nuint.
-        // errorMessage is char** — use out IntPtr and free if non-null.
+        // SoapySDR 0.8 signature (the DLL YWC ships is 0.8.1): returns the stream,
+        // or NULL with the reason in SoapySDRDevice_lastError().
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "SoapySDRDevice_setupStream", CharSet = CharSet.Ansi)]
         private static extern IntPtr NativeSetupStream(
             IntPtr device, int direction, string format,
             ref nuint channels, nuint numChans,
-            IntPtr args, out IntPtr errorMessage);
+            IntPtr args);
+
+        // const char* in thread-local storage, owned by SoapySDR: never free it.
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "SoapySDRDevice_lastError")]
+        private static extern IntPtr NativeLastError();
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "SoapySDRDevice_activateStream")]
@@ -205,6 +215,20 @@ namespace Yaesu_Web_Control.Services.Sdr
             return device;
         }
 
+        /// <summary>
+        /// SoapySDR's own words for the last failure on this thread, as
+        /// " — reason", or "" when it has none (#404: the log said only
+        /// "returned null stream", and the driver's "RTL-SDR is RX only" was lost).
+        /// </summary>
+        private static string Reason()
+        {
+            try { return FormatReason(Marshal.PtrToStringAnsi(NativeLastError())); }
+            catch (EntryPointNotFoundException) { return ""; }
+        }
+
+        internal static string FormatReason(string? lastError) =>
+            string.IsNullOrWhiteSpace(lastError) ? "" : $" — {lastError.Trim()}";
+
         /// <summary>Closes a previously opened device. Safe to call with IntPtr.Zero.</summary>
         public static void CloseDevice(IntPtr device)
         {
@@ -217,11 +241,11 @@ namespace Yaesu_Web_Control.Services.Sdr
         {
             int ret = NativeSetFrequency(device, RX, 0, frequencyHz, IntPtr.Zero);
             if (ret != 0)
-                throw new InvalidOperationException($"SoapySDR: SetFrequency failed (code {ret})");
+                throw new InvalidOperationException($"SoapySDR: SetFrequency failed (code {ret}){Reason()}");
 
             ret = NativeSetSampleRate(device, RX, 0, sampleRateHz);
             if (ret != 0)
-                throw new InvalidOperationException($"SoapySDR: SetSampleRate failed (code {ret})");
+                throw new InvalidOperationException($"SoapySDR: SetSampleRate failed (code {ret}){Reason()}");
 
             // AGC is best-effort; some devices do not support it.
             NativeSetGainMode(device, RX, 0, automatic: true);
@@ -232,21 +256,14 @@ namespace Yaesu_Web_Control.Services.Sdr
         {
             nuint channel = 0;
             IntPtr stream = NativeSetupStream(
-                device, RX, CF32, ref channel, 1, IntPtr.Zero, out IntPtr errorMsg);
-
-            if (errorMsg != IntPtr.Zero)
-            {
-                string? msg = Marshal.PtrToStringAnsi(errorMsg);
-                NativeFree(errorMsg);
-                throw new InvalidOperationException($"SoapySDR: setupStream — {msg}");
-            }
+                device, RX, CF32, ref channel, 1, IntPtr.Zero);
 
             if (stream == IntPtr.Zero)
-                throw new InvalidOperationException("SoapySDR: setupStream returned null stream");
+                throw new InvalidOperationException($"SoapySDR: setupStream returned null stream{Reason()}");
 
             int ret = NativeActivateStream(device, stream, 0, 0, 0);
             if (ret != 0)
-                throw new InvalidOperationException($"SoapySDR: activateStream failed (code {ret})");
+                throw new InvalidOperationException($"SoapySDR: activateStream failed (code {ret}){Reason()}");
 
             return stream;
         }
