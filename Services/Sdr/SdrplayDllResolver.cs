@@ -74,9 +74,18 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// loadable when it loads, and a DLL already in the process is reused
         /// by name, so loading libusb first is what makes librtlsdr find
         /// *our* libusb.
+        /// <para>
+        /// The Visual C++ runtime goes first (#404, Edy): SoapySDR.dll and the
+        /// plugins are built with Visual Studio 2026 and import msvcp140.dll.
+        /// Without our copy they bind to whatever msvcp140.dll Windows finds,
+        /// and one older than 14.40 crashes in std::mutex with 0xC0000005 as
+        /// SoapySDR loads its modules, so every driver's scan dies before it
+        /// touches USB.
+        /// </para>
         /// </summary>
         private static readonly string[] SoapySdrRuntimeDlls =
         {
+            "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll",
             "libwinpthread-1.dll", "pthreadVC2.dll", "pthreadVC3.dll",
             "libusb-1.0.dll",
             "librtlsdr.dll", "airspy.dll", "hackrf.dll",
@@ -123,8 +132,8 @@ namespace Yaesu_Web_Control.Services.Sdr
                 }
                 try
                 {
-                    NativeLibrary.Load(path);
-                    report.Add($"{name} <- {path}");
+                    IntPtr handle = NativeLibrary.Load(path);
+                    report.Add($"{name} <- {LoadedFrom(handle) ?? path}{VersionOf(handle)}");
                 }
                 catch (Exception ex)
                 {
@@ -137,6 +146,30 @@ namespace Yaesu_Web_Control.Services.Sdr
             }
             return report;
         }
+
+        // Where Windows actually loaded a DLL from: a DLL of the same name
+        // already in the process wins over the full path asked for, and for
+        // the C++ runtime that is the line that matters in a crash log.
+        private static string? LoadedFrom(IntPtr handle)
+        {
+            var sb = new System.Text.StringBuilder(1024);
+            return GetModuleFileNameW(handle, sb, sb.Capacity) > 0 ? sb.ToString() : null;
+        }
+
+        private static string VersionOf(IntPtr handle)
+        {
+            string? file = LoadedFrom(handle);
+            if (file == null) return "";
+            try
+            {
+                string? v = System.Diagnostics.FileVersionInfo.GetVersionInfo(file).FileVersion;
+                return string.IsNullOrWhiteSpace(v) ? "" : $" ({v})";
+            }
+            catch { return ""; }
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern int GetModuleFileNameW(IntPtr hModule, System.Text.StringBuilder lpFilename, int nSize);
 
         /// <summary>
         /// Detect (without loading) the SDRplay install directory that the

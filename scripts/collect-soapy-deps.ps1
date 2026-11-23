@@ -13,6 +13,8 @@ $runtime = Join-Path $root "soapysdr-dist\runtime"
 $plugins = Join-Path $root "soapysdr-dist\plugins"
 
 New-Item -ItemType Directory -Force -Path $runtime | Out-Null
+$vcCrt = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\Microsoft.VC14*.CRT" -Directory |
+    Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
 New-Item -ItemType Directory -Force -Path $plugins | Out-Null
 
 $copies = @(
@@ -27,6 +29,12 @@ $copies = @(
     @{ Src = "C:\deps\rtlsdr\libwinpthread-1.dll";              Dst = "$runtime\libwinpthread-1.dll" },
     @{ Src = "C:\deps\airspy\x64\pthreadVC2.dll";               Dst = "$runtime\pthreadVC2.dll" },
     @{ Src = "C:\build\pthreads4w\pthreadVC3.dll";              Dst = "$runtime\pthreadVC3.dll" },
+    # The Visual C++ runtime the DLLs above were built against (VS 2026,
+    # v145), shipped app-local: an older msvcp140.dll on the user's PC
+    # crashes every SoapySDR scan (YWC D#404).
+    @{ Src = "$vcCrt\msvcp140.dll";                             Dst = "$runtime\msvcp140.dll" },
+    @{ Src = "$vcCrt\vcruntime140.dll";                         Dst = "$runtime\vcruntime140.dll" },
+    @{ Src = "$vcCrt\vcruntime140_1.dll";                       Dst = "$runtime\vcruntime140_1.dll" },
     @{ Src = "C:\build\SoapyAirspy\airspySupport.dll";          Dst = "$plugins\airspySupport.dll" },
     @{ Src = "C:\build\SoapyHackRF\HackRFSupport.dll";          Dst = "$plugins\HackRFSupport.dll" },
     @{ Src = "C:\build\SoapyRTLSDR\rtlsdrSupport.dll";          Dst = "$plugins\rtlsdrSupport.dll" }

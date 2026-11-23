@@ -2609,7 +2609,7 @@
                                 onclick="clearSdrDevice()">
                             <i class="bi bi-x-circle"></i> Disable SDR / Clear Device
                         </button>
-                        <div class="form-text">Removes the saved device; the spectrum panel will be hidden.</div>
+                        <div class="form-text">Removes the saved device and saves the settings; the spectrum panel will be hidden.</div>
                     </div>
                 </div>
             </div>
@@ -4460,6 +4460,10 @@
                 updateDeviceKeyDisplay(slot);
             }
             document.getElementById('sdrScanNotes').innerHTML = '';
+            // Save straight away (#404, Edy): emptying the fields alone left
+            // the old device saved until Save Settings was pressed, so YWC kept
+            // trying to open an SDRplay that wasn't there.
+            document.getElementById('settingsForm').requestSubmit();
         };
 
         // DX cluster connection test — POSTs the current Settings-page values
