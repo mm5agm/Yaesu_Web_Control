@@ -12,6 +12,14 @@ a different and much older format.
 
 ---
 
+## 2026-11-23 - v2.5.6-pre27 (pre-release)
+
+*Docker and macOS: the scope works again. Nothing changes on Windows. Everything in v2.5.6-pre26 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Docker and macOS** [Linux Docker](USER_MANUAL.md#23-linux-docker-including-raspberry-pi)
+
+- **The scope's settings load again.** Since v2.5.6-pre18 the scope API failed in Docker and on macOS with "Unable to resolve service", because a part it needs was only set up in the Windows build. It is now set up on every platform, and a new test checks that every API's services exist on all of them. ([#390](https://github.com/mm5agm/Yaesu_Web_Control/issues/390))
+
 ## 2026-11-23 - v2.5.6-pre26 (pre-release)
 
 *FT-817 and FT-818: the Home page follows VFO A and B. Everything in v2.5.6-pre25 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
