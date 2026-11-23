@@ -168,4 +168,31 @@ public sealed class N1mmCatServerTests
     [InlineData(70000, N1mmCatServer.DefaultPort)]
     public void ClampPort_keeps_ports_from_1024_up(int port, int expected) =>
         Assert.Equal(expected, N1mmCatServer.ClampPort(port));
+
+    // #394: N1MM waited for every answer in a packet before it got any.
+    [Fact]
+    public async Task Each_answer_is_sent_as_soon_as_the_radio_gives_it()
+    {
+        var radio = new FakeRadio();
+        radio.Answers["FA;"] = "FA014074000";
+        radio.Answers["MD0;"] = "MD02";
+        var session = new N1mmCatSession(radio);
+        var sent = new List<string>();
+        await session.ProcessAsync("FA;MD0;AI;", (a, _) => { sent.Add(a); return Task.CompletedTask; }, CancellationToken.None);
+        Assert.Equal(new[] { "FA014074000;", "MD02;", "AI0;" }, sent);
+    }
+
+    [Fact]
+    public async Task Reads_the_radio_does_not_answer_are_counted_for_the_log()
+    {
+        var radio = new FakeRadio();
+        radio.Answers["FA;"] = "FA014074000";
+        var session = new N1mmCatSession(radio);
+        var missed = new List<string>();
+        session.OnUnanswered = missed.Add;
+        var reply = await session.ProcessAsync("FA;IF;FA014070000;TX;", CancellationToken.None);
+        Assert.Equal("FA014074000;", reply);
+        Assert.Equal(2, session.Unanswered);
+        Assert.Equal(new[] { "IF;", "TX;" }, missed);
+    }
 }

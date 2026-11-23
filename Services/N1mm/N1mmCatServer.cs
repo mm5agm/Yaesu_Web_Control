@@ -25,6 +25,7 @@ namespace Yaesu_Web_Control.Services.N1mm
     {
         public const int DefaultPort = 4535;
         public const int TxSafetyTimeoutSeconds = 180;
+        private const int UnansweredLogged = 10;
         private static readonly TimeSpan SettingsPoll = TimeSpan.FromSeconds(2);
 
         private readonly ICatPassThrough _link;
@@ -146,6 +147,14 @@ namespace Yaesu_Web_Control.Services.N1mm
             Interlocked.Increment(ref _clientCount);
             _logger.LogInformation("N1MM CAT client connected: {Who}", who);
             var session = new N1mmCatSession(_link);
+            // The first few reads the radio didn't answer go in the log, so a
+            // tester's log shows what N1MM was waiting for (#394).
+            session.OnUnanswered = command =>
+            {
+                if (session.Unanswered <= UnansweredLogged)
+                    _logger.LogWarning("N1MM CAT client {Who}: the radio didn't answer {Command} within {Ms} ms",
+                        who, command, MultiplexerPassThrough.ReadTimeoutMs);
+            };
             CancellationTokenSource? watchdog = null;
             bool hinted = false;
             try
@@ -160,9 +169,8 @@ namespace Yaesu_Web_Control.Services.N1mm
                         int n = await stream.ReadAsync(buffer, token);
                         if (n == 0) break;
                         var wasKeyed = session.Keyed;
-                        var reply = await session.ProcessAsync(Encoding.ASCII.GetString(buffer, 0, n), token);
-                        if (reply.Length > 0)
-                            await stream.WriteAsync(Encoding.ASCII.GetBytes(reply), token);
+                        await session.ProcessAsync(Encoding.ASCII.GetString(buffer, 0, n),
+                            (answer, ct) => stream.WriteAsync(Encoding.ASCII.GetBytes(answer), ct).AsTask(), token);
 
                         if (!hinted && session.FirstInvalid is { } bad)
                         {
@@ -202,7 +210,8 @@ namespace Yaesu_Web_Control.Services.N1mm
                     await ForceReceiveAsync();
                 }
                 Interlocked.Decrement(ref _clientCount);
-                _logger.LogInformation("N1MM CAT client disconnected: {Who} ({Count} commands)", who, session.Commands);
+                _logger.LogInformation("N1MM CAT client disconnected: {Who} ({Count} commands, {Unanswered} reads unanswered)",
+                    who, session.Commands, session.Unanswered);
             }
         }
 

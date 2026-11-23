@@ -31,8 +31,10 @@ namespace Yaesu_Web_Control.Services.N1mm
 
         public bool IsConnected => _mux.IsConnected;
 
+        // The answer also goes to YWC's own state: when N1MM reads FA just
+        // after the radio was tuned, it takes the reply YWC would have used.
         public Task<string?> ReadAsync(string command, CancellationToken cancellationToken) =>
-            _mux.SendCommandAsync(command, ClientId, cancellationToken, ReadTimeoutMs);
+            _mux.SendReadAndDispatchAsync(command, ClientId, cancellationToken, ReadTimeoutMs);
 
         public Task WriteAsync(string command, CancellationToken cancellationToken) =>
             _mux.SendWithoutReplyAsync(command, cancellationToken);
@@ -58,6 +60,12 @@ namespace Yaesu_Web_Control.Services.N1mm
 
         public int Commands { get; private set; }
 
+        /// <summary>Reads the radio didn't answer in time.</summary>
+        public int Unanswered { get; private set; }
+
+        /// <summary>Called with each read the radio didn't answer, for the log.</summary>
+        public Action<string>? OnUnanswered { get; set; }
+
         /// <summary>
         /// Handles whatever text arrived and returns what to send back: the
         /// answers to its reads, each with its ';', in order. A partial
@@ -65,8 +73,19 @@ namespace Yaesu_Web_Control.Services.N1mm
         /// </summary>
         public async Task<string> ProcessAsync(string text, CancellationToken cancellationToken)
         {
-            _pending.Append(text);
             var reply = new StringBuilder();
+            await ProcessAsync(text, (answer, _) => { reply.Append(answer); return Task.CompletedTask; }, cancellationToken);
+            return reply.ToString();
+        }
+
+        /// <summary>
+        /// As above, but each answer goes to <paramref name="send"/> as soon as
+        /// the radio gives it, so N1MM isn't kept waiting for the rest of what
+        /// it sent in the same packet (#394).
+        /// </summary>
+        public async Task ProcessAsync(string text, Func<string, CancellationToken, Task> send, CancellationToken cancellationToken)
+        {
+            _pending.Append(text);
             foreach (var command in N1mmCatProtocol.TakeCommands(_pending))
             {
                 Commands++;
@@ -77,13 +96,21 @@ namespace Yaesu_Web_Control.Services.N1mm
                         break;
 
                     case N1mmCatKind.AutoInfo:
-                        if (command == "AI;") reply.Append(N1mmCatProtocol.AutoInfoOffReply);
+                        if (command == "AI;") await send(N1mmCatProtocol.AutoInfoOffReply, cancellationToken);
                         break;
 
                     case N1mmCatKind.Read:
                         if (!_link.IsConnected) break;
                         var answer = await _link.ReadAsync(command, cancellationToken);
-                        if (!string.IsNullOrEmpty(answer)) reply.Append(answer).Append(';');
+                        if (!string.IsNullOrEmpty(answer))
+                        {
+                            await send(answer + ";", cancellationToken);
+                        }
+                        else
+                        {
+                            Unanswered++;
+                            OnUnanswered?.Invoke(command);
+                        }
                         break;
 
                     case N1mmCatKind.Set:
@@ -95,7 +122,6 @@ namespace Yaesu_Web_Control.Services.N1mm
                 if (N1mmCatProtocol.Keys(command) && _link.IsConnected) Keyed = true;
                 else if (N1mmCatProtocol.Unkeys(command)) Keyed = false;
             }
-            return reply.ToString();
         }
 
         /// <summary>Marks the session unkeyed after the server forced TX0.</summary>
