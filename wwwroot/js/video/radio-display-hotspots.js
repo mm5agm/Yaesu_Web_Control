@@ -781,7 +781,7 @@ export class RadioDisplayHotspots {
         const screen = this._screenNow();
         if (screen === 'decode') {
             for (const [id, zone] of this._decodeZones())
-                if (inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
+                if (!this._otherVfoSize(zone) && inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
             return null;
         }
         if (screen !== 'scope') return null;
@@ -801,11 +801,16 @@ export class RadioDisplayHotspots {
         return [...kept, ...Object.entries(D.zones || {})];
     }
 
+    /** True when the zone is a frequency table for the font size the radio isn't drawing now. */
+    _otherVfoSize(zone) {
+        return !!zone?.hideWhen?.some(c => VFO_CONDITIONS[c]?.(this._vfo()));
+    }
+
     /** True when one of the zone's hideWhen conditions holds for the scope now. */
     _zoneHidden(zone) {
         const conds = zone?.hideWhen;
         if (!conds || !conds.length) return false;
-        if (conds.some(c => VFO_CONDITIONS[c]?.(this._vfo()))) return true;
+        if (this._otherVfoSize(zone)) return true;
         const ss = this.getScopeControl()?.state;
         if (!ss) return false;   // unknown state: leave the zone live
         return conds.some(c => CONDITIONS[c]?.(ss));
@@ -1443,8 +1448,10 @@ export class RadioDisplayHotspots {
         const screen = this._measureDrag || this._measureQueue.length ? 'scope' : this._screenNow();
         if (screen !== 'scope') {
             if (screen === 'decode')
-                for (const [id, zone] of this._decodeZones())
+                for (const [id, zone] of this._decodeZones()) {
+                    if (this._otherVfoSize(zone)) continue;
                     box(zone.rect, (zone.action || '').startsWith('readout.') ? '#0f0' : '#aaa', id);
+                }
             g.fillStyle = '#f66';
             g.fillText(screen === 'decode'
                 ? 'decode screen: readouts live, scope zones off, DEC LVL / DEC OFF are hints only'
@@ -1452,8 +1459,11 @@ export class RadioDisplayHotspots {
             return;
         }
         // Green = readout, yellow = scope soft-key, grey = no CAT action;
-        // dashed = hidden by a hideWhen condition right now.
+        // dashed = hidden by a hideWhen condition right now. A frequency
+        // table for the other font size is not drawn at all: it overlaps the
+        // live one and hides which tile is which.
         for (const [id, zone] of Object.entries(L.zones || {})) {
+            if (this._otherVfoSize(zone)) continue;
             const a = zone.action || 'none';
             const colour = a.startsWith('readout.') ? '#0f0' : a === 'none' ? '#aaa' : '#ff0';
             box(zone.rect, colour, id, this._zoneHidden(zone));

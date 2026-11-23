@@ -75,7 +75,9 @@ public class RadioDisplayFtdx101TilesTests
         Assert.Contains("digitZones(FTDX101_DIGITS_B_LARGE, 0.325, 0.400, 'B', ['active:A'])", zones);
         Assert.Contains("'active:A': vfo => vfo === 'A'", js);
         Assert.Contains("'active:B': vfo => vfo === 'B'", js);
-        Assert.Contains("if (conds.some(c => VFO_CONDITIONS[c]?.(this._vfo()))) return true;", js);
+        Assert.Contains("if (this._otherVfoSize(zone)) return true;", js);
+        Assert.Contains("if (!this._otherVfoSize(zone) && inZone(zone.rect, fx, fy, nw, nh))", js);   // decode screen
+        Assert.Contains("return !!zone?.hideWhen?.some(c => VFO_CONDITIONS[c]?.(this._vfo()));", js);
     }
 
     [Fact]
