@@ -113,13 +113,23 @@ namespace Yaesu_Web_Control.Services
         private string? _pinnedSelectionSeen;
         private static readonly TimeSpan BorrowSettleWindow = TimeSpan.FromMilliseconds(500);
 
+        // Poll-loop watchdog (ported from IWC Discussion #51): each step of the
+        // cycle beats; a thread of its own logs when the beats stop, and which
+        // step they stopped in, then again when the loop moves on.
+        private long _loopBeatMs = Environment.TickCount64;
+        private volatile string _loopStage = "starting";
+        private const int LoopStallWarnMs = 20000;
+        private readonly StarvationMonitor? _load;
+
         public MeterPollingService(
             CatMultiplexerService multiplexer,
             RadioStateService stateService,
             CatMessageDispatcher dispatcher,
             ILogger<MeterPollingService> logger,
-            ISettingsService settingsService)
+            ISettingsService settingsService,
+            StarvationMonitor? load = null)
         {
+            _load = load;
             _multiplexer = multiplexer;
             _stateService = stateService;
             _dispatcher = dispatcher;
@@ -130,8 +140,12 @@ namespace Yaesu_Web_Control.Services
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Meter polling service started (S-Meter, Power, SWR)");
+            // Its own thread, not the pool, so it still reports when every pool
+            // thread is stuck.
+            new Thread(() => WatchLoop(stoppingToken)) { IsBackground = true, Name = "YWC meter-poll watchdog" }.Start();
             while (!stoppingToken.IsCancellationRequested)
             {
+                Beat("reading the settings");
                 int intervalMs = 200;
                 try
                 {
@@ -141,6 +155,7 @@ namespace Yaesu_Web_Control.Services
                     var sw = System.Diagnostics.Stopwatch.StartNew();
 
                     // ── Fast tier: every cycle ─────────────────────────────────────────
+                    Beat("reading TX state and meters");
                     _logger.LogDebug("[MeterPolling][DEBUG] Polling TX status...");
                     var txResponse = await _multiplexer.SendCommandAsync("TX;", "MeterPoll", stoppingToken);
                     _logger.LogDebug("[MeterPolling][DEBUG] TX response: {0}", txResponse);
@@ -254,6 +269,7 @@ namespace Yaesu_Web_Control.Services
                     }
 
                     // ── TX tier: only while transmitting ──────────────────────────────
+                    Beat("reading the TX meters");
                     if (isTransmitting)
                     {
                         _logger.LogDebug("[MeterPolling][DEBUG] Polling Power Meter...");
@@ -433,6 +449,7 @@ namespace Yaesu_Web_Control.Services
                     }
 
                     // ── Slow tier: wall-clock deadlines ───────────────────────────────
+                    Beat("reading AF/RF gain and frequency");
                     var now = DateTime.UtcNow;
 
                     if (now - _lastAntennaPollUtc >= AntennaPollInterval)
@@ -495,6 +512,7 @@ namespace Yaesu_Web_Control.Services
                     var delay = Math.Max(0, intervalMs - elapsed);
                     _logger.LogDebug("[MeterPolling] Cycle elapsed: {ElapsedMs} ms, delay: {DelayMs} ms", elapsed, delay);
 
+                    Beat("pausing between polls");
                     await Task.Delay(delay, stoppingToken);
                 }
                 catch (OperationCanceledException)
@@ -507,6 +525,55 @@ namespace Yaesu_Web_Control.Services
                     try { await Task.Delay(intervalMs, stoppingToken); } catch (OperationCanceledException) { break; }
                 }
             }
+        }
+
+        private void Beat(string stage)
+        {
+            _loopStage = stage;
+            Interlocked.Exchange(ref _loopBeatMs, Environment.TickCount64);
+        }
+
+        private void WatchLoop(CancellationToken stoppingToken)
+        {
+            long reportedBeat = -1;
+            long lastTick = Environment.TickCount64;
+            try
+            {
+                while (!stoppingToken.WaitHandle.WaitOne(5000))
+                {
+                    long now = Environment.TickCount64;
+                    long gap = now - lastTick;
+                    lastTick = now;
+                    // This thread didn't run either: the PC was asleep. The
+                    // starvation monitor logs that; give the loop a moment.
+                    if (gap >= StarvationMonitor.AsleepGapMs) continue;
+
+                    long beat = Interlocked.Read(ref _loopBeatMs);
+                    long stalledMs = now - beat;
+                    if (stalledMs >= LoopStallWarnMs && reportedBeat != beat)
+                    {
+                        reportedBeat = beat;
+                        WatchdogLine(true, $"Meter poll has made no progress for {stalledMs / 1000} s; stuck while {_loopStage}. {ThreadPoolSnapshot.Describe()}");
+                    }
+                    else if (reportedBeat >= 0 && reportedBeat != beat)
+                    {
+                        reportedBeat = -1;
+                        WatchdogLine(false, $"Meter poll moving again ({_loopStage})");
+                    }
+                }
+            }
+            catch (ObjectDisposedException) { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "[MeterPolling] Watchdog stopped");
+            }
+        }
+
+        private void WatchdogLine(bool warning, string text)
+        {
+            if (_load != null) { _load.Record(warning, "MeterPolling", text); return; }
+            if (warning) _logger.LogWarning("[MeterPolling] {Text}", text);
+            else _logger.LogInformation("[MeterPolling] {Text}", text);
         }
 
         private static bool IsCw(string? mode) => mode != null && mode.StartsWith("CW", StringComparison.OrdinalIgnoreCase);

@@ -37,6 +37,29 @@
             aria-expanded="false" aria-controls="diag-voice-panel">Voice Control Log</button>
 </div>
 
+@* PC and YWC load (from IWC D#51). Always visible: when a user says "it
+   froze", this is the first thing to ask for. The events come from
+   StarvationMonitor and the meter-poll watchdog. *@
+<div class="card mb-2">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-baseline flex-wrap gap-2">
+            <span class="fw-semibold">PC and YWC load</span>
+            <span id="diag-load-now" class="fs-5 fw-semibold font-monospace">&mdash;</span>
+            <button type="button" id="diag-load-copy" class="btn btn-sm btn-outline-primary ms-auto">Copy to clipboard</button>
+        </div>
+        <div id="diag-load-detail" class="small text-muted">Waiting for figures&hellip;</div>
+        <pre id="diag-load-events"
+             style="max-height:200px;overflow:auto;font-size:12px;background:#1e1e1e;color:#d4d4d4;padding:8px;margin:4px 0 0 0;white-space:pre-wrap"><em style="color:#888">Loading&hellip;</em></pre>
+        <div class="small text-muted mt-1">
+            <strong>PC</strong> is how busy the whole computer is; <strong>YWC</strong> is YWC's own share.
+            <strong>Wait</strong> is how long YWC's work waits for its turn to run: a few milliseconds is normal,
+            and over 2 seconds means YWC is being starved and pages will freeze. The list shows every freeze,
+            busy spell and sleep since YWC started. If YWC froze or went slow, click
+            <strong>Copy to clipboard</strong> and paste it into the GitHub issue or discussion.
+        </div>
+    </div>
+</div>
+
 <div id="diag-ports-panel" class="card mb-2" hidden>
     <div class="card-body py-2 d-flex align-items-start gap-3 flex-wrap">
         <div class="flex-grow-1">
@@ -590,6 +613,87 @@
 
 
     refreshIndicator();
+
+    // ── PC and YWC load (from IWC D#51) ───────────────────────────────────────
+    // Polled every 2 s, paused while the tab is hidden.
+    const loadNow    = document.getElementById('diag-load-now');
+    const loadDetail = document.getElementById('diag-load-detail');
+    const loadEvents = document.getElementById('diag-load-events');
+    let   loadTimer  = null;
+    let   loadLast   = null;
+
+    const pct = v => (v == null ? '?' : Math.round(v) + '%');
+    const hms = t => new Date(t).toLocaleTimeString([], { hour12: false });
+
+    function loadLines(s) {
+        const now = `PC ${pct(s.pcPercent)} · YWC ${pct(s.appPercent)} · wait ${s.poolWaitMs} ms`;
+        const detail = `${s.processors} processors · ${s.poolThreads} pool threads (${s.busyWorkers} busy) · `
+            + `${s.jobsWaiting} jobs waiting · longest wait since ${hms(s.startedAt)}: ${s.longestWaitMs} ms`;
+        const events = s.events.map(e => `${new Date(e.time).toLocaleString([], { hour12: false })}  ${e.warning ? '!!' : 'ok'}  ${e.text}`);
+        return { now, detail, events };
+    }
+
+    async function refreshLoad() {
+        try {
+            const r = await fetch('/api/diagnostics/load');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const s = await r.json();
+            loadLast = s;
+            const l = loadLines(s);
+            loadNow.textContent = l.now;
+            loadNow.classList.toggle('text-danger', s.poolWaitMs >= 2000);
+            loadDetail.textContent = l.detail;
+            if (l.events.length === 0) {
+                loadEvents.innerHTML = '<em style="color:#888">No freezes, busy spells or sleeps since YWC started.</em>';
+            } else {
+                const atEnd = loadEvents.scrollTop + loadEvents.clientHeight >= loadEvents.scrollHeight - 4;
+                loadEvents.textContent = l.events.join('\n');
+                if (atEnd) loadEvents.scrollTop = loadEvents.scrollHeight;
+            }
+        } catch (e) {
+            loadNow.textContent = '—';
+            loadDetail.textContent = 'Could not read the load figures: ' + e.message;
+        }
+    }
+
+    document.getElementById('diag-load-copy').addEventListener('click', async () => {
+        const btn = document.getElementById('diag-load-copy');
+        await refreshLoad();
+        if (!loadLast) return;
+        const l = loadLines(loadLast);
+        const text = [`YWC @Yaesu_Web_Control.AppVersion.Display load, copied ${new Date().toLocaleString([], { hour12: false })}`,
+                      l.now, l.detail, '',
+                      ...(l.events.length ? l.events : ['No freezes, busy spells or sleeps since YWC started.'])].join('\n');
+        try {
+            await navigator.clipboard.writeText(text);
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-outline-primary');
+            setTimeout(() => {
+                btn.textContent = orig;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-primary');
+            }, 1200);
+        } catch (e) {
+            loadDetail.textContent = 'Could not copy: ' + e.message;
+        }
+    });
+
+    function startLoadPolling() {
+        if (loadTimer !== null) return;
+        refreshLoad();
+        loadTimer = setInterval(refreshLoad, 2000);
+    }
+    function stopLoadPolling() {
+        if (loadTimer === null) return;
+        clearInterval(loadTimer);
+        loadTimer = null;
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopLoadPolling(); else startLoadPolling();
+    });
+    startLoadPolling();
 
 })();
 </script>

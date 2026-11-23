@@ -2924,6 +2924,8 @@ These are lower-priority for most users than the S-Meter and Power calibrations.
 
 Access the Diagnostics page from the navigation bar. It is primarily used when something is not working as expected.
 
+**PC and YWC load** — the panel near the top of the page, always visible. **PC** is how busy the whole computer is, and **YWC** is YWC's own share. **Wait** is how long YWC's work waits for its turn to run: a few milliseconds is normal. Over 2 seconds means YWC isn't getting time to run, and pages freeze, even though the radio and the cable are fine. Underneath is a list of every freeze, busy spell (the PC over 90% for 10 seconds) and sleep since YWC started, with the time of each, and every time YWC's meter poll got stuck. **If YWC froze or went slow, click Copy to clipboard and paste it into the GitHub issue or discussion.** The same lines are in the log.
+
 **COM Ports button** — Opens a list of all serial ports currently detected on your PC. Use this if you are unsure which port the radio is connected to.
 
 **CAT Status JSON button** — Opens a live JSON view of every radio parameter the app knows about. Useful when reporting a bug.
