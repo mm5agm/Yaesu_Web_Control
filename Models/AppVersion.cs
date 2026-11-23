@@ -45,9 +45,25 @@ public static class AppVersion
         return $"{current} ({tag})";               // tag and version disagree
     }
 
-    /// <summary>Date this version was released, ISO format.
-    /// Bump on actual release; current value reflects the planned ship date.</summary>
-    public const string ReleaseDate = "2026-11-16";
+    /// <summary>Date this version was released, ISO format. A CI build (one
+    /// with a tag) uses the day it was built, which is the day it was
+    /// released; until v2.5.6-pre28 every pre-release showed the planned date
+    /// below instead (#420: pre28 said 2026-11-16). A local build shows
+    /// <see cref="PlannedReleaseDate"/>.</summary>
+    public static readonly string ReleaseDate = ComputeReleaseDate(BuildTag, ReadMetadata("YwcBuildDate"));
+
+    /// <summary>The planned ship date, for local builds. Bump on release.</summary>
+    public const string PlannedReleaseDate = "2026-11-16";
+
+    private static string ReadMetadata(string key) =>
+        typeof(AppVersion).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == key)?.Value?.Trim() ?? "";
+
+    internal static string ComputeReleaseDate(string buildTag, string buildDate) =>
+        !string.IsNullOrWhiteSpace(buildTag) && System.Text.RegularExpressions.Regex.IsMatch(buildDate, @"^\d{4}-\d{2}-\d{2}$")
+            ? buildDate
+            : PlannedReleaseDate;
 
     /// <summary>
     /// Firmware versions of the developer's bench radio(s) at the time this

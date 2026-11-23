@@ -307,6 +307,8 @@
 
   <ItemGroup Condition="'$(YwcBuildTag)' != ''">
     <AssemblyMetadata Include="YwcBuildTag" Value="$(YwcBuildTag)" />
+    <!-- The day CI built the tag, shown as the release date (#420). -->
+    <AssemblyMetadata Include="YwcBuildDate" Value="$([System.DateTime]::UtcNow.ToString('yyyy-MM-dd'))" />
   </ItemGroup>
   <!-- Explicitly copy the entire wwwroot folder into the output directory -->
   <ItemGroup>
