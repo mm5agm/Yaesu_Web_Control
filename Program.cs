@@ -591,6 +591,10 @@ builder.Services.AddSingleton<AudioFilterMapService>();
 
 
 // Add after existing service registrations
+// Logs when YWC itself is starved of time, or the PC is busy or asleep, and
+// feeds the PC and YWC load panel on the Diagnostics page (from IWC D#51).
+builder.Services.AddSingleton<StarvationMonitor>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<StarvationMonitor>());
 builder.Services.AddHostedService<MeterPollingService>();
 // High SWR / high ALC pop-up (Discussion #257): watches the meters above, serves /api/txalert.
 builder.Services.AddSingleton<TxAlertService>();
