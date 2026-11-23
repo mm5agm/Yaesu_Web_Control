@@ -41,12 +41,16 @@ public class RadioDisplayFtdx101TilesTests
         return block[block.IndexOf("        zones: {", StringComparison.Ordinal)..];
     }
 
-    [Fact]
-    public void VfoB_HasADigitTileForEachDigit_RightOfVfoA()
+    [Theory]
+    [InlineData("FTDX101_DIGITS", "FTDX101_DIGITS_B")]
+    [InlineData("FTDX101_DIGITS_A_SMALL", "FTDX101_DIGITS_B_LARGE")]
+    public void VfoB_HasADigitTileForEachDigit_RightOfVfoA(string aTable, string bTable)
     {
         var js = Script();
-        var a = Digits(js, "FTDX101_DIGITS");
-        var b = Digits(js, "FTDX101_DIGITS_B");
+        var a = Digits(js, aTable);
+        var b = Digits(js, bTable);
+        Assert.Equal(8, a.Count);
+        for (int i = 1; i < a.Count; i++) Assert.Equal(a[i - 1].R, a[i].L);
 
         Assert.Equal(a.Select(d => d.Step), b.Select(d => d.Step));
         Assert.True(b[0].L > a[^1].R, "VFO B's digits start right of VFO A's");
@@ -56,10 +60,22 @@ public class RadioDisplayFtdx101TilesTests
             Assert.True(b[i].R > b[i].L, b[i].Id);
             if (i > 0) Assert.Equal(b[i - 1].R, b[i].L);   // cells touch, no gaps
         }
+    }
 
+    // The radio draws the active VFO large and the other small (Colin
+    // 2026-11-23, SUB active), so each table hides while it isn't drawn.
+    [Fact]
+    public void LargeAndSmallDigits_ShowForTheActiveVfo()
+    {
+        var js = Script();
         var zones = Ftdx101Zones(js);
-        Assert.Contains("digitZones(FTDX101_DIGITS, 0.325, 0.400, 'A')", zones);
-        Assert.Contains("digitZones(FTDX101_DIGITS_B, 0.325, 0.400, 'B')", zones);
+        Assert.Contains("digitZones(FTDX101_DIGITS, 0.325, 0.400, 'A', ['active:B'])", zones);
+        Assert.Contains("digitZones(FTDX101_DIGITS_A_SMALL, 0.325, 0.400, 'A', ['active:A'])", zones);
+        Assert.Contains("digitZones(FTDX101_DIGITS_B, 0.325, 0.400, 'B', ['active:B'])", zones);
+        Assert.Contains("digitZones(FTDX101_DIGITS_B_LARGE, 0.325, 0.400, 'B', ['active:A'])", zones);
+        Assert.Contains("'active:A': vfo => vfo === 'A'", js);
+        Assert.Contains("'active:B': vfo => vfo === 'B'", js);
+        Assert.Contains("if (conds.some(c => VFO_CONDITIONS[c]?.(this._vfo()))) return true;", js);
     }
 
     [Fact]

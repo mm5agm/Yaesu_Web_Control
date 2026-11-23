@@ -129,6 +129,12 @@ const CONDITIONS = {
     'size:1': ss => !ss.is3dss && (ss.size | 0) === 1,
     'size:2': ss => !ss.is3dss && (ss.size | 0) === 2,
 };
+// `active:A` / `active:B` hold while that VFO is the active one (the scope's
+// band): the FTdx101 draws the active VFO's frequency large.
+const VFO_CONDITIONS = {
+    'active:A': vfo => vfo === 'A',
+    'active:B': vfo => vfo === 'B',
+};
 
 // Per-model zone tables. rect = [left, top, right, bottom] as fractions of
 // the frame (normalizeZone also accepts pixels and x/y/w/h). `scope.plot` is
@@ -167,9 +173,25 @@ const FTDX101_DIGITS = [
     ['f1',    0.440, 0.492, 1],
 ];
 
-// VFO B's readout, right of VFO A's, in a smaller font. Measured 2026-11-23
-// on pictures/Radio_Display_Docked.png (18.100.000, glyphs x 0.644-0.948,
-// y 0.350-0.388); same rule, each dot goes to the digit before it.
+// The radio draws the active VFO's frequency large and the other one small
+// (Colin 2026-11-23: with SUB active VFO A shrinks and VFO B grows), so each
+// VFO has a large and a small table and hideWhen shows the one that matches.
+// Same rule throughout: each dot goes to the digit before it.
+// VFO A small, measured 2026-11-23 on a live FTdx101MP frame with SUB active
+// (10.135.370, glyphs x 0.139-0.444, y 0.335-0.395).
+const FTDX101_DIGITS_A_SMALL = [
+    ['afS10M',  0.125, 0.160, 10_000_000],
+    ['afS1M',   0.160, 0.208, 1_000_000],
+    ['afS100k', 0.208, 0.245, 100_000],
+    ['afS10k',  0.245, 0.284, 10_000],
+    ['afS1k',   0.284, 0.333, 1_000],
+    ['afS100',  0.333, 0.374, 100],
+    ['afS10',   0.374, 0.410, 10],
+    ['afS1',    0.410, 0.448, 1],
+];
+// VFO B small (MAIN active), measured 2026-11-23 on
+// pictures/Radio_Display_Docked.png (18.100.000, glyphs x 0.644-0.948,
+// y 0.350-0.388).
 const FTDX101_DIGITS_B = [
     ['bf10M',  0.630, 0.664, 10_000_000],
     ['bf1M',   0.664, 0.716, 1_000_000],
@@ -180,13 +202,27 @@ const FTDX101_DIGITS_B = [
     ['bf10',   0.878, 0.913, 10],
     ['bf1',    0.913, 0.952, 1],
 ];
+// VFO B large (SUB active), measured 2026-11-23 on Colin's FTdx101MP frame
+// (14.075.614, glyphs x 0.606-0.988, y 0.333-0.391).
+const FTDX101_DIGITS_B_LARGE = [
+    ['bfL10M',  0.598, 0.632, 10_000_000],
+    ['bfL1M',   0.632, 0.696, 1_000_000],
+    ['bfL100k', 0.696, 0.749, 100_000],
+    ['bfL10k',  0.749, 0.793, 10_000],
+    ['bfL1k',   0.793, 0.852, 1_000],
+    ['bfL100',  0.852, 0.898, 100],
+    ['bfL10',   0.898, 0.940, 10],
+    ['bfL1',    0.940, 0.993, 1],
+];
 
 // `vfo` ties a zone to one VFO's readout. Zones without it act on the VFO
 // the scope shows (_vfo()).
-function digitZones(digits, top, bottom, vfo) {
+function digitZones(digits, top, bottom, vfo, hideWhen) {
     const out = {};
-    for (const [id, l, r, step] of digits)
+    for (const [id, l, r, step] of digits) {
         out[id] = { rect: [l, top, r, bottom], action: 'freq.digit', step, vfo };
+        if (hideWhen) out[id].hideWhen = hideWhen;
+    }
     return out;
 }
 
@@ -226,7 +262,8 @@ const LAYOUTS = {
                 dark: ['dss3', 'mono', 'multi', 'expand', 'hold'],
             },
             keep: ['meter', 'ant', 'att', 'ipo', 'rfil', 'agc', 'antB', 'attB', 'ipoB', 'rfilB', 'agcB', 'multifn',
-                   ...FTDX101_DIGITS.map(d => d[0]), ...FTDX101_DIGITS_B.map(d => d[0])],
+                   ...FTDX101_DIGITS.map(d => d[0]), ...FTDX101_DIGITS_B.map(d => d[0]),
+                   ...FTDX101_DIGITS_A_SMALL.map(d => d[0]), ...FTDX101_DIGITS_B_LARGE.map(d => d[0])],
             zones: {
                 declvl: { rect: [0.003, 0.847, 0.124, 0.902], action: 'none',
                           hint: 'DEC LVL has no CAT command — touch it on the radio, then turn MULTI to set the decode threshold' },
@@ -240,8 +277,10 @@ const LAYOUTS = {
             // stopped short of the SWR meter's right-hand scales (Colin
             // 2026-11-23); 0.850 stops before VFO B's filter display.
             meter:  { rect: [0.000, 0.095, 0.850, 0.300], action: 'meter.select' },
-            ...digitZones(FTDX101_DIGITS, 0.325, 0.400, 'A'),
-            ...digitZones(FTDX101_DIGITS_B, 0.325, 0.400, 'B'),
+            ...digitZones(FTDX101_DIGITS, 0.325, 0.400, 'A', ['active:B']),
+            ...digitZones(FTDX101_DIGITS_A_SMALL, 0.325, 0.400, 'A', ['active:A']),
+            ...digitZones(FTDX101_DIGITS_B, 0.325, 0.400, 'B', ['active:B']),
+            ...digitZones(FTDX101_DIGITS_B_LARGE, 0.325, 0.400, 'B', ['active:A']),
             // Ten cells: ANT ATT IPO R.FIL AGC for VFO A, then the same for
             // VFO B (measured 2026-11-23 on Radio_Display_Docked.png; the old
             // five cells across the whole width sat over the wrong settings).
@@ -766,6 +805,7 @@ export class RadioDisplayHotspots {
     _zoneHidden(zone) {
         const conds = zone?.hideWhen;
         if (!conds || !conds.length) return false;
+        if (conds.some(c => VFO_CONDITIONS[c]?.(this._vfo()))) return true;
         const ss = this.getScopeControl()?.state;
         if (!ss) return false;   // unknown state: leave the zone live
         return conds.some(c => CONDITIONS[c]?.(ss));
