@@ -449,15 +449,18 @@ export function startYaesuWindows(windows, ctx) {
             set('S' + vfo, sMeterFraction(s), sMeterText(s));
             if (vfo === ctx.selected()) history?.push(num(v));
         };
+        // PO is out of 200 W in txMeterFraction; a QRP radio (FT-817 5 W,
+        // FT-818 6 W) fills the bar at its own maximum instead (D#379).
+        const poScale = ctx.maxPowerW < 100 ? 200 / ctx.maxPowerW : 1;
         const tx = (id, cal, fmt) => v => {
             const raw = num(typeof v === 'object' && v ? v.value : v);
             const val = cal(raw);
-            set(id, txMeterFraction(id, val), fmt(val));
+            set(id, txMeterFraction(id, id === 'PO' ? val * poScale : val), fmt(val));
         };
         return {
             SMeterA: sm('A'),
             SMeterB: sm('B'),
-            PowerMeter: tx('PO', r => Math.min(ctx.maxPowerW, calibrateNumeric('PWR', r)), v => Math.round(v) + ' W'),
+            PowerMeter: tx('PO', r => Math.min(ctx.maxPowerW, calibrateNumeric('PWR', r)), v => (ctx.maxPowerW < 100 ? v.toFixed(1) : Math.round(v)) + ' W'),
             SWRMeter: tx('SWR', r => calibrateNumeric('SWR', r), v => (v > 0 ? v.toFixed(1) : '--')),
             ALCMeter: tx('ALC', r => r, v => Math.round(v / 2.55) + ' %'),
             CompressionMeter: tx('COMP', r => Math.max(0, Math.min(20, calibrateNumeric('Compression', r))), v => v.toFixed(0) + ' dB'),

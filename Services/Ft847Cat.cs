@@ -190,6 +190,40 @@ namespace Yaesu_Web_Control.Services
         /// <summary>True when an F7 reply says the radio is transmitting (bit 7 clear).</summary>
         public static bool IsTransmitting(byte txStatus) => (txStatus & 0x80) == 0;
 
+        // ── The one-byte ack ──
+        //
+        // The FT-817, FT-818, FT-857 and FT-897 answer every block that is
+        // not a read with one byte (00), a few milliseconds later. The
+        // manuals don't say so; Hamlib's ft817_read_ack reads it after every
+        // command for all four. Left unread, it arrives during the NEXT read
+        // and pushes that reply one byte along: Felix DF3FX's FT-817 showed
+        // 432.039 MHz as 4.320390 MHz (D#379), the 03 reply having become
+        // 00 43 20 39 00. So the transport waits for the ack after each set.
+        // The FT-847 sends nothing back for a set.
+
+        /// <summary>True when the radio answers each set block with a one-byte ack: the FT-817, FT-818, FT-857 and FT-897.</summary>
+        public static bool AcksSets(string model) => IsFt8x7(model);
+
+        // ── Transmit power on the FT-817 and FT-818 ──
+        //
+        // BD (read TX metering, undocumented) answers two bytes while
+        // transmitting (one while receiving): power in the top four bits of
+        // the first byte, 0-8 for 0-5 W (Hamlib's ft817.c and its
+        // FT817_PWR_CAL, measured by Olivier Schmitt). YWC sends it only
+        // when F7 says the radio is transmitting.
+
+        public const byte ReadTxMetering = 0xBD;
+
+        /// <summary>True when YWC reads transmit power with BD: the FT-817 and FT-818.</summary>
+        public static bool ReadsPowerWithBd(string model) => model is "FT-817" or "FT-818";
+
+        /// <summary>
+        /// The power reading (0-15, 0-8 in use) from a BD reply, on YWC's
+        /// 0-255 scale (17 per step). calibration.default.FT-817.json turns
+        /// that into watts with Hamlib's table.
+        /// </summary>
+        public static int PowerFromBd(ReadOnlySpan<byte> reply) => ((reply[0] >> 4) & 0x0F) * 17;
+
         // ── VFO A and B on the FT-817 and FT-818 ──
         //
         // The manuals' only VFO command is 81, which swaps between A and B;

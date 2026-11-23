@@ -12,6 +12,21 @@ a different and much older format.
 
 ---
 
+## 2026-11-23 - v2.5.6-pre24 (pre-release)
+
+*FT-817 fixes from the first test on a real radio, and a PC load panel in Diagnostics. Everything in v2.5.6-pre23 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT-817, FT-818, FT-857 and FT-897** [The FT-817, FT-818, FT-857 and FT-897](USER_MANUAL.md#the-ft-817-ft-818-ft-857-and-ft-897)
+
+- **Wrong frequency after a change.** These radios answer every command that sets something with a one-byte "OK". YWC didn't read it, so when it came late it got in front of the next frequency reading, and 432.039 MHz showed as 4.320390 MHz. YWC now waits for it. ([Discussion #379](https://github.com/mm5agm/Yaesu_Web_Control/discussions/379))
+- **Changes made on the radio now reach YWC.** A mode change, or A/B pressed on the radio, never showed in YWC, because the meter readings kept YWC too busy to check the radio. It now checks every 300 ms whatever else is going on. ([Discussion #379](https://github.com/mm5agm/Yaesu_Web_Control/discussions/379))
+- **Power on the FT-817 and FT-818.** YWC now reads the power the way Hamlib does, so 5 W reads 5 W, not near zero. The PO meter on the Radio page reads 0 to 5 W (FT-818: 0 to 6 W) instead of 0 to 200 W. ([Discussion #379](https://github.com/mm5agm/Yaesu_Web_Control/discussions/379))
+
+**Diagnostics: PC and YWC load** [Diagnostics](USER_MANUAL.md#11-diagnostics)
+
+- A new **PC and YWC load** panel shows the PC's CPU, YWC's CPU and how long YWC waits for a free thread, every 2 seconds, with the last 50 events since YWC started. **Copy to clipboard** copies it for pasting into a GitHub report. ([#412](https://github.com/mm5agm/Yaesu_Web_Control/pull/412))
+- When YWC is starved of time (the PC is busy, or was asleep), the log now says so, and says when it recovered. If the meter readings stop moving for 20 seconds, the log says what they were waiting for.
+
 ## 2026-11-22 - v2.5.6-pre23 (pre-release)
 
 *More detail in the log when the SDR scan crashes. Everything in v2.5.6-pre22 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
