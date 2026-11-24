@@ -1984,6 +1984,7 @@ This is one of only two parts of YWC that need an **internet connection** (the o
 | Cluster host | Hostname or IP of the DX cluster, e.g. `dxspider.co.uk` |
 | Port | TCP port. Most clusters use 7300, 23, or 8000 |
 | Login callsign | Your amateur callsign — sent to the cluster when it prompts for login. Most clusters require a valid licensed call |
+| Password | Only for clusters that ask for one after the callsign. Leave blank otherwise. It is sent in plain text, like every telnet cluster login, so don't reuse a password from anywhere else. **Test cluster connection** sends it too. |
 | Spot age-off (minutes) | Spots older than this are removed automatically. Typical 15–30 minutes |
 | Post-login commands | DXSpider commands to send after the callsign is accepted (one per line). See subsection below. |
 

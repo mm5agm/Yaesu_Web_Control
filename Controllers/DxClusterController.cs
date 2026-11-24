@@ -29,6 +29,7 @@ namespace Yaesu_Web_Control.Controllers
             public string Host { get; set; } = "";
             public int Port { get; set; } = 7300;
             public string LoginCallsign { get; set; } = "";
+            public string Password { get; set; } = "";
         }
 
         public class TestResult
@@ -108,6 +109,12 @@ namespace Yaesu_Web_Control.Controllers
                         {
                             await writer.WriteLineAsync(req.LoginCallsign.Trim().ToUpperInvariant());
                             sb.AppendLine($">> {req.LoginCallsign.Trim().ToUpperInvariant()}");
+                            if (!string.IsNullOrWhiteSpace(req.Password))
+                            {
+                                await Task.Delay(1500, overallCts.Token);
+                                await writer.WriteLineAsync(req.Password.Trim());
+                                sb.AppendLine(">> (password)");
+                            }
                         }
                     }
                     catch { /* socket may already be closing — fine */ }

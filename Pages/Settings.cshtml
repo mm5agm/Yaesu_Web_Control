@@ -2687,6 +2687,19 @@
                                 </div>
                             </div>
                             <div class="mb-3">
+                                <label asp-for="Settings.DxClusterPassword" class="form-label">
+                                    Password
+                                </label>
+                                <input asp-for="Settings.DxClusterPassword" class="form-control" type="password"
+                                       value="@Model.Settings.DxClusterPassword"
+                                       placeholder="Only if your cluster asks for one" autocomplete="off" />
+                                <div class="form-text">
+                                    Sent after the callsign, for clusters that ask for a password. Leave blank
+                                    if yours doesn't. Cluster logins aren't encrypted, so don't reuse a password
+                                    from anywhere else.
+                                </div>
+                            </div>
+                            <div class="mb-3">
                                 <label asp-for="Settings.DxSpotAgeMinutes" class="form-label">
                                     Spot age-off (minutes)
                                 </label>
@@ -4474,6 +4487,7 @@
             const host = document.getElementById('Settings_DxClusterHost').value.trim();
             const port = parseInt(document.getElementById('Settings_DxClusterPort').value, 10);
             const callsign = document.getElementById('Settings_DxClusterLoginCallsign').value.trim();
+            const password = document.getElementById('Settings_DxClusterPassword').value.trim();
 
             const statusEl = document.getElementById('dxClusterTestStatus');
             const transcriptEl = document.getElementById('dxClusterTestTranscript');
@@ -4498,7 +4512,7 @@
                 const resp = await fetch('/api/dxcluster/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ host, port, loginCallsign: callsign }),
+                    body: JSON.stringify({ host, port, loginCallsign: callsign, password }),
                 });
                 const r = await resp.json();
                 statusEl.className = r.success ? 'alert alert-success' : 'alert alert-danger';

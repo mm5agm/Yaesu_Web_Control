@@ -223,6 +223,20 @@ namespace Yaesu_Web_Control.Services
             AppendLogFile($">> {settings.DxClusterLoginCallsign}");
             _logger.LogInformation("[DxCluster] Sent proactive login: {Callsign}", settings.DxClusterLoginCallsign);
 
+            // A password, for clusters that ask for one after the callsign
+            // (KE1AB's, 2026-11-24). Sent the same way, unasked, because the
+            // "password: " prompt often has no newline either. Never logged.
+            var password = (settings.DxClusterPassword ?? "").Trim();
+            bool passwordSent = false;
+            if (password.Length > 0)
+            {
+                await Task.Delay(1500, stoppingToken);
+                await writer.WriteLineAsync(password);
+                passwordSent = true;
+                AppendLogFile(">> (password)");
+                _logger.LogInformation("[DxCluster] Sent password");
+            }
+
             // Send any user-configured post-login commands (set/qra YOUR-GRID,
             // set/name YOUR-NAME, set/filter ... etc.). Pause briefly first so
             // the cluster has time to process the login.
@@ -284,6 +298,25 @@ namespace Yaesu_Web_Control.Services
                     while (_recentLines.Count > 100) _recentLines.RemoveFirst();
                 }
 
+                // A password prompt: answer it with the password once, and never
+                // with the callsign (the catch-all below would). If it was
+                // already sent unasked, the prompt was just slow to arrive.
+                if (IsPasswordPrompt(line))
+                {
+                    if (!passwordSent && password.Length > 0)
+                    {
+                        await writer.WriteLineAsync(password);
+                        passwordSent = true;
+                        AppendLogFile(">> (password)");
+                        _logger.LogInformation("[DxCluster] Sent password");
+                    }
+                    else if (password.Length == 0)
+                    {
+                        _logger.LogWarning("[DxCluster] The cluster asked for a password; set one in Settings, DX Cluster");
+                    }
+                    continue;
+                }
+
                 // Login: most clusters print a prompt containing "call:" or
                 // "callsign" or "login". Respond with the configured callsign.
                 if (!loggedIn && (line.Contains("call:", StringComparison.OrdinalIgnoreCase)
@@ -329,6 +362,18 @@ namespace Yaesu_Web_Control.Services
             }
 
             await SetStatus("disconnected", "Remote closed the connection");
+        }
+
+        /// <summary>
+        /// A cluster line asking for a password ("password:", "Enter your
+        /// password", "Password?"). Short, or ending like a prompt, so a spot
+        /// or talk line that happens to say "password" doesn't count.
+        /// </summary>
+        public static bool IsPasswordPrompt(string? line)
+        {
+            var t = (line ?? "").Trim();
+            return t.Contains("password", StringComparison.OrdinalIgnoreCase)
+                && (t.EndsWith(':') || t.EndsWith('?') || t.EndsWith('>') || t.Length < 30);
         }
 
         /// <summary>

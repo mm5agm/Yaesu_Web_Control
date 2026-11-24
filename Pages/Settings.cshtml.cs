@@ -144,6 +144,7 @@ namespace Yaesu_Web_Control.Pages
             // DX cluster host/callsign also allowed empty (empty = feature disabled).
             ModelState.Remove("Settings.DxClusterHost");
             ModelState.Remove("Settings.DxClusterLoginCallsign");
+            ModelState.Remove("Settings.DxClusterPassword");
             ModelState.Remove("Settings.DxClusterPostLoginCommands");
             // Accessibility TX shortcut is optional — empty = disabled.
             ModelState.Remove("Settings.TxToggleKey");
@@ -363,6 +364,7 @@ namespace Yaesu_Web_Control.Pages
                 current.DxClusterHost            = (Settings.DxClusterHost ?? "").Trim();
                 current.DxClusterPort            = Settings.DxClusterPort > 0 ? Settings.DxClusterPort : 7300;
                 current.DxClusterLoginCallsign   = (Settings.DxClusterLoginCallsign ?? "").Trim().ToUpperInvariant();
+                current.DxClusterPassword        = (Settings.DxClusterPassword ?? "").Trim();
                 current.DxSpotAgeMinutes         = Settings.DxSpotAgeMinutes > 0 ? Settings.DxSpotAgeMinutes : 15;
                 current.DxClusterPostLoginCommands = Settings.DxClusterPostLoginCommands ?? "";
 
