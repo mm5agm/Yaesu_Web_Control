@@ -170,6 +170,27 @@ public class Ft817VfoTests
         link.Dispose();
     }
 
+    // D#379 (Felix, pre32): his FT-817 showed the old VFO in its EEPROM 60 ms
+    // after a swap. YWC gave up on the set and left the radio on the other
+    // VFO. It now waits for the EEPROM to catch up, sets, and swaps back.
+    [Fact]
+    public async Task ASet_ForTheOtherVfo_WaitsForASlowEeprom_AndSwapsBack()
+    {
+        var (link, radio) = Open();
+        radio.EepromVfoLagMs = 200;
+        await SendAsync(link, "VS;", 1);                // on A: 14.074 USB, B is 7.074 LSB
+
+        await SendAsync(link, "MD14;", 0);              // B: FM
+        for (int i = 0; i < 300 && !(!radio.OnVfoB && radio.OtherMode == 0x08 && Count(radio, Ft847Cat.ToggleVfo) == 2); i++)
+            await Task.Delay(10);
+
+        Assert.False(radio.OnVfoB);                     // back on A
+        Assert.Equal(0x01, radio.Mode);                 // A untouched
+        Assert.Equal(0x08, radio.OtherMode);            // B is FM
+        Assert.Equal(2, Count(radio, Ft847Cat.ToggleVfo));
+        link.Dispose();
+    }
+
     [Fact]
     public async Task ASet_ForTheOtherVfo_IsNotSentWhileTransmitting()
     {

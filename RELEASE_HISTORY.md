@@ -12,6 +12,22 @@ a different and much older format.
 
 ---
 
+## 2026-11-24 - v2.5.6-pre33 (pre-release)
+
+*For FT-817 and FT-818 users: setting the mode or frequency of the other VFO works, and a click on a VFO panel's header selects that VFO. Everything in v2.5.6-pre32 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT-817 and FT-818** [The FT-817, FT-818, FT-857 and FT-897](USER_MANUAL.md#the-ft-817-ft-818-ft-857-and-ft-897)
+
+- **The mode and frequency of the other VFO can be set.** The radio can only change the VFO it's on, so YWC swaps to the other VFO, makes the change and swaps back. YWC checked which VFO the radio was on only 60 ms after the swap. Some radios still showed the old VFO then, so YWC gave up: the change wasn't made, and the radio was left on the other VFO. YWC now waits up to 400 ms for the radio to show the swap, makes the change and swaps back. If the radio still hasn't shown it, the log says so. ([D#379](https://github.com/mm5agm/Yaesu_Web_Control/discussions/379))
+
+**Main page**
+
+- **Click a VFO panel's header to select that VFO** on a radio with one receiver: it does what the RX A / B buttons in the toolbar do. Clicks on the buttons inside the header still work as before. On the FTdx101, the header already selected MAIN or SUB. Not on the FT-991A, which can't choose its receive VFO over CAT. ([D#379](https://github.com/mm5agm/Yaesu_Web_Control/discussions/379))
+
+**Logs**
+
+- **A frequency change is logged only when the band changes.** Every frequency update wrote a line, which made up 90% of one user's log and buried the lines that mattered. The full record is still there at Debug level.
+
 ## 2026-11-24 - v2.5.6-pre32 (pre-release)
 
 *For N1MM Logger+ testers: the log now shows what N1MM sends, to track down band buttons that don't work and a lock-up. Everything in v2.5.6-pre31 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

@@ -543,7 +543,7 @@ namespace Yaesu_Web_Control.Services
             await SelectVfoAsync(which);
             if (_vfo != which)
             {
-                _logger?.LogDebug("{Tag} VFO {Vfo} not set: the radio didn't change VFO", _tag, which == 0 ? "A" : "B");
+                _logger?.LogInformation("{Tag} VFO {Vfo} not set: the radio didn't change VFO", _tag, which == 0 ? "A" : "B");
                 return;
             }
             await set();
@@ -566,9 +566,18 @@ namespace Yaesu_Web_Control.Services
             }
 
             await SendSetAsync(Ft847Cat.Block(Ft847Cat.ToggleVfo));
-            // Hamlib waits 50 ms for the swap before reading the EEPROM again.
-            await Task.Delay(60);
-            await ReadVfoAsync(maxAgeMs: 0);
+            // Hamlib waits 50 ms for the swap before reading the EEPROM again,
+            // but Felix DF3FX's FT-817 could still show the old VFO then
+            // (D#379, pre32): YWC gave up on the set and left the radio on the
+            // other VFO. Read until the EEPROM shows the new VFO, for up to
+            // about 400 ms. 81 is a blind toggle, so it's never sent again here.
+            for (int i = 0; i < 8; i++)
+            {
+                await Task.Delay(i == 0 ? 60 : 50);
+                if (await ReadVfoAsync(maxAgeMs: 0) == target) break;
+            }
+            if (_vfo != target)
+                _logger?.LogInformation("{Tag} the radio still shows VFO {Vfo} 400 ms after the swap", _tag, _vfo == 1 ? "B" : "A");
             await ReadMainAsync(maxAgeMs: 0);   // fills the new VFO's slot
         }
 
