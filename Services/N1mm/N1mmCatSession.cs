@@ -52,6 +52,25 @@ namespace Yaesu_Web_Control.Services.N1mm
 
         public N1mmCatSession(ICatPassThrough link) => _link = link;
 
+        // A read the radio misses this many times in a row is set aside...
+        public const int MissesBeforeSetAside = 2;
+        // ...and not sent again for this long. Rick's FTdx101D never answered
+        // N1MM's MG; in CW, and each one held the rest of the batch for the
+        // full read time-out, so a band button's FA waited 15 s behind them
+        // and N1MM put its old band back (#394, 2026-11-24).
+        public static readonly TimeSpan SetAsideFor = TimeSpan.FromSeconds(30);
+
+        /// <summary>The clock, so tests can move time on.</summary>
+        public Func<DateTime> Now { get; set; } = () => DateTime.UtcNow;
+
+        private readonly Dictionary<string, (int Misses, DateTime RetryAt)> _misses = new();
+
+        /// <summary>Reads not sent because the radio kept missing them.</summary>
+        public int SetAside { get; private set; }
+
+        /// <summary>Called once each time a read is set aside, for the log.</summary>
+        public Action<string>? OnSetAside { get; set; }
+
         /// <summary>True after N1MM sent TX1/TX2 and before it sent TX0.</summary>
         public bool Keyed { get; private set; }
 
@@ -107,15 +126,27 @@ namespace Yaesu_Web_Control.Services.N1mm
 
                     case N1mmCatKind.Read:
                         if (!_link.IsConnected) break;
+                        if (_misses.TryGetValue(command, out var miss)
+                            && miss.Misses >= MissesBeforeSetAside && Now() < miss.RetryAt)
+                        {
+                            // N1MM gets no answer, as it wouldn't from the
+                            // radio, but without the wait.
+                            SetAside++;
+                            break;
+                        }
                         var answer = await _link.ReadAsync(command, cancellationToken);
                         if (!string.IsNullOrEmpty(answer))
                         {
+                            _misses.Remove(command);
                             await send(answer + ";", cancellationToken);
                         }
                         else
                         {
                             Unanswered++;
                             OnUnanswered?.Invoke(command);
+                            int misses = _misses.TryGetValue(command, out var m) ? m.Misses + 1 : 1;
+                            _misses[command] = (misses, Now() + SetAsideFor);
+                            if (misses == MissesBeforeSetAside) OnSetAside?.Invoke(command);
                         }
                         break;
 

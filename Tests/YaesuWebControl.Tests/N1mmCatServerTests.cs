@@ -196,6 +196,47 @@ public sealed class N1mmCatServerTests
         Assert.Equal(new[] { "IF;", "TX;" }, missed);
     }
 
+    // #394, Rick's log 2026-11-24: the radio never answered MG; in CW, each
+    // one cost the read time-out, and N1MM's band change waited 15 s.
+    [Fact]
+    public async Task A_read_the_radio_keeps_missing_is_set_aside_then_tried_again()
+    {
+        var radio = new FakeRadio();
+        radio.Answers["FA;"] = "FA014074000";
+        var now = new DateTime(2026, 11, 24, 15, 38, 0, DateTimeKind.Utc);
+        var session = new N1mmCatSession(radio) { Now = () => now };
+        var setAside = new List<string>();
+        session.OnSetAside = setAside.Add;
+
+        await session.ProcessAsync("MG;FA;MG;FA;", CancellationToken.None);
+        Assert.Equal(new[] { "MG;" }, setAside);
+
+        radio.Reads.Clear();
+        var reply = await session.ProcessAsync("MG;FA;MG;", CancellationToken.None);
+        Assert.Equal("FA014074000;", reply);
+        Assert.Equal(new[] { "FA;" }, radio.Reads);
+        Assert.Equal(2, session.SetAside);
+
+        now += N1mmCatSession.SetAsideFor;
+        radio.Reads.Clear();
+        radio.Answers["MG;"] = "MG050";
+        reply = await session.ProcessAsync("MG;MG;", CancellationToken.None);
+        Assert.Equal("MG050;MG050;", reply);
+        Assert.Equal(new[] { "MG;", "MG;" }, radio.Reads);
+    }
+
+    [Fact]
+    public async Task One_missed_read_is_not_set_aside()
+    {
+        var radio = new FakeRadio();
+        var session = new N1mmCatSession(radio);
+        await session.ProcessAsync("IF;", CancellationToken.None);
+        radio.Answers["IF;"] = "IF001014074000+000000200000";
+        var reply = await session.ProcessAsync("IF;", CancellationToken.None);
+        Assert.Equal("IF001014074000+000000200000;", reply);
+        Assert.Equal(0, session.SetAside);
+    }
+
     [Fact]
     public async Task Sets_are_counted_and_reported_for_the_log()
     {
