@@ -56,9 +56,34 @@ namespace Yaesu_Web_Control.Services.Sdr
             ObjectDisposedException.ThrowIf(_disposed, nameof(SoapySdrDevice));
             if (_streaming) return;
 
-            _stream    = SoapySdrInterop.OpenRxStream(_device);
-            _streaming = true;
+            _stream      = SoapySdrInterop.OpenRxStream(_device);
+            _streaming   = true;
+            _lastSamples = DateTime.UtcNow;
         }
+
+        /// <summary>How long a stream may give only timeouts before it is called dead.</summary>
+        public const int NoSamplesLimitMs = 5000;
+
+        private DateTime _lastSamples;
+
+        /// <summary>
+        /// SoapySDR readStream codes (SoapySDR/Errors.h) that mean "try again":
+        /// TIMEOUT (-1) and OVERFLOW (-4, samples were dropped).
+        /// </summary>
+        public static bool IsTransient(int code) => code is -1 or -4;
+
+        /// <summary>The SoapySDR/Errors.h name for a readStream code.</summary>
+        public static string ErrorName(int code) => code switch
+        {
+            -1 => "TIMEOUT",
+            -2 => "STREAM_ERROR",
+            -3 => "CORRUPTION",
+            -4 => "OVERFLOW",
+            -5 => "NOT_SUPPORTED",
+            -6 => "TIME_ERROR",
+            -7 => "UNDERFLOW",
+            _  => "unknown",
+        };
 
         /// <inheritdoc/>
         /// <remarks>
@@ -87,9 +112,22 @@ namespace Yaesu_Web_Control.Services.Sdr
                     ct).ConfigureAwait(false);
 
                 if (read < 0)
-                    throw new InvalidOperationException(
-                        $"SoapySDR: ReadStream returned error code {read}");
+                {
+                    if (!IsTransient(read))
+                        throw new InvalidOperationException(
+                            $"SoapySDR: ReadStream returned error code {read} ({ErrorName(read)})");
 
+                    // #404: the RTL-SDR's reader thread takes a moment to
+                    // deliver its first buffer, so the first reads time out.
+                    // A timeout or overflow is not a failure; only a device
+                    // that stays silent for NoSamplesLimitMs is.
+                    if ((DateTime.UtcNow - _lastSamples).TotalMilliseconds > NoSamplesLimitMs)
+                        throw new InvalidOperationException(
+                            $"SoapySDR: no samples from the device for {NoSamplesLimitMs / 1000} s (last code {read}, {ErrorName(read)})");
+                    continue;
+                }
+
+                _lastSamples = DateTime.UtcNow;
                 if (read >= _fftSize)
                     return true;
 
