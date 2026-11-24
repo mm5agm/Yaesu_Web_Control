@@ -299,6 +299,8 @@
         public string? DxClusterHost { get; set; } = "";
         public int DxClusterPort { get; set; } = 7300;
         public string? DxClusterLoginCallsign { get; set; } = "";
+        // Some clusters ask for a password after the callsign. Blank = none.
+        public string? DxClusterPassword { get; set; } = "";
         public int DxSpotAgeMinutes { get; set; } = 15;
 
         // Cluster commands to send each time we log in. One per line.
