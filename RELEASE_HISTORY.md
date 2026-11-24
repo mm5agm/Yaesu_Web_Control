@@ -12,6 +12,16 @@ a different and much older format.
 
 ---
 
+## 2026-11-24 - v2.5.6-pre37 (pre-release)
+
+*N1MM Logger+'s band buttons change band straight away again. Everything in v2.5.6-pre36 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**N1MM Logger+** ([#394](https://github.com/mm5agm/Yaesu_Web_Control/issues/394))
+
+- **N1MM's band buttons no longer snap back to the old band.** N1MM asks the radio for some things it doesn't answer, such as the mic gain in CW. YWC waited for each of those answers, so N1MM's questions piled up, and a band change could wait 15 seconds behind them while N1MM put the old band back. Now, once the radio has missed the same question twice, YWC stops asking it for 30 seconds and moves straight on. The log says when that happens.
+
+---
+
 ## 2026-11-24 - v2.5.6-pre36 (pre-release)
 
 *The WSJT-X launcher button can be switched on again, and the DX cluster can log in to clusters that ask for a password. Everything in v2.5.6-pre35 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
