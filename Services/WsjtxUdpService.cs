@@ -28,6 +28,7 @@ namespace Yaesu_Web_Control.Services
         private long _dialFrequency;
         private bool _txEnabled;
         private string _dxCall = "";
+        private string _txMessage = "";
         private string _deCall = "";
 
         // Where WSJT-X/WSJT-Z sends from. Requests (Reply, HaltTx, Configure)
@@ -86,6 +87,8 @@ namespace Yaesu_Web_Control.Services
         public bool TxEnabled { get { lock (_lock) return _txEnabled; } }
         public string DxCall { get { lock (_lock) return _dxCall; } }
         public string DeCall { get { lock (_lock) return _deCall; } }
+        /// <summary>The Tx Message from WSJT-X's last Status: what it is sending, or sent last. Empty from older versions.</summary>
+        public string TxMessage { get { lock (_lock) return _txMessage; } }
 
         // The last QSO WSJT-X logged, for the big-tile page's "Logged" banner.
         private WsjtxQsoLogged? _lastLogged;
@@ -319,6 +322,7 @@ namespace Yaesu_Web_Control.Services
                         _txEnabled = msg.TxEnabled;
                         _dxCall = msg.DxCall;
                         _deCall = msg.DeCall;
+                        _txMessage = msg.TxMessage;
                         syncPaused = DateTime.UtcNow < _dialSyncPausedUntil;
                     }
                     CallList.MyCall = msg.DeCall;

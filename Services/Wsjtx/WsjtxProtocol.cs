@@ -33,7 +33,8 @@ namespace Yaesu_Web_Control.Services.Wsjtx
         bool TxEnabled,
         bool Transmitting,
         bool Decoding,
-        string DeCall);
+        string DeCall,
+        string TxMessage = "");
 
     /// <summary>
     /// The QSO Logged (type 5) fields the big-tile page shows. WSJT-X sends it
@@ -142,17 +143,28 @@ namespace Yaesu_Web_Control.Services.Wsjtx
             // The rest is optional: a short Status still gives the fields above.
             bool decoding = false;
             string deCall = "";
+            string txMessage = "";
             try
             {
                 decoding = ReadBool(span, ref offset);
                 ReadUInt32(span, ref offset);            // Rx DF
                 ReadUInt32(span, ref offset);            // Tx DF
                 deCall = ReadUtf8(span, ref offset) ?? "";
+                ReadUtf8(span, ref offset);              // DE grid
+                ReadUtf8(span, ref offset);              // DX grid
+                ReadBool(span, ref offset);              // Tx Watchdog
+                ReadUtf8(span, ref offset);              // Sub-mode
+                ReadBool(span, ref offset);              // Fast mode
+                offset += 1;                             // Special Operation Mode (quint8)
+                ReadUInt32(span, ref offset);            // Frequency Tolerance
+                ReadUInt32(span, ref offset);            // T/R Period
+                ReadUtf8(span, ref offset);              // Configuration Name
+                txMessage = (ReadUtf8(span, ref offset) ?? "").Trim();   // Tx Message: what WSJT-X sends, or last sent
             }
             catch (ArgumentOutOfRangeException) { }
             catch (IndexOutOfRangeException) { }
 
-            return new WsjtxStatus(h.Id, dial, mode, dxCall, txEnabled, transmitting, decoding, deCall);
+            return new WsjtxStatus(h.Id, dial, mode, dxCall, txEnabled, transmitting, decoding, deCall, txMessage);
         }
 
         public static WsjtxQsoLogged? TryParseQsoLogged(byte[] data)
