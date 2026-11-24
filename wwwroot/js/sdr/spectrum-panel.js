@@ -13,6 +13,14 @@ import { tuningStep } from '../ui/tuning-step.js?v=1';
 import { formatTuningStep } from '../tuning/tuning-step-store.js?v=1';
 import { loadRttySettings, afskMidpointAudioHz } from '../rtty/rtty-settings.js?v=1';
 
+// The radio's top tuning frequency, from #vfoRow's data-max-hz (75 MHz for
+// most models, 470 MHz for the FT-991A). A fixed 75 MHz sent a 2 m user to
+// 75 MHz on every wheel notch (D#404).
+function tuneMaxHz() {
+    const v = Number(document.getElementById('vfoRow')?.dataset?.maxHz);
+    return Number.isFinite(v) && v > 0 ? v : 75_000_000;
+}
+
 // Drag-to-tune: CSS pixels a press may wander and still count as a click,
 // and the shortest gap between frequency writes while dragging.
 const TUNE_DRAG_DEADZONE_PX = 4;
@@ -1440,7 +1448,7 @@ export class SpectrumPanel {
         const rect = canvas.getBoundingClientRect();
         if (rect.width <= 0) return;
         const hz = Math.round((d.startHz - (dxCss / rect.width) * d.spanHz) / 10) * 10;
-        d.pendingHz = Math.max(30_000, Math.min(75_000_000, hz));
+        d.pendingHz = Math.max(30_000, Math.min(tuneMaxHz(), hz));
         // At most one CAT write per TUNE_DRAG_SEND_MS; the last one wins.
         if (!d.sendTimer) {
             d.sendTimer = setTimeout(() => {
@@ -1589,7 +1597,7 @@ export class SpectrumPanel {
         // selected digit and the voice nudge step — see ui/tuning-step.js.
         const step = tuningStep.get(this._vfo);
         const direction = e.deltaY > 0 ? -1 : 1;   // scroll up = higher freq
-        this._wheelTargetHz = Math.max(30_000, Math.min(75_000_000,
+        this._wheelTargetHz = Math.max(30_000, Math.min(tuneMaxHz(),
             (this._wheelTargetHz ?? this._vfoHz) + direction * step));
 
         // Debounce: send once scrolling pauses for 60 ms.

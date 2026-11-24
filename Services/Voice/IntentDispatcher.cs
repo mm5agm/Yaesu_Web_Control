@@ -138,8 +138,9 @@ namespace Yaesu_Web_Control.Services.Voice
                 return new DispatchResult(false, "Set frequency");
             }
             var phrase = $"Move to {FormatFrequencyForSpeech(hz)}";
-            // 30 kHz - 75 MHz: same bounds as the HTTP SetFrequencyA endpoint.
-            if (hz < 30_000 || hz > 75_000_000)
+            // The radio's own range (470 MHz on the FT-991A), as the HTTP SetFrequencyA endpoint.
+            var (minHz, maxHz) = RadioCapabilities.FrequencyRangeHz((await _settings.GetSettingsAsync()).RadioModel);
+            if (hz < minHz || hz > maxHz)
             {
                 _logger.LogWarning("[Voice] SetFrequency {Hz} out of range", hz);
                 return new DispatchResult(false, phrase);
@@ -302,7 +303,8 @@ namespace Yaesu_Web_Control.Services.Voice
             var stepHz = stepHzSetting > 0 ? stepHzSetting : 10_000;
             var current = isB ? _state.FrequencyB : _state.FrequencyA;
             var next = current + direction * stepHz;
-            if (next < 30_000 || next > 75_000_000)
+            var (minHz, maxHz) = RadioCapabilities.FrequencyRangeHz(settings.RadioModel);
+            if (next < minHz || next > maxHz)
             {
                 _logger.LogWarning("[Voice] NudgeFrequency would go out of range ({Next})", next);
                 return new DispatchResult(false, phrase);

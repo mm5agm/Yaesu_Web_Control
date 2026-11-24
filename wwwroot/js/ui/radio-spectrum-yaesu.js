@@ -69,6 +69,7 @@ export function startYaesuSpectrumPopout(root, cfg) {
         freq: vfo => feed.state.freq[vfo],
         show: (vfo, hz) => feed.showFrequency(vfo, hz),
         write: (vfo, hz) => post(`/api/cat/frequency/${vfo.toLowerCase()}`, { frequencyHz: hz }),
+        ...(cfg.maxHz ? { maxHz: cfg.maxHz } : {}),
     });
 
     cfg.conn.start().catch(e => console.warn('spectrum: hub', e));
