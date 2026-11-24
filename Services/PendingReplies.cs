@@ -17,17 +17,27 @@ namespace Yaesu_Web_Control.Services
     /// and ';', such as "TX;" or "SM0;") that's already waiting for an answer
     /// isn't sent again: the second asker shares the first one's answer. Sets
     /// and anything with parameters are always sent.
+    ///
+    /// A read never shares an answer asked for before the last set (see
+    /// <see cref="NoteSet"/>): after N1MM's band button sends "FA007025000;",
+    /// its next "FA;" must not take the answer to a "FA;" that went out
+    /// before the set, which would carry the old band (#394).
     /// </summary>
     public sealed class PendingReplies
     {
         private sealed class Waiter
         {
-            public Waiter(string command) => Command = command;
+            public Waiter(string command, long generation) { Command = command; Generation = generation; }
             public string Command { get; }
+            public long Generation { get; }
             public TaskCompletionSource<string> Answer { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
         private readonly ConcurrentDictionary<string, Waiter> _slots = new();
+        private long _generation;
+
+        /// <summary>Call when a set goes to the radio: reads asked before it are no longer shared.</summary>
+        public void NoteSet() => Interlocked.Increment(ref _generation);
 
         /// <summary>True for a read that asks for the key's value and nothing else.</summary>
         public static bool IsPlainRead(string key, string command) =>
@@ -41,13 +51,13 @@ namespace Yaesu_Web_Control.Services
         /// </summary>
         public async Task<string?> AskAsync(string key, string command, Func<Task> send, int timeoutMs, CancellationToken cancellationToken)
         {
-            var mine = new Waiter(command);
+            var mine = new Waiter(command, Interlocked.Read(ref _generation));
             Waiter waiter;
             while (true)
             {
                 if (_slots.TryGetValue(key, out var existing))
                 {
-                    if (existing.Command == command && IsPlainRead(key, command))
+                    if (existing.Command == command && IsPlainRead(key, command) && existing.Generation == mine.Generation)
                     {
                         waiter = existing;
                         break;
