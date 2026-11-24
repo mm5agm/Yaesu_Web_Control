@@ -195,4 +195,16 @@ public sealed class N1mmCatServerTests
         Assert.Equal(2, session.Unanswered);
         Assert.Equal(new[] { "IF;", "TX;" }, missed);
     }
+
+    [Fact]
+    public async Task Sets_are_counted_and_reported_for_the_log()
+    {
+        var radio = new FakeRadio();
+        var session = new N1mmCatSession(radio);
+        var sent = new List<string>();
+        session.OnSet = sent.Add;
+        await session.ProcessAsync("FA;BS05;FA007025000;MD03;TX;", CancellationToken.None);
+        Assert.Equal(3, session.Sets);
+        Assert.Equal(new[] { "BS05;", "FA007025000;", "MD03;" }, sent);
+    }
 }

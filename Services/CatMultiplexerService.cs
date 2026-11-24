@@ -305,6 +305,7 @@ namespace Yaesu_Web_Control.Services
         {
             if (_link?.IsOpen != true)
                 return Task.CompletedTask;
+            _pendingResponses.NoteSet();
             return SendToSerialPortAsync(command, cancellationToken);
         }
 

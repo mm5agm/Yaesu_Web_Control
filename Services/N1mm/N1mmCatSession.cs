@@ -66,6 +66,12 @@ namespace Yaesu_Web_Control.Services.N1mm
         /// <summary>Called with each read the radio didn't answer, for the log.</summary>
         public Action<string>? OnUnanswered { get; set; }
 
+        /// <summary>Sets passed to the radio (frequency, mode, band, macros).</summary>
+        public int Sets { get; private set; }
+
+        /// <summary>Called with each set passed to the radio, for the log.</summary>
+        public Action<string>? OnSet { get; set; }
+
         /// <summary>
         /// Handles whatever text arrived and returns what to send back: the
         /// answers to its reads, each with its ';', in order. A partial
@@ -115,6 +121,8 @@ namespace Yaesu_Web_Control.Services.N1mm
 
                     case N1mmCatKind.Set:
                         if (!_link.IsConnected) break;
+                        Sets++;
+                        OnSet?.Invoke(command);
                         await _link.WriteAsync(command, cancellationToken);
                         break;
                 }

@@ -12,6 +12,15 @@ a different and much older format.
 
 ---
 
+## 2026-11-24 - v2.5.6-pre32 (pre-release)
+
+*For N1MM Logger+ testers: the log now shows what N1MM sends, to track down band buttons that don't work and a lock-up. Everything in v2.5.6-pre31 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**N1MM Logger+** [N1MM Logger+](USER_MANUAL.md#95-n1mm-logger)
+
+- **The log shows every command N1MM sends to change the radio**: frequency, mode, band and macro commands. It also notes up to 50 reads the radio didn't answer (up from 10), and says when N1MM was kept waiting more than 1.5 seconds. ([#394](https://github.com/mm5agm/Yaesu_Web_Control/issues/394))
+- **A read after a change gets a fresh answer.** When N1MM changes the frequency and then reads it back, the read can no longer share an answer the radio gave before the change, which would have carried the old band. ([#394](https://github.com/mm5agm/Yaesu_Web_Control/issues/394))
+
 ## 2026-11-23 - v2.5.6-pre31 (pre-release)
 
 *RTL-SDR, Airspy and HackRF devices should now start streaming. Everything in v2.5.6-pre30 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*

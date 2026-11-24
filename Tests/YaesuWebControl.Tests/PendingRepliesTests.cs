@@ -39,6 +39,23 @@ public sealed class PendingRepliesTests
     }
 
     [Fact]
+    public async Task A_read_after_a_set_does_not_share_a_read_sent_before_it()
+    {
+        // N1MM's band button: "FA007025000;" then "FA;". A "FA;" sent before
+        // the set would answer with the old band, so N1MM's band popped back.
+        var replies = new PendingReplies();
+        int sends = 0;
+        Task Send() { sends++; return Task.CompletedTask; }
+        var before = replies.AskAsync("FA", "FA;", Send, 1000, CancellationToken.None);
+        replies.NoteSet();
+        var after = replies.AskAsync("FA", "FA;", Send, 1000, CancellationToken.None);
+        Assert.Equal(2, sends);
+        Assert.True(replies.TryAnswer("FA", "FA007025000"));
+        Assert.Equal("FA007025000", await after);
+        Assert.Null(await before);
+    }
+
+    [Fact]
     public async Task A_read_that_times_out_leaves_a_newer_read_waiting()
     {
         var replies = new PendingReplies();
