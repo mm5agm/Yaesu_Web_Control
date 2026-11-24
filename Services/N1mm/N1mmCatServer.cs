@@ -161,6 +161,9 @@ namespace Yaesu_Web_Control.Services.N1mm
                     _logger.LogWarning("N1MM CAT client {Who}: the radio didn't answer {Command} within {Ms} ms",
                         who, command, MultiplexerPassThrough.ReadTimeoutMs);
             };
+            session.OnSetAside = command =>
+                _logger.LogWarning("N1MM CAT client {Who}: the radio keeps not answering {Command}, so it isn't asked again for {S} s",
+                    who, command, (int)N1mmCatSession.SetAsideFor.TotalSeconds);
             session.OnSet = command =>
             {
                 if (session.Sets <= SetsLogged)
