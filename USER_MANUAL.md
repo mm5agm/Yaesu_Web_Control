@@ -4857,6 +4857,8 @@ Click **Application Setup** in YWC's menu bar. Under **WSJT-X UDP Settings**, ti
 
 The bar at the top shows the frequency, band and mode, who WSJT-Z is working, and whether WSJT-Z is **Receiving**, has **Tx enabled**, or is **Transmitting** (red).
 
+When WSJT-Z logs a QSO, a green banner under the top bar shows it for 30 seconds, for example **Logged ✓ G4ABC · 14.075.512 · FT8 · sent -10 rcvd -12**. WSJT-Z's **Log QSO** window can't be clicked from the tiles, so to log without going to the shack PC, untick **Prompt me to log QSO** on WSJT-Z's Reporting tab. WSJT-Z then logs each QSO as soon as it ends, passes it on to your logger as usual, and the banner tells you it went in.
+
 A station keeps its tile from one cycle to the next, so it's still there when you reach it. A station that goes quiet fades after one cycle and its tile empties after two. A station that starts a QSO with someone else goes at once.
 
 You can open the page on the tablet's own browser. Use the address in the **Network Access (Tablets/Phones)** line at the top of YWC's **Settings** page ([§6](#6-settings-page)), with `/ft8-tiles` on the end, for example `http://192.168.1.20:8080/ft8-tiles`. Go by the port that line shows: YWC uses 8080 unless another program has it, and then takes the next free port up to 8089, so a saved shortcut can stop working if that changes. A browser on the tablet works better than a remote-desktop view of the shack PC, because WSJT-Z can't cover it.
@@ -4875,6 +4877,7 @@ Switch-scanning and eye-gaze software see the tiles as ordinary buttons. A tile 
 | Stations show but clicking does nothing | Tick **Accept UDP requests** in WSJT-Z. |
 | Clicking a **Just finished** station does nothing | That's standard WSJT-X. Use WSJT-Z. |
 | *no longer in the list* | The station dropped off between seeing it and clicking. Pick another. |
+| The QSO ends but no **Logged** banner appears | WSJT-Z is waiting in its **Log QSO** window. Click OK there, or untick **Prompt me to log QSO** on WSJT-Z's Reporting tab so it logs by itself. |
 | **Change band** moves the radio, then it goes back | WSJT-Z isn't controlling the radio through YWC. Set its Rig to Hamlib NET rigctl, `localhost:4532` ([§9.1](#91-wsjt-x)). |
 
 ---
