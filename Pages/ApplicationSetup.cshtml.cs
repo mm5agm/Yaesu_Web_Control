@@ -13,11 +13,11 @@ namespace Yaesu_Web_Control.Pages
             _settingsService = settingsService;
         }
 
-        // App 1 (default: WSJT-X)
-        [BindProperty]
         /// <summary>True in Docker, where the launcher buttons are hidden.</summary>
         public bool InContainer => HostRuntime.IsContainer;
 
+        // App 1 (default: WSJT-X)
+        [BindProperty]
         public bool ShowApp1Button { get; set; }
 
         [BindProperty]
