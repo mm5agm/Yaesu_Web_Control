@@ -23,7 +23,7 @@
 
     <!-- Radio Display — USB UVC / HDMI capture MJPEG; visible when Settings enable it -->
     <div id="radioDisplayContainer" class="row m-0"
-         data-radio-model="@Model.RadioModel" data-dual-receiver="@(isSingleReceiver ? "false" : "true")">
+         data-radio-model="@Model.RadioModel" data-max-hz="@Model.View.MaxTunableHz" data-dual-receiver="@(isSingleReceiver ? "false" : "true")">
         <div class="col-12">
             <div class="card border-dark">
                 <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">

@@ -239,7 +239,7 @@ export function startYaesuRadioPanel(root, cfg) {
         const name = (dual ? (id === 'A' ? 'MAIN' : 'SUB') : 'VFO-' + id) + ' · SDR ' + id;
         renameForSource(id, name, n => { sourceText[id] = ''; panel.setSpectrumName(id, n); panel.setSpectrumSource({ label: '' }, id); });
     }
-    radioScreen = startRadioScreen(panel.screenSlot('tft'), { model, dual, scopeCat: !!cfg.scopeCat });
+    radioScreen = startRadioScreen(panel.screenSlot('tft'), { model, dual, scopeCat: !!cfg.scopeCat, maxHz: num(cfg.maxHz) || undefined });
     if (panel.screenView() === 'tft') radioScreen.show();
 
     // ---- the slice of radio state the panel derives things from ----------
@@ -1097,7 +1097,7 @@ export function startYaesuRadioPanel(root, cfg) {
 // meters). It needs the radio's scope span for click-to-tune, so a
 // RadioScopeControl is kept here with no visible controls. It reads the
 // radio when the Radio screen is shown, not at page load.
-function startRadioScreen(slot, { model, dual, scopeCat } = {}) {
+function startRadioScreen(slot, { model, dual, scopeCat, maxHz } = {}) {
     if (!slot) return null;
     const img = document.createElement('img');
     img.alt = '';
@@ -1166,7 +1166,7 @@ function startRadioScreen(slot, { model, dual, scopeCat } = {}) {
         scope = new RadioScopeControl(root);
     }
     ensureHotspotStyle();
-    const hotspots = new RadioDisplayHotspots(img, { debug: false, radioModel: model, dualReceiver: dual, getScopeControl: () => scope });
+    const hotspots = new RadioDisplayHotspots(img, { debug: false, radioModel: model, dualReceiver: dual, maxHz, getScopeControl: () => scope });
 
     return {
         show() {

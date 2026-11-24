@@ -11,6 +11,8 @@ namespace Yaesu_Web_Control.Pages
     public class RadioSpectrumModel : IndexModel
     {
         public bool IsDual => RadioCapabilities.IsDualReceiver(RadioModel);
+        /// <summary>The radio's top frequency, so the dial stepper can tune above 75 MHz on the FT-991A.</summary>
+        public long MaxHz => RadioCapabilities.FrequencyRangeHz(RadioModel).MaxHz;
 
         public RadioSpectrumModel(RadioStateService radioStateService, ISettingsService settingsService)
             : base(radioStateService, settingsService)
