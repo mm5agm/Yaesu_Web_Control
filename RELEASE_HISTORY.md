@@ -12,6 +12,18 @@ a different and much older format.
 
 ---
 
+## 2026-11-24 - v2.5.6-pre34 (pre-release)
+
+*An RTL-SDR that stopped straight after starting now streams, and the FT8 Tiles show a banner when WSJT-Z logs a QSO. Everything in v2.5.6-pre33 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**SDR spectrum**
+
+- **RTL-SDR (and other SoapySDR devices) keep streaming when the first reads time out.** The dongle opened and started, then YWC stopped it 70 ms later and restarted it every few seconds, so the spectrum never appeared. The RTL-SDR takes a moment to deliver its first samples, and YWC treated SoapySDR's "timeout, try again" as a failure. Timeouts and overflows are now retried. A device that sends nothing for 5 seconds still stops, and the log says so. ([D#404](https://github.com/mm5agm/Yaesu_Web_Control/discussions/404))
+
+**FT8 Tiles** ([manual](USER_MANUAL.md#24-ft8-tiles))
+
+- **A green "Logged ✓" banner when WSJT-Z logs a QSO**, for example *Logged ✓ G4ABC · 14.075.512 · FT8 · sent -10 rcvd -12*, shown for 30 seconds. WSJT-Z's Log QSO window can't be clicked from the tiles, so to log without going to the shack PC, untick **Prompt me to log QSO** on WSJT-Z's Reporting tab: WSJT-Z then logs each QSO by itself and the banner confirms it. ([#332](https://github.com/mm5agm/Yaesu_Web_Control/issues/332))
+
 ## 2026-11-24 - v2.5.6-pre33 (pre-release)
 
 *For FT-817 and FT-818 users: setting the mode or frequency of the other VFO works, and a click on a VFO panel's header selects that VFO. Everything in v2.5.6-pre32 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
