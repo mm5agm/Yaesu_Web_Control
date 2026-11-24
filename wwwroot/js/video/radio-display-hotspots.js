@@ -227,6 +227,8 @@ function digitZones(digits, top, bottom, vfo, hideWhen) {
 }
 
 const FREQ_MIN_HZ = 30_000;
+// Fallback only: the pages pass the radio's own top frequency as opts.maxHz
+// (470 MHz on the FT-991A). A fixed 75 MHz stopped a 2 m user's digits (D#404).
 const FREQ_MAX_HZ = 75_000_000;
 
 const LAYOUTS = {
@@ -540,6 +542,9 @@ export class RadioDisplayHotspots {
         this.pane = img?.parentElement;
         this.radioModel = opts.radioModel || '';
         this.dualReceiver = !!opts.dualReceiver;
+        this.maxHz = Number(opts.maxHz) > 0
+            ? Number(opts.maxHz)
+            : (Number(document.getElementById('vfoRow')?.dataset?.maxHz) || FREQ_MAX_HZ);
         this.getScopeControl = opts.getScopeControl || (() => null);
         // A model with no built-in table still gets the overlay, so that
         // snapshot() / debug() / measure() work on a live capture; an empty
@@ -883,7 +888,7 @@ export class RadioDisplayHotspots {
         const from = this._digitTarget?.vfo === vfo ? this._digitTarget.hz : this.state[vfo].hz;
         if (!(from > 0)) { this._flash('Frequency not known yet'); return; }
         const to = from + (e.deltaY < 0 ? zone.step : -zone.step);
-        if (to < FREQ_MIN_HZ || to > FREQ_MAX_HZ) { this._flash(`${formatHz(to)} is out of range`); return; }
+        if (to < FREQ_MIN_HZ || to > this.maxHz) { this._flash(`${formatHz(to)} is out of range`); return; }
         this._digitTarget = { vfo, hz: to };
         this._showCursor(null, this._describe({ zone }));
         this._sendDigitTarget();

@@ -147,7 +147,7 @@
 </head>
 <body>
     <div id="radioDisplayContainer" class="row"
-         data-radio-model="@Model.RadioModel" data-dual-receiver="@(Yaesu_Web_Control.Services.RadioCapabilities.IsDualReceiver(Model.RadioModel) ? "true" : "false")">
+         data-radio-model="@Model.RadioModel" data-max-hz="@Yaesu_Web_Control.Services.RadioCapabilities.FrequencyRangeHz(Model.RadioModel).MaxHz" data-dual-receiver="@(Yaesu_Web_Control.Services.RadioCapabilities.IsDualReceiver(Model.RadioModel) ? "true" : "false")">
         <div class="col-12">
             <div class="card border-dark">
                 <div class="card-header bg-dark text-white d-flex align-items-center py-2">

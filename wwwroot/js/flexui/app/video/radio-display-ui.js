@@ -5,7 +5,7 @@
  * Radio Display UI wiring: status poll + MJPEG img stream + controls.
  */
 import { RadioDisplayPanel } from '/js/flexui/app/video/radio-display-panel.js?v=11';
-import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js?v=7';
+import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js?v=8';
 
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
@@ -1333,6 +1333,7 @@ export async function initRadioDisplayUi(mode = 'index') {
     {
       radioModel: container.dataset.radioModel || '',
       dualReceiver: container.dataset.dualReceiver === 'true',
+      maxHz: Number(container.dataset.maxHz) || undefined,
       getScopeControl: () => (window.radioScopeControls || []).find(c => c.state) || window.radioScopeControl || null
     });
 
