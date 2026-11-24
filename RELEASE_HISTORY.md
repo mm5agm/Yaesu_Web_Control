@@ -12,6 +12,16 @@ a different and much older format.
 
 ---
 
+## 2026-11-24 - v2.5.6-pre35 (pre-release)
+
+*FT-991A users on 2 m and 70 cm can tune with the mouse wheel on the spectrum and on the Video page's digits. Everything in v2.5.6-pre34 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT-991A**
+
+- **The mouse wheel and drag on the main page's SDR spectrum tune above 75 MHz.** Both stopped at a fixed 75 MHz, so on 2 m every wheel notch sent the radio to 75 MHz, which it refused, and the display jumped there for a second or two. They now go up to the radio's own limit, 470 MHz on the FT-991A. The same fix applies to the dial on the spectrum window and to voice control's "move to" and "tune up/down". ([D#404](https://github.com/mm5agm/Yaesu_Web_Control/discussions/404))
+- **The wheel on the Video page's frequency digits works above 75 MHz.** It said "out of range" for anything higher.
+- **The Flex-style UI's spectrum** had the same 75 MHz limit, and it's fixed too.
+
 ## 2026-11-24 - v2.5.6-pre34 (pre-release)
 
 *An RTL-SDR that stopped straight after starting now streams, and the FT8 Tiles show a banner when WSJT-Z logs a QSO. Everything in v2.5.6-pre33 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
