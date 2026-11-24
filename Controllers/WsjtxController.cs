@@ -200,6 +200,20 @@ namespace Yaesu_Web_Control.Controllers
             long dial = _udpService.DialFrequency;
             if (dial == 0) dial = _radioState.FrequencyA;
             var current = WsjtxBands.BandOf(dial);
+            // The last logged QSO, for a minute: the page shows it as a banner.
+            var logged = _udpService.LastLogged;
+            object? loggedQso = logged is { } l && now - l.ReceivedUtc < TimeSpan.FromSeconds(60)
+                ? new
+                {
+                    call = l.Qso.DxCall,
+                    grid = l.Qso.DxGrid,
+                    frequency = l.Qso.TxFrequencyHz,
+                    mode = l.Qso.Mode,
+                    sent = l.Qso.ReportSent,
+                    received = l.Qso.ReportReceived,
+                    ageSeconds = Math.Round((now - l.ReceivedUtc).TotalSeconds, 1),
+                }
+                : null;
             return Ok(new
             {
                 enabled = true,
@@ -211,6 +225,7 @@ namespace Yaesu_Web_Control.Controllers
                 dxCall = _udpService.DxCall,
                 myCall = _udpService.DeCall,
                 periodSeconds = period,
+                logged = loggedQso,
                 stations = stations.Select(e => new
                 {
                     call = e.Call,

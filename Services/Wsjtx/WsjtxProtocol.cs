@@ -36,6 +36,20 @@ namespace Yaesu_Web_Control.Services.Wsjtx
         string DeCall);
 
     /// <summary>
+    /// The QSO Logged (type 5) fields the big-tile page shows. WSJT-X sends it
+    /// once a QSO is in its log: after the operator clicks OK in the Log QSO
+    /// window, or straight away when "Prompt me to log QSO" is unticked.
+    /// </summary>
+    public sealed record WsjtxQsoLogged(
+        string Id,
+        string DxCall,
+        string DxGrid,
+        long TxFrequencyHz,
+        string Mode,
+        string ReportSent,
+        string ReportReceived);
+
+    /// <summary>
     /// Reads and writes the WSJT-X UDP message format (NetworkMessage.hpp):
     /// Qt QDataStream, big-endian, a magic number, a schema number, a message
     /// type and the sender's Id, then fields that depend on the type.
@@ -54,6 +68,7 @@ namespace Yaesu_Web_Control.Services.Wsjtx
         public const uint TypeDecode = 2;
         public const uint TypeClear = 3;
         public const uint TypeReply = 4;
+        public const uint TypeQsoLogged = 5;
         public const uint TypeClose = 6;
         public const uint TypeHaltTx = 8;
         public const uint TypeConfigure = 15;
@@ -138,6 +153,38 @@ namespace Yaesu_Web_Control.Services.Wsjtx
             catch (IndexOutOfRangeException) { }
 
             return new WsjtxStatus(h.Id, dial, mode, dxCall, txEnabled, transmitting, decoding, deCall);
+        }
+
+        public static WsjtxQsoLogged? TryParseQsoLogged(byte[] data)
+        {
+            if (!TryReadHeader(data, out var h) || h.Type != TypeQsoLogged) return null;
+            try
+            {
+                var span = data.AsSpan();
+                int offset = h.BodyOffset;
+                if (!SkipDateTime(span, ref offset)) return null;   // Date & Time Off
+                string call = ReadUtf8(span, ref offset) ?? "";
+                string grid = ReadUtf8(span, ref offset) ?? "";
+                long freq = (long)ReadUInt64(span, ref offset);
+                string mode = ReadUtf8(span, ref offset) ?? "";
+                string sent = ReadUtf8(span, ref offset) ?? "";
+                string rcvd = ReadUtf8(span, ref offset) ?? "";
+                if (call.Length == 0) return null;
+                return new WsjtxQsoLogged(h.Id, call, grid, freq, mode, sent, rcvd);
+            }
+            catch (ArgumentOutOfRangeException) { return null; }
+            catch (IndexOutOfRangeException) { return null; }
+        }
+
+        // QDateTime: qint64 Julian day, quint32 ms since midnight, quint8 time
+        // spec, then a qint32 offset if the spec is OffsetFromUTC (2). WSJT-X
+        // sends UTC (1). A time-zone spec (3) carries a zone we don't read.
+        private static bool SkipDateTime(ReadOnlySpan<byte> data, ref int offset)
+        {
+            offset += 8 + 4;
+            byte spec = data[offset++];
+            if (spec == 2) offset += 4;
+            return spec <= 2;
         }
 
         /// <summary>

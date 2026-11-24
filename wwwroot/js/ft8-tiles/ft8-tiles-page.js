@@ -10,6 +10,8 @@ import { TileSlots } from "./ft8-tiles-slots.js";
 
 const PER_PAGE = 9;
 const POLL_MS = 1000;
+// How long the "Logged" banner stays up after WSJT-Z logs a QSO.
+const LOGGED_SHOW_SECONDS = 30;
 
 const el = id => document.getElementById(id);
 const slots = new TileSlots();
@@ -72,6 +74,27 @@ function renderHeader(d) {
     pill.textContent = text;
     pill.className = `ft-state ${cls}`;
     el("ftChangeBandNow").textContent = band ? `now ${band}` : "";
+}
+
+// WSJT-Z sends QSO Logged once the QSO is in its log. With "Prompt me to log
+// QSO" unticked in WSJT-Z that is straight after the 73, with no window to
+// click, so this banner is how the operator knows it went in.
+function loggedText(q) {
+    if (!q) return "";
+    const parts = [`Logged ✓ ${q.call}`];
+    if (q.frequency) parts.push(formatMHz(q.frequency));
+    if (q.mode) parts.push(q.mode);
+    if (q.sent || q.received) parts.push(`sent ${q.sent || "—"} rcvd ${q.received || "—"}`);
+    return parts.join(" · ");
+}
+
+function renderLogged(d) {
+    const box = el("ftLogged");
+    const q = d.logged;
+    const show = !!q && q.ageSeconds < LOGGED_SHOW_SECONDS;
+    const text = show ? loggedText(q) : "";
+    if (box.textContent !== text) box.textContent = text;
+    box.hidden = !show;
 }
 
 function renderTiles(d) {
@@ -139,6 +162,7 @@ async function poll() {
             if (!data.enabled) { setTimeout(poll, POLL_MS); return; }
             lastData = data;
             renderHeader(lastData);
+            renderLogged(lastData);
             renderTiles(lastData);
             renderBands(lastData);
         }
