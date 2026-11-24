@@ -70,6 +70,12 @@ namespace Yaesu_Web_Control.Services
         public byte OtherMode { get; set; } = 0x00;
         public bool AnswersEeprom { get; set; } = true;  // false = a radio whose EEPROM can't be read
 
+        // For this long after an 81 the EEPROM still shows the old VFO, as a
+        // real FT-817 can (D#379: YWC read it 60 ms after a swap, saw the old
+        // VFO and gave up, leaving the radio on the other VFO).
+        public int EepromVfoLagMs { get; set; }
+        private DateTime _toggledUtc = DateTime.MinValue;
+
         /// <summary>True if a BC (EEPROM write) block ever arrived. YWC must never send one.</summary>
         public bool EepromWritten { get; private set; }
 
@@ -147,12 +153,16 @@ namespace Yaesu_Web_Control.Services
                     (FrequencyHz, OtherFrequencyHz) = (OtherFrequencyHz, FrequencyHz);
                     (Mode, OtherMode) = (OtherMode, Mode);
                     OnVfoB = !OnVfoB;
+                    _toggledUtc = DateTime.UtcNow;
                     return null;
                 case Ft847Cat.ReadEeprom when ft8x7:
                     if (!AnswersReads || !AnswersEeprom) return null;
                     var address = (b[0] << 8) | b[1];
                     if (address == Ft847Cat.VfoEepromAddress && Ft847Cat.ReadsVfoFromEeprom(Model))
-                        return new[] { (byte)(0xA4 | (OnVfoB ? 1 : 0)), (byte)0x37 };
+                    {
+                        var shownB = (DateTime.UtcNow - _toggledUtc).TotalMilliseconds < EepromVfoLagMs ? !OnVfoB : OnVfoB;
+                        return new[] { (byte)(0xA4 | (shownB ? 1 : 0)), (byte)0x37 };
+                    }
                     return new byte[] { 0, 0 };
                 case Ft847Cat.ReadTxMetering when Ft847Cat.ReadsPowerWithBd(Model):
                     if (!AnswersReads) return null;

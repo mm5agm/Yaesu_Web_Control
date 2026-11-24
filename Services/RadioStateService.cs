@@ -837,7 +837,10 @@ namespace Yaesu_Web_Control.Services
             var newBandA = GetBandFromFrequency(FrequencyA);
             var newBandB = GetBandFromFrequency(FrequencyB);
 
-            _logger.LogInformation("[UpdateBandFromFrequency] FreqA={FreqA} -> BandA={OldBandA} -> {NewBandA}, FreqB={FreqB} -> BandB={OldBandB} -> {NewBandB}",
+            // Runs on every frequency update, so only a band change is logged
+            // at Information (it was 90% of Felix DF3FX's D#379 log).
+            var level = newBandA != BandA || newBandB != BandB ? LogLevel.Information : LogLevel.Debug;
+            _logger.Log(level, "[UpdateBandFromFrequency] FreqA={FreqA} -> BandA={OldBandA} -> {NewBandA}, FreqB={FreqB} -> BandB={OldBandB} -> {NewBandB}",
                 FrequencyA, BandA, newBandA, FrequencyB, BandB, newBandB);
 
             BandA = newBandA;

@@ -2266,20 +2266,28 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('copyBtoABtn')?.addEventListener('click', () => copyVfo('ba'));
     document.getElementById('copyAtoBBtn')?.addEventListener('click', () => copyVfo('ab'));
 
-    // Dual-receiver only: click a VFO panel's header to make it the active
-    // (MAIN/SUB) band. Ignored on single-receiver (greying already shows the
-    // active VFO) and when the click lands on a control inside the header.
+    // Click a VFO panel's header to select that VFO. Dual-receiver: it becomes
+    // the active (MAIN/SUB) band. Single-receiver: the radio receives on it, as
+    // the toolbar's RX A / B buttons do (Felix DF3FX, D#379), and not at all
+    // when the radio can't choose its receive VFO over CAT (RX B disabled).
+    // Ignored when the click lands on a control inside the header.
     (function wireVfoActiveSelect() {
         const vfoRow = document.getElementById('vfoRow');
-        if (!vfoRow || vfoRow.dataset.singleReceiver === 'true') return;
+        if (!vfoRow) return;
+        const single = vfoRow.dataset.singleReceiver === 'true';
+        const rxB = document.getElementById('rxVfoB');
+        if (single && (!rxB || rxB.disabled)) return;
         const wire = (colId, vfo) => {
             const header = document.querySelector(`#${colId} .card-header`);
             if (!header) return;
             header.style.cursor = 'pointer';
-            header.title = `Click to make VFO ${vfo} the active (MAIN/SUB) band`;
+            header.title = single
+                ? `Click to receive on VFO ${vfo}`
+                : `Click to make VFO ${vfo} the active (MAIN/SUB) band`;
             header.addEventListener('click', (e) => {
                 if (e.target.closest('button, input, select, a, [role="button"], .badge')) return;
-                setActiveVfo(vfo);
+                if (single) setRxVfo(vfo);
+                else setActiveVfo(vfo);
             });
         };
         wire('vfoACol', 'A');
