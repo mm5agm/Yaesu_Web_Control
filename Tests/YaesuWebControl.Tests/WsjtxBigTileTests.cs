@@ -90,6 +90,33 @@ public sealed class WsjtxBigTileTests
     }
 
     [Fact]
+    public void Status_Full_ReadsTheTxMessage()
+    {
+        var bytes = new Bytes().Header(3, 1, "WSJT-X - Z")
+            .U64(14_074_000).S("FT8").S("K1ABC").S("-10").S("FT8")
+            .B(true).B(true).B(false).U32(1500).U32(1200).S("MM5AGM").S("IO85").S("FN42")
+            .B(false).S("").B(false).U8(0).U32(0).U32(15).S("Default").S("K1ABC MM5AGM R-10  ")
+            .ToArray();
+        var s = WsjtxProtocol.TryParseStatus(bytes);
+        Assert.NotNull(s);
+        Assert.Equal("MM5AGM", s!.DeCall);
+        Assert.Equal("K1ABC MM5AGM R-10", s.TxMessage);
+    }
+
+    [Fact]
+    public void Status_WithoutTxMessage_LeavesItEmpty()
+    {
+        var bytes = new Bytes().Header(2, 1, "WSJT-X")
+            .U64(14_074_000).S("FT8").S("K1ABC").S("-10").S("FT8")
+            .B(true).B(false).B(true).U32(1500).U32(1200).S("MM5AGM").S("IO85").S("FN42")
+            .ToArray();
+        var s = WsjtxProtocol.TryParseStatus(bytes);
+        Assert.NotNull(s);
+        Assert.Equal("MM5AGM", s!.DeCall);
+        Assert.Equal("", s.TxMessage);
+    }
+
+    [Fact]
     public void Status_Short_StillGivesTheEarlyFields()
     {
         var bytes = new Bytes().Header(2, 1, "WSJT-X")

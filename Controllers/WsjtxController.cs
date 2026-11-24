@@ -224,6 +224,7 @@ namespace Yaesu_Web_Control.Controllers
                 dialFrequency = dial,
                 dxCall = _udpService.DxCall,
                 myCall = _udpService.DeCall,
+                txMessage = _udpService.TxMessage,
                 periodSeconds = period,
                 logged = loggedQso,
                 stations = stations.Select(e => new

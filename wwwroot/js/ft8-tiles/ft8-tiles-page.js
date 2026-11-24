@@ -3,10 +3,10 @@
 //
 // Tile names are what Windows Voice Access and switch software read out, so
 // they are short and fixed: "Call 1" to "Call 9", "Stop transmit",
-// "Auto Call on", "Auto Call off", "Next page", "Change band", and the band
-// names. Saying "click Call 3" clicks the third station tile.
+// "Auto Call on", "Auto Call off", "Next page", "Change band", "Sort",
+// "Main page", and the band names. Saying "click Call 3" clicks the third station tile.
 
-import { TileSlots } from "./ft8-tiles-slots.js";
+import { TileSlots, SORT_MODES, SORT_LABEL, sortCalls, txStatus, LastQso } from "./ft8-tiles-slots.js";
 
 const PER_PAGE = 9;
 const POLL_MS = 1000;
@@ -15,6 +15,10 @@ const LOGGED_SHOW_SECONDS = 30;
 
 const el = id => document.getElementById(id);
 const slots = new TileSlots();
+const lastQso = new LastQso();
+const SORT_KEY = "ywc.ft8Tiles.sort";
+let sortMode = SORT_MODES.includes(localStorage.getItem(SORT_KEY)) ? localStorage.getItem(SORT_KEY) : "heard";
+let sortPending = sortMode !== "heard";   // sort the first stations to arrive
 let pageIndex = 0;
 let lastData = null;
 let messageTimer = null;
@@ -66,14 +70,22 @@ function renderHeader(d) {
     el("ftBandMode").textContent = [band, d.mode].filter(Boolean).join(" · ");
     el("ftCalling").textContent = d.dxCall ? `Working ${d.dxCall}` : "";
 
+    const st = txStatus(d);
     const pill = el("ftState");
-    let text = "Receiving", cls = "ft-rx";
-    if (!d.connected) { text = "WSJT-Z not connected"; cls = "ft-off"; }
-    else if (d.transmitting) { text = "Transmitting"; cls = "ft-tx"; }
-    else if (d.txEnabled) { text = "Tx enabled"; cls = "ft-armed"; }
-    pill.textContent = text;
-    pill.className = `ft-state ${cls}`;
+    pill.textContent = st.state;
+    pill.className = `ft-state ${st.cls}`;
+    el("ftStatusLine").className = st.cls;
+    setText("ftTxLine", st.line);
+    lastQso.update(d);
+    setText("ftLastQso", lastQso.text());
+    el("ftLastQso").classList.toggle("ft-logged", !!lastQso.last && lastQso.last.logged);
     el("ftChangeBandNow").textContent = band ? `now ${band}` : "";
+}
+
+// Only touch the text when it changes, so a screen reader isn't told it again every second.
+function setText(id, text) {
+    const e = el(id);
+    if (e.textContent !== text) e.textContent = text;
 }
 
 // WSJT-Z sends QSO Logged once the QSO is in its log. With "Prompt me to log
@@ -100,6 +112,10 @@ function renderLogged(d) {
 function renderTiles(d) {
     const byCall = new Map(d.stations.map(s => [s.call, s]));
     slots.update(d.stations.map(s => s.call));
+    if (sortPending && d.stations.length) {
+        slots.arrange(sortCalls(d.stations, sortMode));
+        sortPending = false;
+    }
     const pages = slots.pageCount(PER_PAGE);
     if (pageIndex >= pages) pageIndex = 0;
 
@@ -181,6 +197,7 @@ async function callStation(tile) {
 async function chooseBand(name) {
     closeBands();
     slots.clear();
+    sortPending = sortMode !== "heard";
     pageIndex = 0;
     if (await post("/api/wsjtx/band", { band: name })) showMessage(`Changing to ${name}`);
 }
@@ -189,6 +206,7 @@ async function chooseBand(name) {
 function showOff(off) {
     el("ftOff").hidden = !off;
     document.querySelector(".ft-sub").hidden = off;
+    el("ftStatusLine").hidden = off;
     if (off) {
         el("ftMain").hidden = true;
         el("ftBands").hidden = true;
@@ -207,6 +225,10 @@ function openBands() {
 function closeBands() {
     el("ftBands").hidden = true;
     el("ftMain").hidden = false;
+}
+
+function showSort() {
+    el("ftSortNow").textContent = SORT_LABEL[sortMode];
 }
 
 function wire() {
@@ -228,6 +250,18 @@ function wire() {
         if (lastData) renderTiles(lastData);
     });
     el("ftChangeBand").addEventListener("click", openBands);
+    el("ftSort").addEventListener("click", () => {
+        sortMode = SORT_MODES[(SORT_MODES.indexOf(sortMode) + 1) % SORT_MODES.length];
+        localStorage.setItem(SORT_KEY, sortMode);
+        showSort();
+        pageIndex = 0;
+        if (lastData) {
+            slots.arrange(sortCalls(lastData.stations, sortMode));
+            renderTiles(lastData);
+        }
+        showMessage(`Sorted ${SORT_LABEL[sortMode]}`);
+    });
+    showSort();
     el("ftBandBack").addEventListener("click", closeBands);
 }
 

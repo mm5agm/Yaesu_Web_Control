@@ -4855,12 +4855,16 @@ Click **Application Setup** in YWC's menu bar. Under **WSJT-X UDP Settings**, ti
 | **Auto Call off** | Turns off Auto Call, and Auto CQ with it. |
 | **Next page** | Shows the next nine stations when there are more than nine. |
 | **Change band** | Opens a page of band tiles. Choose a band to put the radio on its FT8 frequency (FT4 if WSJT-Z is in FT4), or **Back** to stay where you are. WSJT-Z follows the radio within a few seconds. |
+| **Sort** | Puts the stations in a new order, once, and steps to the next order each time you click it: **as heard**, **by strength** (strongest first), **newest first** (most recently heard first) and **by callsign**. Stations calling you stay first in every order. The tile shows the order in use, and the page remembers it. From v2.5.6-pre38. |
+| **Main page** | Goes to YWC's Radio page. From v2.5.6-pre38. |
 
-The bar at the top shows the frequency, band and mode, who WSJT-Z is working, and whether WSJT-Z is **Receiving**, has **Tx enabled**, or is **Transmitting** (red).
+The bar at the top shows the frequency, band and mode, who WSJT-Z is working, and whether WSJT-Z is **Receiving**, **Waiting to transmit** (Enable Tx on, between transmissions) or **Transmitting** (red).
+
+Under it, the status line says the same in words, with what WSJT-Z is sending, for example **Transmitting to G4ABC · sending G4ABC MM5AGM R-10** or **Not transmitting · last sent G4ABC MM5AGM RR73**. On its right is the last QSO: **Last QSO: G4ABC · logged ✓** once WSJT-Z logs it, or **not logged** if WSJT-Z moved on without logging it. The message text needs a WSJT-Z or WSJT-X recent enough to send it (WSJT-X 2.6 or later); with an older one the line still says whether it is transmitting. From v2.5.6-pre38.
 
 When WSJT-Z logs a QSO, a green banner under the top bar shows it for 30 seconds, for example **Logged ✓ G4ABC · 14.075.512 · FT8 · sent -10 rcvd -12**. WSJT-Z's **Log QSO** window can't be clicked from the tiles, so to log without going to the shack PC, untick **Prompt me to log QSO** on WSJT-Z's Reporting tab. WSJT-Z then logs each QSO as soon as it ends, passes it on to your logger as usual, and the banner tells you it went in.
 
-A station keeps its tile from one cycle to the next, so it's still there when you reach it. A station that goes quiet fades after one cycle and its tile empties after two. A station that starts a QSO with someone else goes at once.
+A station keeps its tile from one cycle to the next, so it's still there when you reach it. **Sort** moves the stations only when you click it; after that each keeps its new tile, and new stations take the empty tiles. A station that goes quiet fades after one cycle and its tile empties after two. A station that starts a QSO with someone else goes at once.
 
 You can open the page on the tablet's own browser. Use the address in the **Network Access (Tablets/Phones)** line at the top of YWC's **Settings** page ([§6](#6-settings-page)), with `/ft8-tiles` on the end, for example `http://192.168.1.20:8080/ft8-tiles`. Go by the port that line shows: YWC uses 8080 unless another program has it, and then takes the next free port up to 8089, so a saved shortcut can stop working if that changes. A browser on the tablet works better than a remote-desktop view of the shack PC, because WSJT-Z can't cover it.
 

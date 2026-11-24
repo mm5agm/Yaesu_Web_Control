@@ -75,14 +75,26 @@
         .ft-action .ft-big { font-size: clamp(1.3rem, 3.6vh, 2.1rem); font-weight: 700; }
         .ft-action .ft-small { font-size: 1.1rem; color: var(--ft-muted); }
         .ft-action:disabled { opacity: 0.4; }
-        #ftStop { grid-column: 4; grid-row: 1 / span 2; background: var(--ft-red); border-color: #8e0000; color: #fff; }
-        #ftStop .ft-big { font-size: clamp(1.6rem, 4.5vh, 2.6rem); }
-        #ftStop .ft-square { width: 3.2rem; height: 3.2rem; background: #fff; margin-bottom: 0.8rem; }
-        #ftAutoOn { grid-column: 4; grid-row: 3; border-color: #2e7d32; }
-        #ftAutoOff { grid-column: 4; grid-row: 4; }
+        #ftStop { grid-column: 4; grid-row: 1; background: var(--ft-red); border-color: #8e0000; color: #fff; }
+        #ftStop .ft-big { font-size: clamp(1.5rem, 4vh, 2.4rem); }
+        #ftStop .ft-square { width: 2.2rem; height: 2.2rem; background: #fff; margin-bottom: 0.4rem; }
+        #ftAutoOn { grid-column: 4; grid-row: 2; border-color: #2e7d32; }
+        #ftAutoOff { grid-column: 4; grid-row: 3; }
+        #ftMainPage { grid-column: 4; grid-row: 4; text-decoration: none; justify-content: center; }
         #ftNextPage { grid-column: 1; grid-row: 4; }
         #ftChangeBand { grid-column: 2; grid-row: 4; border-color: var(--ft-blue); }
-        .ft-note { grid-column: 3; grid-row: 4; align-self: center; color: var(--ft-muted); font-size: 0.95rem; }
+        #ftSort { grid-column: 3; grid-row: 4; border-color: #7b4fb0; }
+
+        /* The status line: what WSJT-Z is doing, and the last QSO. */
+        #ftStatusLine { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 0.3rem 1.5rem; align-items: baseline;
+                        margin: 0.5rem 1.2rem 0; padding: 0.45rem 1rem; border-radius: 0.6rem;
+                        background: #fff; border-left: 0.6rem solid #5b6575; font-size: 1.5rem; font-weight: 600; }
+        #ftStatusLine.ft-rx { border-left-color: #2e7d32; }
+        #ftStatusLine.ft-tx { border-left-color: var(--ft-red); background: #fde8e8; }
+        #ftStatusLine.ft-armed { border-left-color: #b26a00; background: #fff4e0; }
+        #ftStatusLine[hidden] { display: none; }
+        #ftLastQso { margin-left: auto; font-size: 1.3rem; color: var(--ft-muted); }
+        #ftLastQso.ft-logged { color: #2e7d32; }
 
         #ftBands { grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; }
         .ft-band { align-items: center; font-size: clamp(1.6rem, 5vh, 2.8rem); font-weight: 700; border-color: var(--ft-blue); }
@@ -104,6 +116,10 @@
         <span id="ftCalling" aria-live="polite"></span>
         <span id="ftState" class="ft-state ft-off" role="status">WSJT-Z not connected</span>
     </header>
+    <div id="ftStatusLine" class="ft-off">
+        <span id="ftTxLine" aria-live="polite"></span>
+        <span id="ftLastQso" aria-live="polite"></span>
+    </div>
     <div id="ftLogged" role="status" aria-live="polite" hidden></div>
     <div class="ft-sub">
         <strong>Stations to call: click one to call</strong>
@@ -153,9 +169,14 @@
             <span class="ft-big">Change band</span>
             <span class="ft-small" id="ftChangeBandNow"></span>
         </button>
-        <div class="ft-note">
-            CQ = calling CQ. Just finished = sent RR73 or 73. A station that goes quiet fades, then its tile empties.
-        </div>
+        <button type="button" class="ft-tile ft-action" id="ftSort" aria-label="Sort">
+            <span class="ft-big">Sort</span>
+            <span class="ft-small" id="ftSortNow">as heard</span>
+        </button>
+        <a class="ft-tile ft-action" id="ftMainPage" href="/radio" aria-label="Main page">
+            <span class="ft-big">Main page</span>
+            <span class="ft-small">Radio</span>
+        </a>
     </main>
 
     <div id="ftBands" hidden>

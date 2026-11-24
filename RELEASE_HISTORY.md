@@ -12,6 +12,25 @@ a different and much older format.
 
 ---
 
+## 2026-11-24 - v2.5.6-pre38 (pre-release)
+
+*The FT8 Tiles page gets a Main page tile, a Sort tile, a plainer status line and the last QSO. Everything in v2.5.6-pre37 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT8 Tiles** ([#332](https://github.com/mm5agm/Yaesu_Web_Control/issues/332), [manual](USER_MANUAL.md#24-ft8-tiles))
+
+- **A Main page tile** goes to YWC's Radio page. Until now the only way off the tiles page was the browser's address bar.
+- **A Sort tile** puts the stations in order: as heard, by strength, newest first or by callsign, stepping to the next each click. Stations calling you stay first. The stations move only when you click it, so a tile you're reaching for doesn't change under you.
+- **A status line** under the top bar says what WSJT-Z is doing in words: transmitting, waiting to transmit or not transmitting, who to, and the message it is sending or sent last.
+- **The last QSO** shows on the status line, with whether WSJT-Z logged it.
+- **Stop transmit** is now the same size as the other tiles, to make room. It is still red and still in the top-right corner.
+
+**For developers**
+
+- `/api/wsjtx/calls` includes `txMessage`, the Tx Message from WSJT-X's Status (WSJT-X 2.6 or later; empty from older versions).
+- `Tests/js` holds Node tests for the tiles' sort, status and last-QSO logic: `node --test "Tests/js/*.test.mjs"`.
+
+---
+
 ## 2026-11-24 - v2.5.6-pre37 (pre-release)
 
 *N1MM Logger+'s band buttons change band straight away again. Everything in v2.5.6-pre36 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
