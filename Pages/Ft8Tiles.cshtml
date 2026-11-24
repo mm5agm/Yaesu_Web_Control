@@ -91,6 +91,9 @@
         #ftOff { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center;
                  align-items: center; gap: 1rem; padding: 2rem; text-align: center; font-size: 1.5rem; }
         #ftOff[hidden] { display: none; }
+        #ftLogged { flex: 0 0 auto; margin: 0.5rem 1.2rem 0; padding: 0.5rem 1rem; border-radius: 0.6rem;
+                    background: #2e7d32; color: #fff; font-size: 1.6rem; font-weight: 700; }
+        #ftLogged[hidden] { display: none; }
         #ftOff a { color: var(--ft-blue); font-weight: 600; }
     </style>
 </head>
@@ -101,6 +104,7 @@
         <span id="ftCalling" aria-live="polite"></span>
         <span id="ftState" class="ft-state ft-off" role="status">WSJT-Z not connected</span>
     </header>
+    <div id="ftLogged" role="status" aria-live="polite" hidden></div>
     <div class="ft-sub">
         <strong>Stations to call: click one to call</strong>
         <span id="ftSummary"></span>

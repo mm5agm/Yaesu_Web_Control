@@ -87,6 +87,14 @@ namespace Yaesu_Web_Control.Services
         public string DxCall { get { lock (_lock) return _dxCall; } }
         public string DeCall { get { lock (_lock) return _deCall; } }
 
+        // The last QSO WSJT-X logged, for the big-tile page's "Logged" banner.
+        private WsjtxQsoLogged? _lastLogged;
+        private DateTime _lastLoggedUtc;
+        public (WsjtxQsoLogged Qso, DateTime ReceivedUtc)? LastLogged
+        {
+            get { lock (_lock) return _lastLogged is null ? null : (_lastLogged, _lastLoggedUtc); }
+        }
+
         /// <summary>Stops the WSJT-X dial frequency being copied to the radio for a while.</summary>
         public void PauseDialSync(TimeSpan duration)
         {
@@ -283,6 +291,18 @@ namespace Yaesu_Web_Control.Services
 
                 case WsjtxProtocol.TypeClear:
                     CallList.Clear();
+                    break;
+
+                case WsjtxProtocol.TypeQsoLogged:
+                    var qso = WsjtxProtocol.TryParseQsoLogged(data);
+                    if (qso is null) break;
+                    lock (_lock)
+                    {
+                        _lastLogged = qso;
+                        _lastLoggedUtc = DateTime.UtcNow;
+                    }
+                    _logger.LogInformation("[WSJT-X UDP] QSO logged: {Call} {Grid} {Freq} Hz {Mode} sent {Sent} rcvd {Rcvd}",
+                        qso.DxCall, qso.DxGrid, qso.TxFrequencyHz, qso.Mode, qso.ReportSent, qso.ReportReceived);
                     break;
 
                 case WsjtxProtocol.TypeStatus:
