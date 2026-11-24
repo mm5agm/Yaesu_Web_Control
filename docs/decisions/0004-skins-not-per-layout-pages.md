@@ -1,6 +1,8 @@
 # ADR 0004 — Alternative layouts are skins (one markup, CSS only), not separate Razor pages
 
 **Status:** ACCEPTED — 2026-08-06
+
+> **Update 2026-11-24:** the SP3L layout itself is **declined**. Jacek sent a v3 drawing on 2026-11-23 (MAIN/SUB side by side, FTdx10 VFO-A/VFO-B variant). Colin decided a third layout was not worth it: every new control would have to be placed in three layouts, the markup refactor below is several weeks, and the side-by-side panels leave no place for the spectrum. #48 closed as not planned. The skins decision stands for any future layout request.
 **Decision-makers:** Colin (MM5AGM)
 **Driven by:** [Issue #48](https://github.com/mm5agm/Yaesu_Web_Control/issues/48) (Jacek SP3L) — re-arrangement of the controls in the YWC GUI; and [PR #93](https://github.com/mm5agm/Yaesu_Web_Control/pull/93) (Fabio Valente) — UI experimentation
 **Supersedes:** the layout mechanism agreed in `Plan.md` Phase 7 ("SP3L Alternative GUI Layout")
