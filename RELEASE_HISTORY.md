@@ -12,6 +12,23 @@ a different and much older format.
 
 ---
 
+## 2026-11-24 - v2.5.6-pre36 (pre-release)
+
+*The WSJT-X launcher button can be switched on again, and the DX cluster can log in to clusters that ask for a password. Everything in v2.5.6-pre35 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Application Setup**
+
+- **The WSJT-X button's Show switch is saved again.** Since v2.5.6-pre14, Application 1 (WSJT-X by default) always went back to off when you pressed Save, so its button never appeared on the main page. The other four buttons weren't affected. ([#439](https://github.com/mm5agm/Yaesu_Web_Control/issues/439))
+
+**DX cluster** ([manual](USER_MANUAL.md#66-dx-cluster))
+
+- **A Password box in Settings, DX Cluster**, for clusters that ask for a password after the callsign. YWC sends it after your callsign, and **Test cluster connection** sends it too. Leave it blank if your cluster doesn't ask. Cluster logins aren't encrypted, so don't reuse a password from anywhere else. The password isn't written to the logs.
+- **A password prompt no longer gets your callsign as the answer.** YWC used to answer any cluster prompt ending in ":" with the callsign, so a cluster that asked for a password got the callsign instead, and the login failed.
+
+**For developers**
+
+- **`/api/cat/status` includes the RF gain** of both receivers (`rfGain` in `vfoA` and `vfoB`).
+
 ## 2026-11-24 - v2.5.6-pre35 (pre-release)
 
 *FT-991A users on 2 m and 70 cm can tune with the mouse wheel on the spectrum and on the Video page's digits. Everything in v2.5.6-pre34 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
