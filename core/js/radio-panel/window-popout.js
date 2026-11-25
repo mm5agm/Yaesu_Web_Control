@@ -8,6 +8,9 @@
 // of panels in a page of its own. It draws the frame - title, REATTACH, close
 // and one box per panel - and the app fills each box through slot(panelId),
 // exactly as it fills the board's. Colours follow the board's theme.
+// A panel marked popAlone (with popout) gets a ⇱ key here too when the app
+// passes onPopout, so one panel can go on to yet another screen; the app
+// hides its box with setPanelShown while it is out.
 
 import { injectRadioPanelStyle } from './radio-panel-style.js';
 import { applyTheme, DEFAULT_THEME } from './radio-panel-themes.js';
@@ -33,12 +36,14 @@ function btn(cls, text, onClick) {
  * @param {HTMLElement} root
  * @param {object} opts
  * @param {string} opts.title
- * @param {{id:string, title:string, w?:number}[]} opts.panels  w: a fixed width in px
+ * @param {{id:string, title:string, w?:number, popAlone?:boolean, popout?:any}[]} opts.panels  w: a fixed width in px
+ * @param {(panelId:string) => void} [opts.onPopout]  a popAlone panel's ⇱ key
  * @param {() => void} [opts.onReattach]
  * @param {() => void} [opts.onClose]
  * @param {string} [opts.storagePrefix='rwc.radioPanel.']  the board's: the theme is read from it
  * @param {string} [opts.fontBase]
- * @returns {{ slot(panelId:string): HTMLElement|null, setSubtitle(text:string): void }}
+ * @returns {{ slot(panelId:string): HTMLElement|null, setSubtitle(text:string): void,
+ *             setPanelShown(panelId:string, shown:boolean): void }}
  */
 export function mountWindowPopout(root, opts) {
     injectRadioPanelStyle(document, opts.fontBase);
@@ -66,6 +71,7 @@ export function mountWindowPopout(root, opts) {
     // window made narrower than that squeezes the fixed ones, never the rest
     // to nothing.
     const slots = {};
+    const boxes = {};
     const fixedAll = opts.panels.every(p => p.w);
     opts.panels.forEach((p, i) => {
         const box = h('div', 'rp-wpanel');
@@ -75,10 +81,16 @@ export function mountWindowPopout(root, opts) {
         if (grow) box.style.minWidth = '260px';
         const ph = h('div', 'rp-wpanel-head');
         ph.append(h('span', 'rp-wpanel-title', p.title));
+        if (p.popAlone && p.popout && opts.onPopout && opts.panels.length > 1) {
+            const pop = btn('rp-wbtn', '⇱', () => opts.onPopout(p.id));
+            pop.title = 'Open this panel in a browser window of its own - it can go on another screen';
+            ph.append(pop);
+        }
         const body = h('div', 'rp-wpanel-body');
         box.append(ph, body);
         row.append(box);
         slots[p.id] = body;
+        boxes[p.id] = box;
     });
 
     const setTheme = () => applyTheme(root, store.get(prefix + 'theme', DEFAULT_THEME));
@@ -89,5 +101,6 @@ export function mountWindowPopout(root, opts) {
     return {
         slot: id => slots[id] ?? null,
         setSubtitle: text => { sub.textContent = text ?? ''; },
+        setPanelShown: (id, shown) => { if (boxes[id]) boxes[id].style.display = shown ? '' : 'none'; },
     };
 }

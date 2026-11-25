@@ -1,10 +1,12 @@
 // radio-window-yaesu.js - YWC's feed for one of the radio panel's windows
 // (Meters, RX Setup, TX Setup, Scope, Memories) in a browser window of its
-// own, the page at /RadioWindow?g=<group>. The frame is core's
+// own, the page at /RadioWindow?g=<group>, or one of its panels alone at
+// /RadioWindow?g=<group>&p=<panel> (CW's keyer, memories). The frame is core's
 // (window-popout.js); the panels are filled by the same code as on the board
 // (radio-panel-yaesu-windows.js), so they behave the same in both places.
 
 import { mountWindowPopout } from '/js/radio-panel/window-popout.js';
+import { PopoutHost } from '/js/popout/popout.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
 
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -19,7 +21,8 @@ function post(url, body) {
 
 /**
  * @param {HTMLElement} root
- * @param {object} cfg  { conn, popout, group, model, dual, maxPowerW, maxHz }  popout: the page's PopoutChild
+ * @param {object} cfg  { conn, popout, group, panel, model, dual, maxPowerW, maxHz }  popout: the page's PopoutChild;
+ *                      panel: a popAlone panel's id, to show that panel alone
  */
 export function startYaesuRadioWindow(root, cfg) {
     const g = YAESU_WINDOWS.find(x => x.id === cfg.group && x.popout);
@@ -27,28 +30,67 @@ export function startYaesuRadioWindow(root, cfg) {
         root.textContent = 'No such window.';
         return;
     }
-    document.title = g.title + ' - Yaesu Web Control';
+    const one = cfg.panel ? g.panels.find(p => p.id === cfg.panel && p.popAlone) : null;
+    if (cfg.panel && !one) {
+        root.textContent = 'No such panel.';
+        return;
+    }
+    const title = one ? g.title + ' · ' + one.title : g.title;
+    const mine = (gid, pid) => gid === g.id && (!one || pid === one.id);
+    document.title = title + ' - Yaesu Web Control';
     const pop = mountWindowPopout(root, {
-        title: g.title,
-        panels: g.panels,
+        title,
+        panels: one ? [one] : g.panels,
+        onPopout: id => {
+            if (!panelHosts[id]?.open()) alert('The browser blocked the window. Allow pop-ups for this page and press the key again.');
+        },
         onReattach: () => cfg.popout?.reattach(),
         onClose: () => window.close(),
         storagePrefix: 'ywc.radioPanel.',
         fontBase: '/lib/fonts',
     });
 
-    // The windows API the panel builders expect: this group's panels are the
-    // page's boxes and always shown; every other group's are bodies that are
-    // never put on a page.
+    // The windows API the panel builders expect: this group's panels (or the
+    // one panel) are the page's boxes and always shown; every other is a body
+    // that is never put on a page.
     const spare = {};
     const subtitles = {};
     const windows = {
-        slot: (gid, pid) => (gid === g.id ? pop.slot(pid) : (spare[gid + '/' + pid] ??= document.createElement('div'))),
+        slot: (gid, pid) => (mine(gid, pid) ? pop.slot(pid) : (spare[gid + '/' + pid] ??= document.createElement('div'))),
         isOpen: gid => gid === g.id,
-        isShown: gid => gid === g.id,
+        isShown: (gid, pid) => mine(gid, pid),
         open() {}, close() {}, closePanel() {}, showPanel() {},
         setSubtitle: (gid, text) => { subtitles[gid] = text; if (gid === g.id) pop.setSubtitle(text); },
     };
+
+    // The whole window (not one panel): a popAlone panel's ⇱ opens that panel
+    // alone, and its box here is hidden while it is out. It comes back on
+    // REATTACH or when that window is closed. A panel already out when this
+    // window opens is hidden straight away (its window answers the ping).
+    // With every panel out this window would be an empty frame, so it hands
+    // back to the radio panel and closes; the panels then go back there.
+    const panelHosts = {};
+    const out = new Set();
+    const shown = (id, yes) => {
+        pop.setPanelShown(id, yes);
+        if (yes) out.delete(id); else out.add(id);
+        if (out.size === g.panels.length) cfg.popout?.reattach();
+    };
+    if (!one) {
+        for (const p of g.panels) {
+            if (!p.popAlone || !p.popout) continue;
+            const host = panelHosts[p.id] = new PopoutHost({
+                name: p.popout.name,
+                url: p.popout.url,
+                defaultSize: p.popout.size,
+                onChange: open => {
+                    if (open) shown(p.id, false);
+                    else setTimeout(() => { if (!host.isOpen) shown(p.id, true); }, 1000);
+                },
+                onReattach: () => shown(p.id, true),
+            }).start();
+        }
+    }
 
     const r = { sel: 'A', freq: { A: 0, B: 0 } };
     const win = startYaesuWindows(windows, {
