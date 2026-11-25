@@ -12,6 +12,27 @@ a different and much older format.
 
 ---
 
+## 2026-11-25 - v2.5.6-pre39 (pre-release)
+
+*Each panel of the CW window can now go to a browser window of its own, so the keyer, memories, reader and send can each sit on a different monitor. Everything in v2.5.6-pre38 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**CW window: tear off any panel** ([#446](https://github.com/mm5agm/Yaesu_Web_Control/pull/446), [manual](USER_MANUAL.md#523-radio-panel))
+
+- The CW window on the Radio page looks as it did, but **KEYER**, **MEMORIES**, **READER** and **SEND** each have a **⇱** key now. It opens just that panel in a browser window, which you can put on a second or third monitor.
+- **⇱ WINDOW** in the title bar still takes the whole CW window out, and its panels have the same **⇱** keys there.
+- While a panel is out it leaves the CW window. **REATTACH**, or closing its window with **×**, puts it back where it came from.
+- If every panel of a popped-out CW window goes to a window of its own, the empty CW window closes, and closed panels then go back to the Radio page.
+- Closing any panel's own window with **×** now puts the panel back, as **REATTACH** does. That includes the RTTY tuner and DX spots.
+
+Thanks to Rick W2JAZ for the idea.
+
+**For developers**
+
+- `core/js/radio-panel/panel-windows.js`: a panel marked `popAlone` keeps its own ⇱ in a group that pops out whole. `window-popout.js` takes `onPopout` and returns `setPanelShown`. Both are opt-in, so IWC is unchanged.
+- `/RadioWindow?g=cw&p=keyer` (or `p=cwMem`) shows one panel alone.
+
+---
+
 ## 2026-11-24 - v2.5.6-pre38 (pre-release)
 
 *The FT8 Tiles page gets a Main page tile, a Sort tile, a plainer status line and the last QSO. Everything in v2.5.6-pre37 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
