@@ -232,7 +232,14 @@ export function startYaesuWindows(windows, ctx) {
             // (/RadioWindow) goes back there instead. A closed window is given
             // a second, since a reload of it says closed and then opened.
             const away = () => popouts[g.id]?.isOpen;
-            const back = () => { if (!away()) windows.showPanel(g.id, p.id); };
+            // The board forgets which panels were out once its window has
+            // emptied, so the others still out on their own are taken off again.
+            const back = () => {
+                if (away()) return;
+                windows.showPanel(g.id, p.id);
+                for (const q of g.panels)
+                    if (q.id !== p.id && popouts[g.id + '/' + q.id]?.isOpen) windows.closePanel(g.id, q.id);
+            };
             const host = popouts[g.id + '/' + p.id] = new PopoutHost({
                 name: p.popout.name,
                 url: p.popout.url,

@@ -67,7 +67,15 @@ export function startYaesuRadioWindow(root, cfg) {
     // alone, and its box here is hidden while it is out. It comes back on
     // REATTACH or when that window is closed. A panel already out when this
     // window opens is hidden straight away (its window answers the ping).
+    // With every panel out this window would be an empty frame, so it hands
+    // back to the radio panel and closes; the panels then go back there.
     const panelHosts = {};
+    const out = new Set();
+    const shown = (id, yes) => {
+        pop.setPanelShown(id, yes);
+        if (yes) out.delete(id); else out.add(id);
+        if (out.size === g.panels.length) cfg.popout?.reattach();
+    };
     if (!one) {
         for (const p of g.panels) {
             if (!p.popAlone || !p.popout) continue;
@@ -76,10 +84,10 @@ export function startYaesuRadioWindow(root, cfg) {
                 url: p.popout.url,
                 defaultSize: p.popout.size,
                 onChange: open => {
-                    if (open) pop.setPanelShown(p.id, false);
-                    else setTimeout(() => { if (!host.isOpen) pop.setPanelShown(p.id, true); }, 1000);
+                    if (open) shown(p.id, false);
+                    else setTimeout(() => { if (!host.isOpen) shown(p.id, true); }, 1000);
                 },
-                onReattach: () => pop.setPanelShown(p.id, true),
+                onReattach: () => shown(p.id, true),
             }).start();
         }
     }
