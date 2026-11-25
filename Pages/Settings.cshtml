@@ -2078,6 +2078,13 @@
                     splitter. If N1MM's connection drops while it has the radio keyed, or keeps it keyed for
                     over 3 minutes, Yaesu Web Control sends receive.
                 </p>
+                <p class="form-text">
+                    <strong>Start Yaesu Web Control first</strong>, then N1MM. If N1MM was already running, close it
+                    and start it again so it connects. For N1MM's CW macros, N1MM keys the radio's Standard COM port:
+                    give that port its own line in Configure Ports with CW/Other ticked, and set the radio's
+                    <strong>PC KEYING</strong> (in its CW menu) to the same pin N1MM uses for CW, usually
+                    <strong>RTS</strong>.
+                </p>
                 <div class="mb-3 form-check form-switch">
                     <input class="form-check-input" type="checkbox" asp-for="Settings.N1mmCatServerEnabled" />
                     <label class="form-check-label" asp-for="Settings.N1mmCatServerEnabled">Turn on the CAT port for N1MM</label>
