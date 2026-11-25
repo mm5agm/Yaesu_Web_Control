@@ -212,3 +212,6 @@ data/
 # and must never be committed or redistributed - so this rule is the whole
 # directory, not a *.wav pattern.
 bench/
+
+# Local notes. Last, so no rule above can un-ignore it.
+docs/Mikes Setup.txt
