@@ -25,6 +25,11 @@ two repositories.
   COM port can never be chosen. The box is the page's half; the app serves
   `firmware/paddle-adapter/dist`. Tested in `tests/js/paddle-firmware.test.mjs`,
   which also fails when `dist/` does not match the firmware source.
+- `controls/slider-wheel.js` — `attachSliderWheel`: the mouse wheel over a
+  slider moves it a step (Shift: ten), sending input and change so the page's
+  own handlers act. A wheel that is scrolling the page is left to the page, and
+  transmit levels named in `focusOnly` (or marked `data-wheel-focus`) only take
+  it once focused. Tested in `tests/js/slider-wheel.test.mjs`.
 - `vendor/esptool-js.js` — Espressif's esptool-js 0.7.1 bundle, unchanged but
   for a licence header (Apache-2.0, `vendor/LICENSE-esptool-js`). Loaded only
   when programming starts.
