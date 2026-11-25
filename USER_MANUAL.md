@@ -2805,6 +2805,10 @@ N1MM Logger+ wants a CAT port of its own, and Yaesu Web Control already has the 
 
 **What N1MM can do:** whatever it can do with the radio on its own COM port, transmit included (N1MM keys the radio by CAT, as with a splitter). Yaesu Web Control never sends N1MM's voice-memory or transmit commands itself. Two safety nets: if N1MM's connection drops while it has the radio keyed, or it holds transmit for over 3 minutes, Yaesu Web Control sends receive.
 
+**Start Yaesu Web Control first**, then N1MM. N1MM connects to the CAT port when it starts, and Yaesu Web Control opens the port a few seconds after it starts, before the radio is even connected. If N1MM was already running, close it and start it again.
+
+**CW macros:** N1MM keys CW itself on the radio's second (Standard) COM port, not through the CAT port. In Configure Ports give that port its own line with **CW/Other** ticked, and in its **Set** window choose the pin for CW (usually **RTS**, with **DTR** for PTT). Then set the radio's **PC KEYING** (in the radio's CW menu) to the same pin. If the macros key PTT but send no CW, PC KEYING is on the other pin.
+
 **Notes:**
 
 - **Auto information stays on.** Yaesu Web Control needs the radio's auto information to hear frequency changes, so N1MM's AI commands aren't passed on, and N1MM is told AI is off. N1MM polls, as it does by default.
