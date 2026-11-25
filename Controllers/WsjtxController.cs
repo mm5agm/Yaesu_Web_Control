@@ -272,6 +272,15 @@ namespace Yaesu_Web_Control.Controllers
             return ok ? Ok(new { sent = true }) : Conflict(new { error });
         }
 
+        // POST api/wsjtx/autocq: WSJT-Z's Auto CQ on or off (Auto Call goes off too).
+        [HttpPost("autocq")]
+        public async Task<IActionResult> AutoCq([FromBody] AutoCallRequest request)
+        {
+            if (!TilesEnabled) return Conflict(new { error = TilesOffError });
+            var (ok, error) = await _udpService.SendAutoCqAsync(request.On);
+            return ok ? Ok(new { sent = true }) : Conflict(new { error });
+        }
+
         // POST api/wsjtx/band: put the radio on a band's FT8 (or FT4) frequency.
         // WSJT-X follows when it next reads the radio's frequency.
         [HttpPost("band")]

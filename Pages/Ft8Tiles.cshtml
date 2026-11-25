@@ -77,9 +77,10 @@
         .ft-action:disabled { opacity: 0.4; }
         #ftStop { grid-column: 4; grid-row: 1; background: var(--ft-red); border-color: #8e0000; color: #fff; }
         #ftStop .ft-big { font-size: clamp(1.5rem, 4vh, 2.4rem); }
+        #ftStop .ft-small { color: #fff; }
         #ftStop .ft-square { width: 2.2rem; height: 2.2rem; background: #fff; margin-bottom: 0.4rem; }
         #ftAutoOn { grid-column: 4; grid-row: 2; border-color: #2e7d32; }
-        #ftAutoOff { grid-column: 4; grid-row: 3; }
+        #ftCallCq { grid-column: 4; grid-row: 3; border-color: #b26a00; }
         #ftMainPage { grid-column: 4; grid-row: 4; text-decoration: none; justify-content: center; }
         #ftNextPage { grid-column: 1; grid-row: 4; }
         #ftChangeBand { grid-column: 2; grid-row: 4; border-color: var(--ft-blue); }
@@ -152,14 +153,15 @@
         <button type="button" class="ft-tile ft-action" id="ftStop" aria-label="Stop transmit">
             <span class="ft-square" aria-hidden="true"></span>
             <span class="ft-big">Stop transmit</span>
+            <span class="ft-small ft-stop-small">and Auto off</span>
         </button>
         <button type="button" class="ft-tile ft-action" id="ftAutoOn" aria-label="Auto Call on">
             <span class="ft-big">Auto Call on</span>
             <span class="ft-small">WSJT-Z</span>
         </button>
-        <button type="button" class="ft-tile ft-action" id="ftAutoOff" aria-label="Auto Call off">
-            <span class="ft-big">Auto Call off</span>
-            <span class="ft-small">and Auto CQ off</span>
+        <button type="button" class="ft-tile ft-action" id="ftCallCq" aria-label="Call CQ">
+            <span class="ft-big">Call CQ</span>
+            <span class="ft-small">until someone answers</span>
         </button>
         <button type="button" class="ft-tile ft-action" id="ftNextPage" aria-label="Next page" disabled>
             <span class="ft-big">Next page</span>

@@ -127,6 +127,11 @@ namespace Yaesu_Web_Control.Services
         public Task<(bool Ok, string? Error)> SendAutoCallAsync(bool on) =>
             SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: false, autoCall: on), on ? "Auto Call on" : "Auto Call off");
 
+        // WSJT-Z's Auto CQ: it calls CQ every other period until a station answers
+        // or it's turned off. Auto Call goes off at the same time.
+        public Task<(bool Ok, string? Error)> SendAutoCqAsync(bool on) =>
+            SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: on, autoCall: false), on ? "Auto CQ on" : "Auto CQ off");
+
         private async Task<(bool Ok, string? Error)> SendAsync(Func<string, byte[]> build, string what)
         {
             UdpClient? udp;

@@ -162,6 +162,35 @@ public sealed class WsjtxBigTileTests
         Assert.Equal(expected, WsjtxProtocol.BuildAutoConfigure("WSJT-X - Z", autoCq: false, autoCall: on));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Configure_AutoCq_TurnsAutoCallOff(bool on)
+    {
+        var expected = new Bytes().Header(3, 15, "WSJT-X - Z")
+            .S("").U32(uint.MaxValue).S("").B(false).U32(uint.MaxValue).U32(uint.MaxValue)
+            .S("").S("").B(false)
+            .B(on)      // Auto CQ
+            .B(false)   // Auto Call always off
+            .ToArray();
+        Assert.Equal(expected, WsjtxProtocol.BuildAutoConfigure("WSJT-X - Z", autoCq: on, autoCall: false));
+    }
+
+    // The Call CQ tile is there and Stop transmit turns Auto CQ off as well as halting.
+    [Fact]
+    public void Ft8Tiles_CallCqTile_AndStopTurnsAutoOff()
+    {
+        string root = FindRepoRoot();
+        string page = File.ReadAllText(Path.Combine(root, "Pages", "Ft8Tiles.cshtml"));
+        Assert.Contains("id=\"ftCallCq\" aria-label=\"Call CQ\"", page);
+        string js = File.ReadAllText(Path.Combine(root, "wwwroot", "js", "ft8-tiles", "ft8-tiles-page.js"));
+        int stop = js.IndexOf("el(\"ftStop\")", StringComparison.Ordinal);
+        int next = js.IndexOf("el(\"ftAutoOn\")", stop, StringComparison.Ordinal);
+        string stopBody = js.Substring(stop, next - stop);
+        Assert.Contains("/api/wsjtx/halt", stopBody);
+        Assert.Contains("\"/api/wsjtx/autocq\", { on: false }", stopBody);
+    }
+
     // --- Who can be called ---
 
     [Theory]
@@ -264,7 +293,7 @@ public sealed class WsjtxBigTileTests
     {
         string root = FindRepoRoot();
         string controller = File.ReadAllText(Path.Combine(root, "Controllers", "WsjtxController.cs"));
-        foreach (string action in new[] { "Reply(", "AutoCall(", "Band(" })
+        foreach (string action in new[] { "Reply(", "AutoCall(", "AutoCq(", "Band(" })
         {
             int at = controller.IndexOf("public async Task<IActionResult> " + action, StringComparison.Ordinal);
             Assert.True(at >= 0, action);

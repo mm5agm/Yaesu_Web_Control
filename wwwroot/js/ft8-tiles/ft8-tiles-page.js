@@ -3,7 +3,7 @@
 //
 // Tile names are what Windows Voice Access and switch software read out, so
 // they are short and fixed: "Call 1" to "Call 9", "Stop transmit",
-// "Auto Call on", "Auto Call off", "Next page", "Change band", "Sort",
+// "Auto Call on", "Call CQ", "Next page", "Change band", "Sort",
 // "Main page", and the band names. Saying "click Call 3" clicks the third station tile.
 
 import { TileSlots, SORT_MODES, SORT_LABEL, sortCalls, txStatus, LastQso } from "./ft8-tiles-slots.js";
@@ -237,13 +237,17 @@ function wire() {
         tile.addEventListener("click", () => callStation(tile));
     }
     el("ftStop").addEventListener("click", async () => {
-        if (await post("/api/wsjtx/halt")) showMessage("Transmit stopped");
+        // Stop means stop: halt now, and turn WSJT-Z's Auto CQ and Auto Call
+        // off so it doesn't start again next period.
+        const halted = await post("/api/wsjtx/halt");
+        const autoOff = await post("/api/wsjtx/autocq", { on: false });
+        if (halted) showMessage(autoOff ? "Transmit stopped, Auto off" : "Transmit stopped");
     });
     el("ftAutoOn").addEventListener("click", async () => {
         if (await post("/api/wsjtx/autocall", { on: true })) showMessage("Auto Call on");
     });
-    el("ftAutoOff").addEventListener("click", async () => {
-        if (await post("/api/wsjtx/autocall", { on: false })) showMessage("Auto Call off");
+    el("ftCallCq").addEventListener("click", async () => {
+        if (await post("/api/wsjtx/autocq", { on: true })) showMessage("Calling CQ: Stop transmit ends it");
     });
     el("ftNextPage").addEventListener("click", () => {
         pageIndex = (pageIndex + 1) % slots.pageCount(PER_PAGE);
