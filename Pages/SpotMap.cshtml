@@ -1,0 +1,39 @@
+@page "/spot-map"
+@model Yaesu_Web_Control.Pages.SpotMapModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Spot Map";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>Spot Map - Yaesu Web Control</title>
+    @* Leaflet and mqtt.js are served from wwwroot/lib, never a CDN. *@
+    <link rel="stylesheet" href="~/lib/leaflet/leaflet.css" />
+</head>
+<body>
+    <div id="spotMap"></div>
+
+    <script src="~/lib/leaflet/leaflet.js"></script>
+    <script src="~/lib/mqtt/mqtt.min.js"></script>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    @* This page has no _Layout, so it keeps the host running itself. *@
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { keepHostAlive } from "/js/ui/host-presence.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        keepHostAlive();
+    </script>
+    <script type="module">
+        import { startSpotMap } from "/js/spotmap/spot-map-page.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        startSpotMap(document.getElementById('spotMap'), {
+            app: 'ywc',
+            stationUrl: '/api/wsjtx/station',
+            programName: 'WSJT-X',
+        });
+    </script>
+    <script type="module" src="~/js/txalert/tx-alert.js" asp-append-version="true"></script>
+</body>
+</html>

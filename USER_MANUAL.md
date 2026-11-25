@@ -66,6 +66,7 @@
    - 9.3 [Log4OM](#93-log4om)
    - 9.4 [GridTracker](#94-gridtracker)
    - 9.5 [N1MM Logger+](#95-n1mm-logger)
+   - 9.6 [Spot Map (PSK Reporter)](#96-spot-map-psk-reporter)
 10. [Meter Calibration](#10-meter-calibration)
     - 10.1 [Calibrating the S-Meter (receive)](#101-calibrating-the-s-meter-receive)
     - 10.2 [Calibrating the Power meter (transmit)](#102-calibrating-the-power-meter-transmit)
@@ -2816,6 +2817,33 @@ N1MM Logger+ wants a CAT port of its own, and Yaesu Web Control already has the 
 - **N1MM on another PC:** tick **Allow N1MM on another PC**, and in N1MM use this PC's address instead of `127.0.0.1`. Leave it off otherwise, since any PC on your network could then control the radio.
 - **The five-byte CAT radios** (FT-847, FT-817, FT-818, FT-857, FT-897) don't get the port: their CAT isn't the text that N1MM sends to the newer radios.
 - If N1MM sends something that isn't Yaesu CAT, the log says so once. Check that N1MM's Radio is your Yaesu model.
+
+### 9.6 Spot Map (PSK Reporter)
+
+*New in v2.5.6-pre41.*
+
+The Spot Map shows who hears you, and who you hear, on a world map and in a list, live from [PSK Reporter](https://pskreporter.info). It is made for a second monitor. Open it from **Spot Map** in the Radio page menu (under **RECEIVE**), or in the Classic page's menu bar; it opens in a new window.
+
+**Your callsign and grid** come from WSJT-X (or WS, JTDX) over the UDP link in [9.1](#91-wsjt-x), so there is nothing to set up. If WSJT-X isn't running, the page asks for them once and remembers them in that browser. **Change callsign** at the top changes them. If you start WSJT-X after opening the page, or change its callsign, the page follows within 15 seconds.
+
+**Your program must send spots to PSK Reporter.** In WSJT-X that is **Settings, Reporting, Enable PSK Reporter Spotting**. The map can show only what PSK Reporter has been told.
+
+**The map:**
+
+- **Orange**: stations that heard you. **Blue**: stations you heard. **Yellow**: you.
+- Each station shows once, at its latest spot, with a line from you. Spots from the last 3 minutes are drawn bigger.
+- Hold the mouse over a dot for the callsign, band, mode, SNR and how long ago.
+
+**The list** (right-hand side): **Who**, **Band**, **SNR**, **Distance** and **Time UTC**, newest first. Click a column heading to sort by it, and again to reverse it. Click a row to go to that station on the map. Drag the bar between the map and the list to resize them; **List** at the top hides or shows it.
+
+**At the top:** **Show** picks both kinds, or only one. **Last** picks how far back (5 minutes to 24 hours). **km**/**miles** sets the distance units. All of these are remembered.
+
+**Notes:**
+
+- **Spots can be up to 5 minutes late.** WSJT-X and WS send their spots to PSK Reporter in batches, about every 5 minutes. That's normal.
+- **History:** when the page opens it loads the last 24 hours. PSK Reporter allows one query about every 5 minutes, so "heard me" loads at once and "I heard" about 5½ minutes later.
+- The page needs the internet for the map and the spots. It never touches the radio.
+- Data from PSK Reporter by Philip Gladstone. Live spots come from mqtt.pskreporter.info, run by Tom Fanning M0LTE.
 
 ---
 

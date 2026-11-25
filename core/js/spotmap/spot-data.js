@@ -1,0 +1,209 @@
+// Radio Web Control - Spot Map data
+// Shared by Icom Web Control and Yaesu Web Control. This file is copied into
+// each app's wwwroot at build time - see js/README.md. Edit it here, in the
+// core, never in a wwwroot copy.
+//
+// The pure half of the Spot Map: grid squares to positions, distances, bands,
+// and the store of who heard whom. No DOM, no network, so it is tested in
+// tests/js/spot-data.test.mjs. spot-map-page.js draws what this holds.
+//
+// Two kinds of spot, both from PSK Reporter:
+//   heardMe - the operator transmitted and another station reported it;
+//   iHeard  - the operator's station reported hearing another.
+
+export const KINDS = ['heardMe', 'iHeard'];
+
+/** A Maidenhead locator (4 or 6 characters) to [lat, lon] at the square's centre, or null. */
+export function gridToLatLon(grid) {
+    const g = String(grid ?? '').trim().toUpperCase();
+    if (g.length < 4) return null;
+    if (!/^[A-R]{2}[0-9]{2}/.test(g)) return null;
+    const A = 65;
+    let lon = (g.charCodeAt(0) - A) * 20 - 180 + Number(g[2]) * 2;
+    let lat = (g.charCodeAt(1) - A) * 10 - 90 + Number(g[3]);
+    if (g.length >= 6 && /^[A-X]{2}$/.test(g.slice(4, 6))) {
+        lon += (g.charCodeAt(4) - A) * (2 / 24) + 1 / 24;
+        lat += (g.charCodeAt(5) - A) * (1 / 24) + 1 / 48;
+    } else {
+        lon += 1;
+        lat += 0.5;
+    }
+    return [lat, lon];
+}
+
+/** Great-circle distance in km between two [lat, lon] points, or null if either is missing. */
+export function distanceKm(a, b) {
+    if (!a || !b) return null;
+    const rad = Math.PI / 180;
+    const dLat = (b[0] - a[0]) * rad;
+    const dLon = (b[1] - a[1]) * rad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+const BANDS = [
+    [1.8, 2, '160m'], [3.5, 4, '80m'], [5.25, 5.45, '60m'], [7, 7.3, '40m'], [10.1, 10.15, '30m'],
+    [14, 14.35, '20m'], [18.068, 18.168, '17m'], [21, 21.45, '15m'], [24.89, 24.99, '12m'], [28, 29.7, '10m'],
+    [50, 54, '6m'], [70, 71, '4m'], [144, 148, '2m'], [222, 225, '1.25m'], [420, 450, '70cm'],
+];
+
+/** A frequency in Hz to a band name ('20m'), or the MHz figure when it isn't in a band, or ''. */
+export function bandOf(hz) {
+    const m = Number(hz) / 1e6;
+    if (!m) return '';
+    for (const [lo, hi, name] of BANDS) if (m >= lo && m <= hi) return name;
+    return m.toFixed(3) + ' MHz';
+}
+
+/** Band names in frequency order, for sorting the list by band. */
+export function bandRank(band) {
+    const i = BANDS.findIndex(b => b[2] === band);
+    return i < 0 ? BANDS.length : i;
+}
+
+/** A callsign as PSK Reporter's MQTT topics spell it: '/' becomes '.'. */
+export function topicCall(call) {
+    return String(call ?? '').trim().toUpperCase().replace(/\//g, '.');
+}
+
+/** True for something that looks like a callsign (letters, digits and '/', 3 to 15 long). */
+export function isCallsign(call) {
+    return /^[A-Z0-9/]{3,15}$/.test(String(call ?? '').trim().toUpperCase());
+}
+
+/** The two MQTT topics that carry every spot of a callsign, sent or received. */
+export function topicsFor(call) {
+    const t = topicCall(call);
+    return [`pskr/filter/v2/+/+/${t}/#`, `pskr/filter/v2/+/+/+/${t}/#`];
+}
+
+/**
+ * One MQTT message (already JSON-parsed) to { kind, raw } for the operator's
+ * call, or null if the operator is in neither end. MQTT field names: sc/rc
+ * sender and receiver callsigns, sl/rl their locators, f Hz, md mode, rp SNR,
+ * b band, t (or t_tx) Unix seconds.
+ */
+export function classifyMqtt(msg, call) {
+    if (!msg) return null;
+    const me = String(call ?? '').toUpperCase();
+    const raw = { ...msg, t: msg.t_tx ?? msg.t };
+    if (String(msg.sc ?? '').toUpperCase() === me) return { kind: 'heardMe', raw };
+    if (String(msg.rc ?? '').toUpperCase() === me) return { kind: 'iHeard', raw };
+    return null;
+}
+
+/** A PSK Reporter query API receptionReport to the MQTT field names. */
+export function fromReceptionReport(r) {
+    return {
+        sc: r.senderCallsign, sl: r.senderLocator, rc: r.receiverCallsign, rl: r.receiverLocator,
+        t: r.flowStartSeconds, f: r.frequency, md: r.mode, rp: r.sNR,
+    };
+}
+
+function toNumberOrNull(v) {
+    if (v === undefined || v === null || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Who heard whom: for each kind, the latest spot of each other station. A
+ * station heard again replaces its older spot, so the map and the list show
+ * one entry per station, as PSK Reporter's own map does.
+ */
+export class SpotStore {
+    constructor() {
+        this.byKind = { heardMe: new Map(), iHeard: new Map() };
+        this.seen = new Set();
+        /** The operator's grid as the spots give it, when the app doesn't know it. */
+        this.gridFromSpots = '';
+    }
+
+    /**
+     * Adds one spot in MQTT field names. Returns the stored spot, or null if
+     * it was a repeat, had no other station or grid, or was older than the one held.
+     */
+    add(kind, raw) {
+        if (!this.byKind[kind]) return null;
+        if (raw.sq !== undefined && raw.sq !== null) {
+            const key = kind + ':' + raw.sq;
+            if (this.seen.has(key)) return null;
+            this.seen.add(key);
+            if (this.seen.size > 50000) this.seen.clear();
+        }
+        const other = String((kind === 'heardMe' ? raw.rc : raw.sc) ?? '').trim().toUpperCase();
+        const grid = String((kind === 'heardMe' ? raw.rl : raw.sl) ?? '').trim().toUpperCase();
+        const myGrid = String((kind === 'heardMe' ? raw.sl : raw.rl) ?? '').trim().toUpperCase();
+        if (!other || !grid || !gridToLatLon(grid)) return null;
+        if (!this.gridFromSpots && gridToLatLon(myGrid)) this.gridFromSpots = myGrid;
+        const t = Number(raw.t) || 0;
+        const spot = {
+            kind,
+            call: other,
+            grid,
+            t,
+            band: raw.b || bandOf(raw.f),
+            hz: Number(raw.f) || 0,
+            mode: raw.md || '',
+            snr: toNumberOrNull(raw.rp),
+        };
+        const held = this.byKind[kind].get(other);
+        if (held && held.t > t) return null;
+        this.byKind[kind].set(other, spot);
+        return spot;
+    }
+
+    /** Spots heard in the last windowSecs seconds, for the kinds asked for. */
+    within(nowSecs, windowSecs, kinds = KINDS) {
+        const out = [];
+        for (const kind of kinds) {
+            for (const s of this.byKind[kind]?.values() ?? []) {
+                if (nowSecs - s.t <= windowSecs) out.push(s);
+            }
+        }
+        return out;
+    }
+
+    clear() {
+        for (const k of KINDS) this.byKind[k].clear();
+        this.seen.clear();
+        this.gridFromSpots = '';
+    }
+}
+
+/**
+ * The spot list's rows: each spot with its distance from home, sorted.
+ * sortKey: 'time' | 'call' | 'band' | 'snr' | 'distance'; desc: true for
+ * largest/newest first.
+ */
+export function listRows(spots, home, sortKey = 'time', desc = true) {
+    const rows = spots.map(s => ({ ...s, km: distanceKm(home, gridToLatLon(s.grid)) }));
+    const val = r => {
+        switch (sortKey) {
+            case 'call': return r.call;
+            case 'band': return bandRank(r.band);
+            case 'snr': return r.snr ?? -999;
+            case 'distance': return r.km ?? -1;
+            default: return r.t;
+        }
+    };
+    rows.sort((a, b) => {
+        const va = val(a), vb = val(b);
+        let c = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+        if (c === 0) c = a.t - b.t;
+        return desc ? -c : c;
+    });
+    return rows;
+}
+
+/** Unix seconds to 'HH:MM' UTC. */
+export function utcHhmm(secs) {
+    return new Date(secs * 1000).toISOString().slice(11, 16);
+}
+
+/** A distance in km for the list, in km or miles. */
+export function formatDistance(km, miles = false) {
+    if (km === null || km === undefined) return '';
+    const v = miles ? km / 1.609344 : km;
+    return Math.round(v).toLocaleString('en-GB') + (miles ? ' mi' : ' km');
+}

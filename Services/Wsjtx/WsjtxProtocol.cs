@@ -34,7 +34,8 @@ namespace Yaesu_Web_Control.Services.Wsjtx
         bool Transmitting,
         bool Decoding,
         string DeCall,
-        string TxMessage = "");
+        string TxMessage = "",
+        string DeGrid = "");
 
     /// <summary>
     /// The QSO Logged (type 5) fields the big-tile page shows. WSJT-X sends it
@@ -143,6 +144,7 @@ namespace Yaesu_Web_Control.Services.Wsjtx
             // The rest is optional: a short Status still gives the fields above.
             bool decoding = false;
             string deCall = "";
+            string deGrid = "";
             string txMessage = "";
             try
             {
@@ -150,7 +152,7 @@ namespace Yaesu_Web_Control.Services.Wsjtx
                 ReadUInt32(span, ref offset);            // Rx DF
                 ReadUInt32(span, ref offset);            // Tx DF
                 deCall = ReadUtf8(span, ref offset) ?? "";
-                ReadUtf8(span, ref offset);              // DE grid
+                deGrid = (ReadUtf8(span, ref offset) ?? "").Trim();   // DE grid: the operator's own grid (Spot Map)
                 ReadUtf8(span, ref offset);              // DX grid
                 ReadBool(span, ref offset);              // Tx Watchdog
                 ReadUtf8(span, ref offset);              // Sub-mode
@@ -164,7 +166,7 @@ namespace Yaesu_Web_Control.Services.Wsjtx
             catch (ArgumentOutOfRangeException) { }
             catch (IndexOutOfRangeException) { }
 
-            return new WsjtxStatus(h.Id, dial, mode, dxCall, txEnabled, transmitting, decoding, deCall, txMessage);
+            return new WsjtxStatus(h.Id, dial, mode, dxCall, txEnabled, transmitting, decoding, deCall, txMessage, deGrid);
         }
 
         public static WsjtxQsoLogged? TryParseQsoLogged(byte[] data)

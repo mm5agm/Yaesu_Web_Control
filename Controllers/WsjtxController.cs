@@ -179,6 +179,18 @@ namespace Yaesu_Web_Control.Controllers
             });
         }
 
+        // GET api/wsjtx/station: the operator's callsign and grid as WSJT-X/WS
+        // reports them in its Status, for the Spot Map page. Read-only, and not
+        // behind the FT8 Tiles switch: the Spot Map is a page anyone can open.
+        // Empty strings until WSJT-X has sent a Status.
+        [HttpGet("station")]
+        public IActionResult Station() => Ok(new
+        {
+            connected = _udpService.IsConnected,
+            call = _udpService.DeCall,
+            grid = _udpService.DeGrid,
+        });
+
         // --- The big-tile page (issue #332) ---
 
         // The page is opt-in (Settings, ApplicationSettings.Ft8TilesEnabled).
