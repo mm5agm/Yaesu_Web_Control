@@ -1,0 +1,112 @@
+@page "/exit"
+@model Yaesu_Web_Control.Pages.ExitModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>Close YWC - Yaesu Web Control</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; }
+        body {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem;
+            background: #eef1f5; color: #1b2433; font-family: "Segoe UI", system-ui, sans-serif; padding: 1.5rem;
+            text-align: center;
+        }
+        h1 { font-size: 2.2rem; margin: 0; }
+        p { font-size: 1.3rem; margin: 0; max-width: 40rem; line-height: 1.45; }
+        .ex-warn { color: #8a4b00; font-weight: 600; }
+        .ex-buttons { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
+        .ex-buttons button, .ex-buttons a {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 20rem; min-height: 9rem; padding: 1rem; border-radius: 0.8rem; border: 4px solid;
+            font: inherit; font-size: 1.9rem; font-weight: 700; cursor: pointer; text-decoration: none;
+        }
+        .ex-buttons small { font-size: 1.1rem; font-weight: 400; margin-top: 0.4rem; }
+        #exClose { background: #c62828; border-color: #8e1c1c; color: #fff; }
+        #exClose:disabled { opacity: 0.6; cursor: default; }
+        #exCancel { background: #fff; border-color: #1e63c6; color: #1b2433; }
+        #exAsk, #exDone { display: contents; }
+        #exAsk[hidden], #exDone[hidden] { display: none; }
+        #exError { color: #c62828; font-weight: 600; min-height: 1.5em; }
+    </style>
+</head>
+<body>
+    <div id="exAsk">
+        <h1>Close Yaesu Web Control?</h1>
+        <p>
+            This closes YWC on the PC it runs on and frees the radio's COM port, so another program,
+            such as HRD, can use the radio. Programs that reach the radio through YWC, such as WSJT-Z
+            or a logger, lose it until YWC is started again.
+        </p>
+        @if (Model.PowerOffAtExit)
+        {
+            <p class="ex-warn">"Turn the radio off when Yaesu Web Control closes" is ticked in Settings, so the radio will switch off too.</p>
+        }
+        @if (Model.InContainer)
+        {
+            <p class="ex-warn">YWC is running in Docker here. Stop it with docker compose down instead.</p>
+        }
+        <div class="ex-buttons">
+            <button type="button" id="exClose" aria-label="Close YWC" @(Model.InContainer ? "disabled" : "")>
+                Close YWC<small>and free the radio</small>
+            </button>
+            <a id="exCancel" href="/radio" aria-label="Cancel">Cancel<small>back to the Radio page</small></a>
+        </div>
+        <p id="exError" role="alert"></p>
+    </div>
+    <div id="exDone" hidden>
+        <h1>Yaesu Web Control has closed</h1>
+        <p>The radio's COM port is free. You can start HRD or another program now.</p>
+        <p>To start YWC again, double-click its desktop shortcut on the PC it runs on.</p>
+    </div>
+    <script>
+        (() => {
+            // The Cancel button goes back where the operator came from, if that was a YWC page.
+            const cancel = document.getElementById("exCancel");
+            try {
+                if (document.referrer && new URL(document.referrer).origin === location.origin
+                    && new URL(document.referrer).pathname !== "/exit") {
+                    cancel.href = document.referrer;
+                    cancel.querySelector("small").textContent = "back where you were";
+                }
+            } catch { /* keep /radio */ }
+
+            const button = document.getElementById("exClose");
+            const error = document.getElementById("exError");
+            button.addEventListener("click", async () => {
+                button.disabled = true;
+                error.textContent = "";
+                try {
+                    const r = await fetch("/api/app/exit", { method: "POST" });
+                    if (!r.ok) {
+                        const d = await r.json().catch(() => ({}));
+                        error.textContent = d.error || `YWC refused (${r.status})`;
+                        button.disabled = false;
+                        return;
+                    }
+                } catch {
+                    error.textContent = "YWC isn't answering. It may already be closed.";
+                    button.disabled = false;
+                    return;
+                }
+                document.getElementById("exAsk").hidden = true;
+                document.getElementById("exDone").hidden = false;
+            });
+        })();
+    </script>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    @* This page has no _Layout, so it keeps the host running itself. *@
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { keepHostAlive } from "/js/ui/host-presence.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        keepHostAlive();
+    </script>
+    <script type="module" src="~/js/txalert/tx-alert.js" asp-append-version="true"></script>
+</body>
+</html>

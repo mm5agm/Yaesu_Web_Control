@@ -744,6 +744,9 @@ builder.Services.AddHostedService<SystemTrayService>();
 builder.Services.AddSingleton<MacSystemTrayService>();
 #endif
 
+// Exit page (POST api/app/exit): closes YWC from a browser, as the tray's Exit does.
+builder.Services.AddSingleton<AppExitService>();
+
 // Register WSJT-X UDP listener as a singleton so it can be injected into controllers
 builder.Services.AddSingleton<WsjtxUdpService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WsjtxUdpService>());
