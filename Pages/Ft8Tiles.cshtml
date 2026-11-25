@@ -28,6 +28,10 @@
         #ftFreq { font-size: 2.4rem; font-weight: 600; letter-spacing: 0.02em; }
         #ftBandMode { font-size: 1.5rem; color: #cfd6e2; }
         #ftCalling { font-size: 1.4rem; color: #ffd27a; margin-left: auto; }
+        #ftCloseYwc {
+            font-size: 1.2rem; font-weight: 600; padding: 0.35rem 1rem; border-radius: 0.5rem;
+            background: #c62828; color: #fff; text-decoration: none; border: 2px solid #fff;
+        }
         .ft-state { font-size: 1.4rem; font-weight: 600; padding: 0.35rem 1rem; border-radius: 0.5rem; }
         .ft-rx { background: #2e7d32; }
         .ft-tx { background: var(--ft-red); }
@@ -119,6 +123,7 @@
         <span id="ftBandMode"></span>
         <span id="ftCalling" aria-live="polite"></span>
         <span id="ftState" class="ft-state ft-off" role="status">WSJT-Z not connected</span>
+        <a id="ftCloseYwc" href="/exit" aria-label="Close YWC" title="Close Yaesu Web Control and free the radio's COM port">Close YWC</a>
     </header>
     <div id="ftStatusLine" class="ft-off">
         <span id="ftTxLine" aria-live="polite"></span>

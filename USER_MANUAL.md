@@ -508,8 +508,9 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 **Closing the app:**
 
 1. **Tray / menu-bar Exit** (Windows / macOS) — cleanest shutdown.
-2. **Close the browser and walk away** — when **Automatically exit when no browser is connected** is enabled (default on desktop hosts), YWC waits ~30 seconds then exits. Turn that setting **off** (or use Docker, which forces it off) to keep the CAT host running with no browser open.
-3. **Force-quit** — Task Manager on Windows; Activity Monitor or Ctrl+C on macOS/Linux; `docker compose down` for containers. Use this only if something has hung.
+2. **Close YWC from the browser** — **Close YWC** in the Radio page's menu (under **EXIT**), in the Classic page's top bar, or the red button at the top right of the FT8 Tiles page opens a page with two big buttons: **Close YWC** and **Cancel**. Close YWC shuts the app down the same way as the tray's Exit, from any browser, including a tablet on the LAN, and frees the radio's COM port so another program (HRD, for example) can open it. If **Turn the radio off when Yaesu Web Control closes** is ticked in Settings, the page says the radio will switch off too. To start YWC again, use its desktop shortcut on the PC it runs on. In Docker the button is greyed out: use `docker compose down`.
+3. **Close the browser and walk away** — when **Automatically exit when no browser is connected** is enabled (default on desktop hosts), YWC waits ~30 seconds then exits. Turn that setting **off** (or use Docker, which forces it off) to keep the CAT host running with no browser open.
+4. **Force-quit** — Task Manager on Windows; Activity Monitor or Ctrl+C on macOS/Linux; `docker compose down` for containers. Use this only if something has hung.
 
 **Accessing the app from another device:** If you set **Network Interface** to `0.0.0.0 (all interfaces)` in Settings (the default), the app is also accessible from any device on your local network. The Settings page shows the full URL for each network interface — bookmark one of these on your tablet or phone.
 
