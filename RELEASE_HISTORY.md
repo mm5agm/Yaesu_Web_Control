@@ -12,6 +12,22 @@ a different and much older format.
 
 ---
 
+## 2026-11-25 - v2.5.6-pre40 (pre-release)
+
+*The FT-817/818 now writes the raw power bytes to the log while you transmit, so the power meter going to full scale can be tracked down. The N1MM help is clearer too. Everything in v2.5.6-pre39 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT-817/818: power meter bytes in the log** ([#449](https://github.com/mm5agm/Yaesu_Web_Control/pull/449), [D#379](https://github.com/mm5agm/Yaesu_Web_Control/discussions/379))
+
+- While the radio transmits, the log gets a line `transmit power bytes F7=.. BD=.. -> n/255` each time the radio's answer changes. It shows what the radio sent and what YWC made of it.
+- This is logging only. The meters work as they did in pre39.
+
+**N1MM Logger+ help** ([#448](https://github.com/mm5agm/Yaesu_Web_Control/pull/448), [manual](USER_MANUAL.md#95-n1mm-logger))
+
+- Settings and the manual now say to start YWC before N1MM, or restart N1MM if it was started first.
+- They also say to set PC KEYING on the radio to RTS, to match N1MM's CW keying pin.
+
+---
+
 ## 2026-11-25 - v2.5.6-pre39 (pre-release)
 
 *Each panel of the CW window can now go to a browser window of its own, so the keyer, memories, reader and send can each sit on a different monitor. Everything in v2.5.6-pre38 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
