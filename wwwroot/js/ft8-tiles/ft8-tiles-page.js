@@ -6,7 +6,7 @@
 // "Auto Call on", "Call CQ", "Next page", "Change band", "Sort",
 // "Main page", and the band names. Saying "click Call 3" clicks the third station tile.
 
-import { TileSlots, SORT_MODES, SORT_LABEL, sortCalls, txStatus, LastQso } from "./ft8-tiles-slots.js";
+import { TileSlots, SORT_MODES, SORT_LABEL, sortCalls, txStatus, callingCq, LastQso } from "./ft8-tiles-slots.js";
 
 const PER_PAGE = 9;
 const POLL_MS = 1000;
@@ -79,6 +79,13 @@ function renderHeader(d) {
     lastQso.update(d);
     setText("ftLastQso", lastQso.text());
     el("ftLastQso").classList.toggle("ft-logged", !!lastQso.last && lastQso.last.logged);
+
+    // The Call CQ tile lights up while CQ is going out. Its name stays
+    // "Call CQ" for Voice Access; only the words on it change.
+    const cq = callingCq(d);
+    el("ftCallCq").classList.toggle("ft-calling-cq", cq);
+    setText("ftCallCqBig", cq ? "Calling CQ" : "Call CQ");
+    setText("ftCallCqSmall", cq ? "Stop transmit ends it" : "until someone answers");
     el("ftChangeBandNow").textContent = band ? `now ${band}` : "";
 }
 

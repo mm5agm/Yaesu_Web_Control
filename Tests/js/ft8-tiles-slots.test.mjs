@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TileSlots, sortCalls, txStatus, LastQso } from '../../wwwroot/js/ft8-tiles/ft8-tiles-slots.js';
+import { TileSlots, sortCalls, txStatus, callingCq, LastQso } from '../../wwwroot/js/ft8-tiles/ft8-tiles-slots.js';
 const st = [
   { call: "K1ABC", kind: "cq", snr: -18, ageSeconds: 10 },
   { call: "DL2XY", kind: "cq", snr: -3, ageSeconds: 2 },
@@ -31,6 +31,16 @@ test("status lines", () => {
     "Not transmitting · last sent CQ MM5AGM IO85");
   assert.equal(txStatus({ connected: true, transmitting: false, txEnabled: true, dxCall: "", txMessage: "CQ MM5AGM IO85" }).state, "Waiting to transmit");
   assert.equal(txStatus({ connected: false }).state, "WSJT-Z not connected");
+});
+test("Call CQ tile lights only while CQ is going out", () => {
+  const on = { connected: true, transmitting: false, txEnabled: true, dxCall: "", txMessage: "CQ MM5AGM IO86" };
+  assert.equal(callingCq(on), true);
+  assert.equal(callingCq({ ...on, txEnabled: false, transmitting: true }), true);
+  assert.equal(callingCq({ ...on, txEnabled: false }), false);            // last sent CQ, now idle
+  assert.equal(callingCq({ ...on, dxCall: "K1ABC", txMessage: "K1ABC MM5AGM IO86" }), false);
+  assert.equal(callingCq({ ...on, txMessage: "K1ABC MM5AGM R-10" }), false);
+  assert.equal(callingCq({ ...on, txMessage: "" }), false);               // old WSJT-X: no Tx message
+  assert.equal(callingCq({ ...on, connected: false }), false);
 });
 test("last QSO: logged, then a later unlogged one isn't overwritten", () => {
   const q = new LastQso();

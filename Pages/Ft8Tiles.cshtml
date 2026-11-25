@@ -81,6 +81,8 @@
         #ftStop .ft-square { width: 2.2rem; height: 2.2rem; background: #fff; margin-bottom: 0.4rem; }
         #ftAutoOn { grid-column: 4; grid-row: 2; border-color: #2e7d32; }
         #ftCallCq { grid-column: 4; grid-row: 3; border-color: #b26a00; }
+        #ftCallCq.ft-calling-cq { background: #b26a00; color: #fff; box-shadow: 0 0 0 4px #f3d19c; }
+        #ftCallCq.ft-calling-cq .ft-small { color: #fff; }
         #ftMainPage { grid-column: 4; grid-row: 4; text-decoration: none; justify-content: center; }
         #ftNextPage { grid-column: 1; grid-row: 4; }
         #ftChangeBand { grid-column: 2; grid-row: 4; border-color: var(--ft-blue); }
@@ -160,8 +162,8 @@
             <span class="ft-small">WSJT-Z</span>
         </button>
         <button type="button" class="ft-tile ft-action" id="ftCallCq" aria-label="Call CQ">
-            <span class="ft-big">Call CQ</span>
-            <span class="ft-small">until someone answers</span>
+            <span class="ft-big" id="ftCallCqBig">Call CQ</span>
+            <span class="ft-small" id="ftCallCqSmall">until someone answers</span>
         </button>
         <button type="button" class="ft-tile ft-action" id="ftNextPage" aria-label="Next page" disabled>
             <span class="ft-big">Next page</span>

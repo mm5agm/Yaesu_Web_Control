@@ -110,6 +110,17 @@ export function txStatus(d) {
 }
 
 /**
+ * True while WSJT-Z (or WS) is calling CQ: Enable Tx on or transmitting, no
+ * station being worked, and the Tx message a CQ. Lights the Call CQ tile.
+ * Works whatever turned the CQ on, the tile or a click in WSJT-Z itself.
+ */
+export function callingCq(d) {
+    if (!d.connected || d.dxCall) return false;
+    if (!d.transmitting && !d.txEnabled) return false;
+    return /^CQ\s/.test((d.txMessage || "").trim());
+}
+
+/**
  * Remembers the last QSO for the status line: the station WSJT-Z was working,
  * and whether WSJT-Z logged it. A QSO counts as over when WSJT-Z logs it or
  * moves on to another station (or none).
