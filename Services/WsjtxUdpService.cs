@@ -129,8 +129,19 @@ namespace Yaesu_Web_Control.Services
 
         // WSJT-Z's Auto CQ: it calls CQ every other period until a station answers
         // or it's turned off. Auto Call goes off at the same time.
-        public Task<(bool Ok, string? Error)> SendAutoCqAsync(bool on) =>
-            SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: on, autoCall: false), on ? "Auto CQ on" : "Auto CQ off");
+        // WSJT-Z turns Enable Tx on only when the Auto CQ box changes to ticked
+        // (on_cbAutoCQ_toggled -> auto_tx_mode(true)). If it was already ticked,
+        // say after Enable Tx was turned off by hand, "on" alone does nothing,
+        // so "on" sends off then on, and the box always flips.
+        public async Task<(bool Ok, string? Error)> SendAutoCqAsync(bool on)
+        {
+            if (on)
+            {
+                var off = await SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: false, autoCall: false), "Auto CQ off");
+                if (!off.Ok) return off;
+            }
+            return await SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: on, autoCall: false), on ? "Auto CQ on" : "Auto CQ off");
+        }
 
         private async Task<(bool Ok, string? Error)> SendAsync(Func<string, byte[]> build, string what)
         {
