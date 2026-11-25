@@ -151,6 +151,9 @@ namespace Yaesu_Web_Control.Services
         private (long Hz, char Md)? _reported;
         private int _consecutiveTimeouts;
         private readonly string _model;
+        // The last raw transmit-power bytes logged (D#379), so a steady
+        // carrier logs once and each change logs again.
+        private string? _loggedPowerBytes;
         private readonly bool _readsVfo;
         private int? _vfo;                          // 0 = A, 1 = B; null until read
         private DateTime _vfoReadUtc = DateTime.MinValue;
@@ -402,11 +405,21 @@ namespace Yaesu_Web_Control.Services
                         // Receiving, the meter bits are not a power reading.
                         if (!Ft847Cat.IsTransmitting(tx[0])) return new[] { "RM5000000" };
                         var po = Ft847Cat.MeterTo255(tx[0], _model);
+                        byte[]? bd = null;
                         // The FT-817 and FT-818: power from BD, as Hamlib reads it.
                         if (Ft847Cat.ReadsPowerWithBd(_model))
                         {
-                            var bd = await ExchangeAsync(Ft847Cat.Block(Ft847Cat.ReadTxMetering), 2);
+                            bd = await ExchangeAsync(Ft847Cat.Block(Ft847Cat.ReadTxMetering), 2);
                             if (bd != null) po = Ft847Cat.PowerFromBd(bd);
+                        }
+                        // What the radio sent, for a power meter that reads
+                        // wrong (Felix DF3FX's FT-817 showed full scale at its
+                        // lowest power, D#379).
+                        string bytes = $"F7={tx[0]:X2} BD={(bd == null ? "none" : Convert.ToHexString(bd))} -> {po}/255";
+                        if (bytes != _loggedPowerBytes)
+                        {
+                            _loggedPowerBytes = bytes;
+                            _logger?.LogInformation("{Tag} transmit power bytes {Bytes}", _tag, bytes);
                         }
                         return new[] { $"RM5{po:D3}000" };
                     }
