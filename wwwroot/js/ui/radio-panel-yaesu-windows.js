@@ -20,10 +20,13 @@
 // same page in a browser window of its own, which can go on another screen.
 // It is the window Classic's Pop out opens (same name and channel), so there
 // is only ever one. While it is open the panel leaves the board; its Reattach,
-// or closing it, puts the panel back. In CW and RTTY, though, the ⇱ takes
-// the whole window out - keyer, reader and send together, at /RadioWindow -
-// because the reader on its own is not what an operator wants on the other
-// screen.
+// or closing it, puts the panel back. In RTTY, though, the ⇱ takes the
+// whole window out - reader and tuner together, at /RadioWindow. CW has both:
+// ⇱ WINDOW takes the whole window out, and the keyer, memories, reader and
+// send each have a ⇱ of their own (popAlone) for a window on its own, so each
+// can go on a different screen (Rick W2JAZ, 2026-11-24; Colin, 2026-11-25).
+// Keyer and memories, which have no page of their own, open at
+// /RadioWindow?g=cw&p=keyer and &p=cwMem.
 //
 // Remote Audio, the radio's own scope and the audio filter are framed pages
 // too: /RemoteAudio, /RadioScope and /AudioFilter.
@@ -48,11 +51,13 @@ const LATER = 'Comes in a later build.';
 
 export const YAESU_WINDOWS = [
     { id: 'cw', key: 'CW', title: 'CW', tip: 'Open or close the CW window: keyer, memories M1-M5, reader, zero-in and keyboard send. Opening it switches the selected receiver to CW-U', pos: [170, 230, 1280, 340], popout: { width: 1300, height: 400 }, panels: [
-        { id: 'keyer', title: 'KEYER', w: 230 },
-        { id: 'cwMem', title: 'MEMORIES', w: 300 },
-        { id: 'cwReader', title: 'READER', dpos: [380, 560, 760, 320],
+        { id: 'keyer', title: 'KEYER', w: 230, popAlone: true,
+          popout: { name: 'radio-win-cw-keyer', url: '/RadioWindow?g=cw&p=keyer', size: { width: 270, height: 400 } } },
+        { id: 'cwMem', title: 'MEMORIES', w: 300, popAlone: true,
+          popout: { name: 'radio-win-cw-cwMem', url: '/RadioWindow?g=cw&p=cwMem', size: { width: 340, height: 400 } } },
+        { id: 'cwReader', title: 'READER', dpos: [380, 560, 760, 320], popAlone: true,
           popout: { name: 'cw-reader', url: '/CwReader', size: () => screenShare(0.25, window.screen) } },
-        { id: 'cwSend', title: 'SEND', w: 320, dpos: [420, 300, 520, 400],
+        { id: 'cwSend', title: 'SEND', w: 320, dpos: [420, 300, 520, 400], popAlone: true,
           popout: { name: 'cw-send', url: '/CwSend', size: { width: 600, height: 340 } } },
     ] },
     { id: 'rtty', key: 'RTTY', title: 'RTTY', tip: 'Open or close the RTTY window: reader and tuner. Opening it switches the selected receiver to RTTY-L', pos: [330, 380, 1040, 420], popout: { width: 1060, height: 480 }, panels: [
@@ -215,9 +220,9 @@ export function startYaesuWindows(windows, ctx) {
             }).start();
         }
         for (const p of g.panels) {
-            // In a group that pops out whole (CW, RTTY), a panel's ⇱ does that
-            // too: the reader alone, without its keyer and send, is half a job.
-            if (!p.popout || g.popout) continue;
+            // In a group that pops out whole (RTTY), a panel's ⇱ does that
+            // too; a popAlone panel (CW's) opens a window of its own.
+            if (!p.popout || (g.popout && !p.popAlone)) continue;
             popouts[g.id + '/' + p.id] = new PopoutHost({
                 name: p.popout.name,
                 url: p.popout.url,
