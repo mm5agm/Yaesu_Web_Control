@@ -157,6 +157,23 @@ test('/RadioWindow?g=mem: the window draws and its hub connects', async () => {
     } finally { await page.close(); }
 });
 
+// CW's panels each pop out alone (Rick W2JAZ, 2026-11-24): keyer and memories
+// at /RadioWindow?g=cw&p=..., showing that panel and nothing else.
+test('/RadioWindow?g=cw&p=keyer and p=cwMem: one panel alone; a bad panel says so', async () => {
+    for (const [p, title] of [['keyer', 'KEYER'], ['cwMem', 'MEMORIES']]) {
+        const page = await open('/RadioWindow?g=cw&p=' + p, { settleMs: 2500 });
+        try {
+            const r = await page.eval(`({ ids: [...document.querySelectorAll('.rp-wpanel')].map(b => b.dataset.panel), title: document.title, started: __rwcTest.started })`);
+            expect(r.ids.join() === p, `panels drawn: ${r.ids.join()}`);
+            expect(r.title.startsWith('CW · ' + title), `title: ${r.title}`);
+            expect(r.started, 'hub never started');
+            expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+        } finally { await page.close(); }
+    }
+    const bad = await open('/RadioWindow?g=cw&p=nope', { settleMs: 1500 });
+    try { expect(/No such panel/.test(await bad.eval('document.body.textContent')), 'a bad panel id drew something'); } finally { await bad.close(); }
+});
+
 // Classic's Memory Keyer on /radio: the CW window's MEMORIES panel. Writes are
 // stubbed, so M1 here never reaches the radio.
 test('/RadioWindow?g=cw: MEMORIES shows M1-M5, saves, and a key sends its slot', async () => {
