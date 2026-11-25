@@ -12,6 +12,19 @@ a different and much older format.
 
 ---
 
+## 2026-11-25 - v2.5.6-pre42 (pre-release)
+
+*Close YWC from any browser with one click, and free the radio's COM port for another program. Everything in v2.5.6-pre41 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Close YWC from the browser** ([#454](https://github.com/mm5agm/Yaesu_Web_Control/pull/454), [manual](USER_MANUAL.md#4-starting-the-application))
+
+- A new page with two big buttons, **Close YWC** and **Cancel**. Close YWC shuts the app down the same way as the tray's Exit, from any browser, including a tablet in another room.
+- The radio's COM port is then free, so another program (HRD, for example) can open it.
+- Open it from **Close YWC** in the Radio page menu (EXIT), in the Classic menu bar, or the red button at the top right of the FT8 Tiles page.
+- If **Turn the radio off when Yaesu Web Control closes** is ticked in Settings, the page says the radio will switch off too.
+- To start YWC again, use its desktop shortcut on the PC it runs on.
+- In Docker the button is greyed out: stop it with `docker compose down`.
+
 ## 2026-11-25 - v2.5.6-pre41 (pre-release)
 
 *A new Spot Map page shows who hears you and who you hear, live from PSK Reporter, for a second monitor. FT8 Tiles gets a Call CQ tile. Everything in v2.5.6-pre40 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
