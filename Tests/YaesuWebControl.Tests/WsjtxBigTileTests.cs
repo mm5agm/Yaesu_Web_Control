@@ -101,6 +101,7 @@ public sealed class WsjtxBigTileTests
         Assert.NotNull(s);
         Assert.Equal("MM5AGM", s!.DeCall);
         Assert.Equal("K1ABC MM5AGM R-10", s.TxMessage);
+        Assert.Equal("IO85", s.DeGrid);
     }
 
     [Fact]
@@ -127,6 +128,7 @@ public sealed class WsjtxBigTileTests
         Assert.Equal(7_074_000, s!.DialFrequency);
         Assert.True(s.Transmitting);
         Assert.Equal("", s.DeCall);
+        Assert.Equal("", s.DeGrid);
     }
 
     // --- Outgoing messages ---

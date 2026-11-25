@@ -30,6 +30,7 @@ namespace Yaesu_Web_Control.Services
         private string _dxCall = "";
         private string _txMessage = "";
         private string _deCall = "";
+        private string _deGrid = "";
 
         // Where WSJT-X/WSJT-Z sends from. Requests (Reply, HaltTx, Configure)
         // go back to this endpoint, which is the socket it listens on.
@@ -87,6 +88,8 @@ namespace Yaesu_Web_Control.Services
         public bool TxEnabled { get { lock (_lock) return _txEnabled; } }
         public string DxCall { get { lock (_lock) return _dxCall; } }
         public string DeCall { get { lock (_lock) return _deCall; } }
+        /// <summary>The operator's own grid from WSJT-X's last Status (Settings, My Grid). Empty from older versions.</summary>
+        public string DeGrid { get { lock (_lock) return _deGrid; } }
         /// <summary>The Tx Message from WSJT-X's last Status: what it is sending, or sent last. Empty from older versions.</summary>
         public string TxMessage { get { lock (_lock) return _txMessage; } }
 
@@ -322,6 +325,7 @@ namespace Yaesu_Web_Control.Services
                         _txEnabled = msg.TxEnabled;
                         _dxCall = msg.DxCall;
                         _deCall = msg.DeCall;
+                        _deGrid = msg.DeGrid;
                         _txMessage = msg.TxMessage;
                         syncPaused = DateTime.UtcNow < _dialSyncPausedUntil;
                     }

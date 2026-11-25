@@ -64,6 +64,30 @@
         "files/share-tech-mono-latin-400-normal.woff2",
         "LICENSE"
       ]
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "leaflet@1.9.4",
+      "destination": "wwwroot/lib/leaflet/",
+      "files": [
+        "dist/leaflet.js",
+        "dist/leaflet.css",
+        "dist/images/layers.png",
+        "dist/images/layers-2x.png",
+        "dist/images/marker-icon.png",
+        "dist/images/marker-icon-2x.png",
+        "dist/images/marker-shadow.png",
+        "LICENSE"
+      ]
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "mqtt@5.16.1",
+      "destination": "wwwroot/lib/mqtt/",
+      "files": [
+        "dist/mqtt.min.js",
+        "LICENSE.md"
+      ]
     }
   ]
 }
