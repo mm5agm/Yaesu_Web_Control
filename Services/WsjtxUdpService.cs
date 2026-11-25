@@ -117,15 +117,21 @@ namespace Yaesu_Web_Control.Services
         }
 
         /// <summary>Stops transmitting now (autoTxOnly=false) or just turns Enable Tx off.</summary>
-        public Task<(bool Ok, string? Error)> SendHaltTxAsync(bool autoTxOnly) =>
-            SendAsync(id => WsjtxProtocol.BuildHaltTx(id, autoTxOnly), autoTxOnly ? "Halt auto Tx" : "Halt Tx now");
+        public Task<(bool Ok, string? Error)> SendHaltTxAsync(bool autoTxOnly)
+        {
+            CancelPendingCq();
+            return SendAsync(id => WsjtxProtocol.BuildHaltTx(id, autoTxOnly), autoTxOnly ? "Halt auto Tx" : "Halt Tx now");
+        }
 
         /// <summary>
         /// WSJT-Z only: switches Auto Call on or off. Auto CQ is always switched
         /// off, because WSJT-Z sets both from the same message.
         /// </summary>
-        public Task<(bool Ok, string? Error)> SendAutoCallAsync(bool on) =>
-            SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: false, autoCall: on), on ? "Auto Call on" : "Auto Call off");
+        public Task<(bool Ok, string? Error)> SendAutoCallAsync(bool on)
+        {
+            CancelPendingCq();
+            return SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: false, autoCall: on), on ? "Auto Call on" : "Auto Call off");
+        }
 
         // WSJT-Z's Auto CQ: it calls CQ every other period until a station answers
         // or it's turned off. Auto Call goes off at the same time.
@@ -133,14 +139,71 @@ namespace Yaesu_Web_Control.Services
         // (on_cbAutoCQ_toggled -> auto_tx_mode(true)). If it was already ticked,
         // say after Enable Tx was turned off by hand, "on" alone does nothing,
         // so "on" sends off then on, and the box always flips.
+        // "On" waits for the start of the next period (CqStartLeadSeconds in):
+        // WSJT-Z starts transmitting at once if Enable Tx comes on part-way
+        // through its own period, and a short CQ can't be decoded. Started at
+        // the top of a period, it either sends a full CQ or waits for its own.
+        // Off, Stop transmit and Auto Call cancel a CQ still waiting.
         public async Task<(bool Ok, string? Error)> SendAutoCqAsync(bool on)
         {
-            if (on)
+            CancelPendingCq();
+            var off = await SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: false, autoCall: false), "Auto CQ off");
+            if (!on || !off.Ok) return off;
+
+            var delay = WsjtxCallList.DelayToPeriodStart(DateTime.UtcNow, WsjtxCallList.PeriodSeconds(WsjtxMode), CqStartLeadSeconds);
+            var cts = new CancellationTokenSource();
+            lock (_lock)
             {
-                var off = await SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: false, autoCall: false), "Auto CQ off");
-                if (!off.Ok) return off;
+                _pendingCq = cts;
+                _pendingCqAt = DateTime.UtcNow + delay;
             }
-            return await SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: on, autoCall: false), on ? "Auto CQ on" : "Auto CQ off");
+            _logger.LogInformation("[WSJT-X UDP] Auto CQ on in {Delay:F1} s, at the start of the next period", delay.TotalSeconds);
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(delay, cts.Token);
+                    lock (_lock)
+                    {
+                        if (_pendingCq != cts) return;
+                        _pendingCq = null;
+                    }
+                    var (ok, error) = await SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: true, autoCall: false), "Auto CQ on");
+                    if (!ok) _logger.LogWarning("[WSJT-X UDP] Auto CQ on not sent: {Error}", error);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogInformation("[WSJT-X UDP] Waiting Auto CQ cancelled");
+                }
+            });
+            return (true, null);
+        }
+
+        /// <summary>Seconds into a period that Call CQ turns Auto CQ on.</summary>
+        public const double CqStartLeadSeconds = 0.3;
+
+        private CancellationTokenSource? _pendingCq;
+        private DateTime _pendingCqAt;
+
+        /// <summary>Seconds until a waiting Call CQ starts, or null if none is waiting.</summary>
+        public double? CqStartsInSeconds
+        {
+            get
+            {
+                lock (_lock)
+                    return _pendingCq is null ? null : Math.Max(0, Math.Round((_pendingCqAt - DateTime.UtcNow).TotalSeconds, 1));
+            }
+        }
+
+        private void CancelPendingCq()
+        {
+            CancellationTokenSource? cts;
+            lock (_lock)
+            {
+                cts = _pendingCq;
+                _pendingCq = null;
+            }
+            cts?.Cancel();
         }
 
         private async Task<(bool Ok, string? Error)> SendAsync(Func<string, byte[]> build, string what)

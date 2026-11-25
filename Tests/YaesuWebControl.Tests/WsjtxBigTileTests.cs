@@ -191,6 +191,36 @@ public sealed class WsjtxBigTileTests
         Assert.Contains("\"/api/wsjtx/autocq\", { on: false }", stopBody);
     }
 
+    // Call CQ waits until just after the next period starts, so the first CQ
+    // goes out in full. T0 is 12:00:00 UTC, a period start for FT8 and FT4.
+    [Theory]
+    [InlineData(0.0, 15, 0.3)]     // right at the start: 0.3 s in, this period
+    [InlineData(0.2, 15, 0.1)]     // still before 0.3 s in
+    [InlineData(0.3, 15, 15.0)]    // exactly 0.3 s in: next period
+    [InlineData(4.0, 15, 11.3)]    // part-way through: next period
+    [InlineData(14.9, 15, 0.4)]
+    [InlineData(4.0, 7.5, 3.8)]    // FT4
+    public void DelayToPeriodStart_WaitsForTheNextPeriod(double secondsIn, double period, double expected)
+    {
+        var delay = WsjtxCallList.DelayToPeriodStart(T0.AddSeconds(secondsIn), period, 0.3);
+        Assert.Equal(expected, delay.TotalSeconds, 3);
+    }
+
+    // A Call CQ still waiting for its period is cancelled by Stop transmit,
+    // Auto Call and Auto CQ off, so it can't start after the operator stopped it.
+    [Fact]
+    public void WaitingCallCq_IsCancelledByStopAndAutoCall()
+    {
+        string src = File.ReadAllText(Path.Combine(FindRepoRoot(), "Services", "WsjtxUdpService.cs"));
+        foreach (string method in new[] { "SendHaltTxAsync(", "SendAutoCallAsync(", "SendAutoCqAsync(" })
+        {
+            int at = src.IndexOf("public " , src.IndexOf(method, StringComparison.Ordinal) - 60, StringComparison.Ordinal);
+            int body = src.IndexOf('{', at);
+            int firstStatement = src.IndexOf(';', body);
+            Assert.Contains("CancelPendingCq()", src.Substring(body, firstStatement - body + 1));
+        }
+    }
+
     // --- Who can be called ---
 
     [Theory]

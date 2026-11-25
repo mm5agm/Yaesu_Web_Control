@@ -82,10 +82,13 @@ function renderHeader(d) {
 
     // The Call CQ tile lights up while CQ is going out. Its name stays
     // "Call CQ" for Voice Access; only the words on it change.
+    // Call CQ waits for the next period, so the first CQ goes out in full.
     const cq = callingCq(d);
+    const waiting = !cq && d.cqStartsIn != null;
     el("ftCallCq").classList.toggle("ft-calling-cq", cq);
-    setText("ftCallCqBig", cq ? "Calling CQ" : "Call CQ");
-    setText("ftCallCqSmall", cq ? "Stop transmit ends it" : "until someone answers");
+    el("ftCallCq").classList.toggle("ft-cq-waiting", waiting);
+    setText("ftCallCqBig", cq ? "Calling CQ" : waiting ? "CQ next period" : "Call CQ");
+    setText("ftCallCqSmall", cq || waiting ? "Stop transmit ends it" : "until someone answers");
     el("ftChangeBandNow").textContent = band ? `now ${band}` : "";
 }
 
@@ -254,7 +257,7 @@ function wire() {
         if (await post("/api/wsjtx/autocall", { on: true })) showMessage("Auto Call on");
     });
     el("ftCallCq").addEventListener("click", async () => {
-        if (await post("/api/wsjtx/autocq", { on: true })) showMessage("Calling CQ: Stop transmit ends it");
+        if (await post("/api/wsjtx/autocq", { on: true })) showMessage("CQ starts at the next period: Stop transmit ends it");
     });
     el("ftNextPage").addEventListener("click", () => {
         pageIndex = (pageIndex + 1) % slots.pageCount(PER_PAGE);

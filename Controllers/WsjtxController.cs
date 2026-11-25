@@ -226,6 +226,7 @@ namespace Yaesu_Web_Control.Controllers
                 myCall = _udpService.DeCall,
                 txMessage = _udpService.TxMessage,
                 periodSeconds = period,
+                cqStartsIn = _udpService.CqStartsInSeconds,
                 logged = loggedQso,
                 stations = stations.Select(e => new
                 {
@@ -278,7 +279,7 @@ namespace Yaesu_Web_Control.Controllers
         {
             if (!TilesEnabled) return Conflict(new { error = TilesOffError });
             var (ok, error) = await _udpService.SendAutoCqAsync(request.On);
-            return ok ? Ok(new { sent = true }) : Conflict(new { error });
+            return ok ? Ok(new { sent = true, startsIn = _udpService.CqStartsInSeconds }) : Conflict(new { error });
         }
 
         // POST api/wsjtx/band: put the radio on a band's FT8 (or FT4) frequency.
