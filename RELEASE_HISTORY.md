@@ -12,6 +12,30 @@ a different and much older format.
 
 ---
 
+## 2026-11-25 - v2.5.6-pre41 (pre-release)
+
+*A new Spot Map page shows who hears you and who you hear, live from PSK Reporter, for a second monitor. FT8 Tiles gets a Call CQ tile. Everything in v2.5.6-pre40 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Spot Map** ([#451](https://github.com/mm5agm/Yaesu_Web_Control/pull/451), [manual](USER_MANUAL.md#96-spot-map-psk-reporter))
+
+- A new page, made for a second monitor: a world map with a spot list beside it. Open it from the Radio page menu (RECEIVE) or the Classic menu bar.
+- Orange dots are stations that heard you, blue dots are stations you heard, and yellow is you. Spots from the last 3 minutes are drawn bigger.
+- The list shows Who, Band, SNR, Distance and Time UTC. Click a column heading to sort it, or click a row to go to that station on the map. Drag the grip to resize the list, or hide it with **List**.
+- **Show** (both, heard me, I heard), **Last** (5 minutes to 24 hours) and km or miles are remembered.
+- Your callsign and grid come from WSJT-X. Without WSJT-X the page asks once and remembers them.
+- Spots arrive live from PSK Reporter, and the last 24 hours load when the page opens. PSK Reporter spots can be up to 5 minutes late, because WSJT-X sends them in batches.
+- It only receives. The page never touches the radio.
+
+**FT8 Tiles: Call CQ** ([#452](https://github.com/mm5agm/Yaesu_Web_Control/pull/452), [manual](USER_MANUAL.md#242-using-the-tiles))
+
+- **Call CQ** replaces the **Auto Call off** tile. It turns on WSJT-Z's Auto CQ, and WSJT-Z then calls CQ until a station answers, works them and logs the QSO.
+- It waits for the start of the next period, so the first CQ always goes out in full. Until then the tile reads **CQ next period**.
+- While CQ is going out the tile turns orange and reads **Calling CQ**, whatever started it.
+- **Stop transmit** now also turns Auto CQ and Auto Call off, so WSJT-Z doesn't start again on the next period.
+- Call CQ needs WSJT-Z. WS and standard WSJT-X have no Auto CQ and ignore it.
+
+---
+
 ## 2026-11-25 - v2.5.6-pre40 (pre-release)
 
 *The FT-817/818 now writes the raw power bytes to the log while you transmit, so the power meter going to full scale can be tracked down. The N1MM help is clearer too. Everything in v2.5.6-pre39 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
