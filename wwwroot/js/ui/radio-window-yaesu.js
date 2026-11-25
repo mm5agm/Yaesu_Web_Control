@@ -6,6 +6,7 @@
 // (radio-panel-yaesu-windows.js), so they behave the same in both places.
 
 import { mountWindowPopout } from '/js/radio-panel/window-popout.js';
+import { PopoutHost } from '/js/popout/popout.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
 
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -40,6 +41,9 @@ export function startYaesuRadioWindow(root, cfg) {
     const pop = mountWindowPopout(root, {
         title,
         panels: one ? [one] : g.panels,
+        onPopout: id => {
+            if (!panelHosts[id]?.open()) alert('The browser blocked the window. Allow pop-ups for this page and press the key again.');
+        },
         onReattach: () => cfg.popout?.reattach(),
         onClose: () => window.close(),
         storagePrefix: 'ywc.radioPanel.',
@@ -58,6 +62,27 @@ export function startYaesuRadioWindow(root, cfg) {
         open() {}, close() {}, closePanel() {}, showPanel() {},
         setSubtitle: (gid, text) => { subtitles[gid] = text; if (gid === g.id) pop.setSubtitle(text); },
     };
+
+    // The whole window (not one panel): a popAlone panel's ⇱ opens that panel
+    // alone, and its box here is hidden while it is out. It comes back on
+    // REATTACH or when that window is closed. A panel already out when this
+    // window opens is hidden straight away (its window answers the ping).
+    const panelHosts = {};
+    if (!one) {
+        for (const p of g.panels) {
+            if (!p.popAlone || !p.popout) continue;
+            const host = panelHosts[p.id] = new PopoutHost({
+                name: p.popout.name,
+                url: p.popout.url,
+                defaultSize: p.popout.size,
+                onChange: open => {
+                    if (open) pop.setPanelShown(p.id, false);
+                    else setTimeout(() => { if (!host.isOpen) pop.setPanelShown(p.id, true); }, 1000);
+                },
+                onReattach: () => pop.setPanelShown(p.id, true),
+            }).start();
+        }
+    }
 
     const r = { sel: 'A', freq: { A: 0, B: 0 } };
     const win = startYaesuWindows(windows, {

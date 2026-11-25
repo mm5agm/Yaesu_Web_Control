@@ -216,19 +216,32 @@ export function startYaesuWindows(windows, ctx) {
                     windows.close(g.id);
                     for (const p of g.panels) windows.closePanel(g.id, p.id);
                 },
-                onReattach: () => windows.open(g.id),
+                // A panel still out on its own (CW's) stays out.
+                onReattach: () => {
+                    windows.open(g.id);
+                    for (const p of g.panels) if (popouts[g.id + '/' + p.id]?.isOpen) windows.closePanel(g.id, p.id);
+                },
             }).start();
         }
         for (const p of g.panels) {
             // In a group that pops out whole (RTTY), a panel's ⇱ does that
             // too; a popAlone panel (CW's) opens a window of its own.
             if (!p.popout || (g.popout && !p.popAlone)) continue;
-            popouts[g.id + '/' + p.id] = new PopoutHost({
+            // Back on the board on REATTACH or when its window is closed - but
+            // not while the whole window is out: a panel popped out of that
+            // (/RadioWindow) goes back there instead. A closed window is given
+            // a second, since a reload of it says closed and then opened.
+            const away = () => popouts[g.id]?.isOpen;
+            const back = () => { if (!away()) windows.showPanel(g.id, p.id); };
+            const host = popouts[g.id + '/' + p.id] = new PopoutHost({
                 name: p.popout.name,
                 url: p.popout.url,
                 defaultSize: p.popout.size,
-                onChange: open => { if (open) windows.closePanel(g.id, p.id); },
-                onReattach: () => windows.showPanel(g.id, p.id),
+                onChange: open => {
+                    if (open) windows.closePanel(g.id, p.id);
+                    else setTimeout(() => { if (!host.isOpen) back(); }, 1000);
+                },
+                onReattach: back,
             }).start();
         }
     }

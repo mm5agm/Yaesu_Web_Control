@@ -170,6 +170,12 @@ test('/RadioWindow?g=cw&p=keyer and p=cwMem: one panel alone; a bad panel says s
             expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
         } finally { await page.close(); }
     }
+    // The whole CW window keeps a ⇱ on each panel (Colin, 2026-11-25).
+    const whole = await open('/RadioWindow?g=cw', { settleMs: 2500 });
+    try {
+        const keys = await whole.eval(`[...document.querySelectorAll('.rp-wpanel-head button')].filter(b => b.textContent === '⇱').map(b => b.closest('.rp-wpanel').dataset.panel).join()`);
+        expect(keys === 'keyer,cwMem,cwReader,cwSend', `⇱ keys in the whole window: ${keys}`);
+    } finally { await whole.close(); }
     const bad = await open('/RadioWindow?g=cw&p=nope', { settleMs: 1500 });
     try { expect(/No such panel/.test(await bad.eval('document.body.textContent')), 'a bad panel id drew something'); } finally { await bad.close(); }
 });
