@@ -164,6 +164,65 @@ public sealed class WsjtxBigTileTests
         Assert.Equal(expected, WsjtxProtocol.BuildAutoConfigure("WSJT-X - Z", autoCq: false, autoCall: on));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Configure_AutoCq_TurnsAutoCallOff(bool on)
+    {
+        var expected = new Bytes().Header(3, 15, "WSJT-X - Z")
+            .S("").U32(uint.MaxValue).S("").B(false).U32(uint.MaxValue).U32(uint.MaxValue)
+            .S("").S("").B(false)
+            .B(on)      // Auto CQ
+            .B(false)   // Auto Call always off
+            .ToArray();
+        Assert.Equal(expected, WsjtxProtocol.BuildAutoConfigure("WSJT-X - Z", autoCq: on, autoCall: false));
+    }
+
+    // The Call CQ tile is there and Stop transmit turns Auto CQ off as well as halting.
+    [Fact]
+    public void Ft8Tiles_CallCqTile_AndStopTurnsAutoOff()
+    {
+        string root = FindRepoRoot();
+        string page = File.ReadAllText(Path.Combine(root, "Pages", "Ft8Tiles.cshtml"));
+        Assert.Contains("id=\"ftCallCq\" aria-label=\"Call CQ\"", page);
+        string js = File.ReadAllText(Path.Combine(root, "wwwroot", "js", "ft8-tiles", "ft8-tiles-page.js"));
+        int stop = js.IndexOf("el(\"ftStop\")", StringComparison.Ordinal);
+        int next = js.IndexOf("el(\"ftAutoOn\")", stop, StringComparison.Ordinal);
+        string stopBody = js.Substring(stop, next - stop);
+        Assert.Contains("/api/wsjtx/halt", stopBody);
+        Assert.Contains("\"/api/wsjtx/autocq\", { on: false }", stopBody);
+    }
+
+    // Call CQ waits until just after the next period starts, so the first CQ
+    // goes out in full. T0 is 12:00:00 UTC, a period start for FT8 and FT4.
+    [Theory]
+    [InlineData(0.0, 15, 0.3)]     // right at the start: 0.3 s in, this period
+    [InlineData(0.2, 15, 0.1)]     // still before 0.3 s in
+    [InlineData(0.3, 15, 15.0)]    // exactly 0.3 s in: next period
+    [InlineData(4.0, 15, 11.3)]    // part-way through: next period
+    [InlineData(14.9, 15, 0.4)]
+    [InlineData(4.0, 7.5, 3.8)]    // FT4
+    public void DelayToPeriodStart_WaitsForTheNextPeriod(double secondsIn, double period, double expected)
+    {
+        var delay = WsjtxCallList.DelayToPeriodStart(T0.AddSeconds(secondsIn), period, 0.3);
+        Assert.Equal(expected, delay.TotalSeconds, 3);
+    }
+
+    // A Call CQ still waiting for its period is cancelled by Stop transmit,
+    // Auto Call and Auto CQ off, so it can't start after the operator stopped it.
+    [Fact]
+    public void WaitingCallCq_IsCancelledByStopAndAutoCall()
+    {
+        string src = File.ReadAllText(Path.Combine(FindRepoRoot(), "Services", "WsjtxUdpService.cs"));
+        foreach (string method in new[] { "SendHaltTxAsync(", "SendAutoCallAsync(", "SendAutoCqAsync(" })
+        {
+            int at = src.IndexOf("public " , src.IndexOf(method, StringComparison.Ordinal) - 60, StringComparison.Ordinal);
+            int body = src.IndexOf('{', at);
+            int firstStatement = src.IndexOf(';', body);
+            Assert.Contains("CancelPendingCq()", src.Substring(body, firstStatement - body + 1));
+        }
+    }
+
     // --- Who can be called ---
 
     [Theory]
@@ -266,7 +325,7 @@ public sealed class WsjtxBigTileTests
     {
         string root = FindRepoRoot();
         string controller = File.ReadAllText(Path.Combine(root, "Controllers", "WsjtxController.cs"));
-        foreach (string action in new[] { "Reply(", "AutoCall(", "Band(" })
+        foreach (string action in new[] { "Reply(", "AutoCall(", "AutoCq(", "Band(" })
         {
             int at = controller.IndexOf("public async Task<IActionResult> " + action, StringComparison.Ordinal);
             Assert.True(at >= 0, action);

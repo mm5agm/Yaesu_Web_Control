@@ -100,6 +100,21 @@ namespace Yaesu_Web_Control.Services.Wsjtx
         };
 
         /// <summary>
+        /// How long to wait until leadSeconds after the start of a T/R period.
+        /// Periods start on whole multiples of the period, counted in UTC.
+        /// Call CQ waits for this so the first CQ goes out in full: WSJT-X starts
+        /// at once if Enable Tx comes on part-way through its own period, and a
+        /// few seconds of FT8 can't be decoded.
+        /// </summary>
+        public static TimeSpan DelayToPeriodStart(DateTime utcNow, double periodSeconds, double leadSeconds)
+        {
+            double t = (utcNow - DateTime.UnixEpoch).TotalSeconds;
+            double target = Math.Floor(t / periodSeconds) * periodSeconds + leadSeconds;
+            if (target <= t) target += periodSeconds;
+            return TimeSpan.FromSeconds(target - t);
+        }
+
+        /// <summary>
         /// Works out who sent a message and whether they can be called.
         /// Returns null for messages that say nothing useful about a station.
         /// busy=true means the sender is in a QSO with someone else.

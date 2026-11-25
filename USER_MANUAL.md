@@ -4882,9 +4882,9 @@ Click **Application Setup** in YWC's menu bar. Under **WSJT-X UDP Settings**, ti
 | Tile | What it does |
 |---|---|
 | **Call 1** to **Call 9** | Answers that station. Its tile gets a blue border while WSJT-Z is working it. |
-| **Stop transmit** | Stops transmitting at once and turns Enable Tx off, like WSJT-Z's **Halt Tx** button. |
+| **Stop transmit** | Stops transmitting at once and turns Enable Tx off, like WSJT-Z's **Halt Tx** button. From v2.5.6-pre41 it also turns WSJT-Z's Auto CQ and Auto Call off, so nothing starts again next period. |
 | **Auto Call on** | Turns on WSJT-Z's Auto Call. |
-| **Auto Call off** | Turns off Auto Call, and Auto CQ with it. |
+| **Call CQ** | Turns on WSJT-Z's Auto CQ at the start of the next period, so the first CQ goes out in full; until then the tile reads **CQ next period**. WSJT-Z calls CQ every other period until a station answers, then works it. Auto Call goes off. Click **Stop transmit** to end it. While CQ is going out the tile turns orange and reads **Calling CQ**, whatever started it. Call CQ needs WSJT-Z; WS and standard WSJT-X ignore it. From v2.5.6-pre41, in place of the old **Auto Call off** tile. |
 | **Next page** | Shows the next nine stations when there are more than nine. |
 | **Change band** | Opens a page of band tiles. Choose a band to put the radio on its FT8 frequency (FT4 if WSJT-Z is in FT4), or **Back** to stay where you are. WSJT-Z follows the radio within a few seconds. |
 | **Sort** | Puts the stations in a new order, once, and steps to the next order each time you click it: **as heard**, **by strength** (strongest first), **newest first** (most recently heard first) and **by callsign**. Stations calling you stay first in every order. The tile shows the order in use, and the page remembers it. From v2.5.6-pre38. |
@@ -4902,7 +4902,7 @@ You can open the page on the tablet's own browser. Use the address in the **Netw
 
 ### 24.3 Voice Access and switches
 
-Every tile has a short fixed name, so **Windows Voice Access** can click it: say *"click Call 3"*, *"click Stop transmit"*, *"click Change band"*, then *"click 20 m"*. The station tiles are always numbered 1 to 9 on every page, so the names stay one digit.
+Every tile has a short fixed name, so **Windows Voice Access** can click it: say *"click Call 3"*, *"click Call CQ"*, *"click Stop transmit"*, *"click Change band"*, then *"click 20 m"*. The station tiles are always numbered 1 to 9 on every page, so the names stay one digit.
 
 Switch-scanning and eye-gaze software see the tiles as ordinary buttons. A tile is clicked once on the press, so a dwell click or a single switch press is enough.
 

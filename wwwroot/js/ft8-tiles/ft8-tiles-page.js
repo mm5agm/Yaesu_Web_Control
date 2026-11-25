@@ -3,10 +3,10 @@
 //
 // Tile names are what Windows Voice Access and switch software read out, so
 // they are short and fixed: "Call 1" to "Call 9", "Stop transmit",
-// "Auto Call on", "Auto Call off", "Next page", "Change band", "Sort",
+// "Auto Call on", "Call CQ", "Next page", "Change band", "Sort",
 // "Main page", and the band names. Saying "click Call 3" clicks the third station tile.
 
-import { TileSlots, SORT_MODES, SORT_LABEL, sortCalls, txStatus, LastQso } from "./ft8-tiles-slots.js";
+import { TileSlots, SORT_MODES, SORT_LABEL, sortCalls, txStatus, callingCq, LastQso } from "./ft8-tiles-slots.js";
 
 const PER_PAGE = 9;
 const POLL_MS = 1000;
@@ -79,6 +79,16 @@ function renderHeader(d) {
     lastQso.update(d);
     setText("ftLastQso", lastQso.text());
     el("ftLastQso").classList.toggle("ft-logged", !!lastQso.last && lastQso.last.logged);
+
+    // The Call CQ tile lights up while CQ is going out. Its name stays
+    // "Call CQ" for Voice Access; only the words on it change.
+    // Call CQ waits for the next period, so the first CQ goes out in full.
+    const cq = callingCq(d);
+    const waiting = !cq && d.cqStartsIn != null;
+    el("ftCallCq").classList.toggle("ft-calling-cq", cq);
+    el("ftCallCq").classList.toggle("ft-cq-waiting", waiting);
+    setText("ftCallCqBig", cq ? "Calling CQ" : waiting ? "CQ next period" : "Call CQ");
+    setText("ftCallCqSmall", cq || waiting ? "Stop transmit ends it" : "until someone answers");
     el("ftChangeBandNow").textContent = band ? `now ${band}` : "";
 }
 
@@ -237,13 +247,17 @@ function wire() {
         tile.addEventListener("click", () => callStation(tile));
     }
     el("ftStop").addEventListener("click", async () => {
-        if (await post("/api/wsjtx/halt")) showMessage("Transmit stopped");
+        // Stop means stop: halt now, and turn WSJT-Z's Auto CQ and Auto Call
+        // off so it doesn't start again next period.
+        const halted = await post("/api/wsjtx/halt");
+        const autoOff = await post("/api/wsjtx/autocq", { on: false });
+        if (halted) showMessage(autoOff ? "Transmit stopped, Auto off" : "Transmit stopped");
     });
     el("ftAutoOn").addEventListener("click", async () => {
         if (await post("/api/wsjtx/autocall", { on: true })) showMessage("Auto Call on");
     });
-    el("ftAutoOff").addEventListener("click", async () => {
-        if (await post("/api/wsjtx/autocall", { on: false })) showMessage("Auto Call off");
+    el("ftCallCq").addEventListener("click", async () => {
+        if (await post("/api/wsjtx/autocq", { on: true })) showMessage("CQ starts at the next period: Stop transmit ends it");
     });
     el("ftNextPage").addEventListener("click", () => {
         pageIndex = (pageIndex + 1) % slots.pageCount(PER_PAGE);
