@@ -35,6 +35,12 @@ namespace Yaesu_Web_Control.Pages
 #endif
 
         /// <summary>
+        /// True when YWC_DEVELOPER=1 is set on this PC. Shows the hidden
+        /// Developer section (bench tools) at the end of the page.
+        /// </summary>
+        public bool IsDeveloper { get; } = HostRuntime.IsDeveloper;
+
+        /// <summary>
         /// The port YWC is actually listening on right now. This is the port
         /// the displayed network URLs on the Settings page use — so the
         /// Local-Access / Network-Access boxes always show something that
