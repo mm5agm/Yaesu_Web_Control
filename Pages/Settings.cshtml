@@ -3200,6 +3200,38 @@
             </div>
         </div>
     </details>
+
+    @if (Model.IsDeveloper)
+    {
+        <!-- Developer tools: only shown when YWC_DEVELOPER=1 is set on this PC.
+             Bench tools live here, never as normal settings. Each one is stored
+             in this browser only, not in the settings file. -->
+        <details class="settings-section" id="developerSection">
+            <summary><i class="bi bi-tools" aria-hidden="true"></i>&nbsp;Developer</summary>
+            <div class="section-body">
+                <p class="text-muted">
+                    Bench tools for working on YWC. Users don't see this section: it only shows when
+                    <code>YWC_DEVELOPER=1</code> is set on this PC. These choices are kept in this browser only.
+                </p>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="devZoneBoxes">
+                    <label class="form-check-label" for="devZoneBoxes">Show screen zone boxes</label>
+                </div>
+                <p class="text-muted small mt-1">
+                    Draws the click zones over the radio's screen picture on the Radio page. Reload the Radio page after changing it.
+                </p>
+            </div>
+        </details>
+        <script>
+            (function () {
+                const KEY = 'ywc.radioDisplayHotspots.debug';
+                const box = document.getElementById('devZoneBoxes');
+                if (!box) return;
+                box.checked = localStorage.getItem(KEY) === '1';
+                box.addEventListener('change', () => localStorage.setItem(KEY, box.checked ? '1' : '0'));
+            })();
+        </script>
+    }
 </div>
 
 <script>

@@ -12,4 +12,11 @@ public static class HostRuntime
             "true",
             StringComparison.OrdinalIgnoreCase)
         || File.Exists("/.dockerenv");
+
+    /// <summary>
+    /// True when YWC_DEVELOPER=1 is set on this PC. Turns on the hidden
+    /// Developer section in Settings (bench tools users never see).
+    /// </summary>
+    public static bool IsDeveloper { get; } =
+        Environment.GetEnvironmentVariable("YWC_DEVELOPER") == "1";
 }
