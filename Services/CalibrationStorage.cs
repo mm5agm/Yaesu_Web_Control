@@ -451,7 +451,12 @@ public class CalibrationStorage
             var userFile    = LoadFromPath(_userPath);
             var defaultFile = LoadFromPath(GetDefaultPath());
 
-            var changed = false;
+            var shipped = KnownDefaults().files
+                .Append(Path.Combine(_wwwrootPath, "calibration.default.json"))
+                .Where(File.Exists)
+                .Select(LoadFromPath)
+                .ToList();
+            var changed = ReplaceShippedPlaceholders(userFile, defaultFile, shipped);
             foreach (var defaultMeter in defaultFile.Meters)
             {
                 if (!userFile.Meters.Any(m => m.Name == defaultMeter.Name))
@@ -470,6 +475,48 @@ public class CalibrationStorage
         {
             // If the merge fails for any reason, leave the user file as-is.
         }
+    }
+
+    // A meter in the user file that is exactly some shipped default's table was
+    // never calibrated by the user: it is a placeholder copied in on first run.
+    // When the configured model's own default differs (the file was made under
+    // another model, or before this model's table shipped), the placeholder is
+    // swapped for this model's. Felix DF3FX's FT-817 kept the FTdx101's 200 W
+    // PWR table, so every reading came out at 5 W or more: full scale (D#379).
+    // Meters the user did calibrate are left alone.
+    internal static bool ReplaceShippedPlaceholders(
+        CalibrationFile user, CalibrationFile modelDefault, IReadOnlyList<CalibrationFile> shipped)
+    {
+        var changed = false;
+        for (int i = 0; i < user.Meters.Count; i++)
+        {
+            var meter = user.Meters[i];
+            var mine = modelDefault.Meters.FirstOrDefault(m => m.Name == meter.Name);
+            if (mine == null || SamePoints(meter, mine)) continue;
+            bool placeholder = shipped.Any(f => f.Meters.Any(m => m.Name == meter.Name && SamePoints(m, meter)));
+            if (!placeholder) continue;
+            user.Meters[i] = mine;
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static bool SamePoints(MeterCalibration a, MeterCalibration b)
+    {
+        if (a.Points.Count != b.Points.Count) return false;
+        for (int i = 0; i < a.Points.Count; i++)
+        {
+            var p = a.Points[i];
+            var q = b.Points[i];
+            if (p.Raw != q.Raw) return false;
+            var pn = p.TryGetRadioNumeric();
+            var qn = q.TryGetRadioNumeric();
+            bool same = pn.HasValue && qn.HasValue
+                ? pn.Value == qn.Value
+                : string.Equals(p.Radio?.Trim(), q.Radio?.Trim(), StringComparison.Ordinal);
+            if (!same) return false;
+        }
+        return true;
     }
 
     private static CalibrationFile LoadFromPath(string path)
