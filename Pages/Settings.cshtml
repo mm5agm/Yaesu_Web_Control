@@ -1936,11 +1936,14 @@
                         </div>
                         <div class="mb-3">
                             <label asp-for="Settings.BaudRate" class="form-label">Baud Rate</label>
+                            @* No hard-coded "selected" here: asp-for marks the saved rate, and a
+                               second selected option (38400 came last) won in the browser, so
+                               every save turned 4800/9600/19200 into 38400 (Felix DF3FX, D#379). *@
                             <select asp-for="Settings.BaudRate" class="form-select">
                                 <option value="4800">4800</option>
                                 <option value="9600">9600</option>
                                 <option value="19200">19200</option>
-                                <option value="38400" selected>38400 (Default)</option>
+                                <option value="38400">38400 (Default)</option>
                                 <option value="57600">57600</option>
                                 <option value="115200">115200</option>
                             </select>
@@ -2126,7 +2129,7 @@
                             <label class="form-label">Network Interface</label>
                             <select asp-for="Settings.WebAddress" class="form-select" id="webAddressSelect">
                                 <option value="localhost">localhost (This PC only)</option>
-                                <option value="0.0.0.0" selected>All Interfaces (Recommended - works with DHCP and Static IP)</option>
+                                <option value="0.0.0.0">All Interfaces (Recommended - works with DHCP and Static IP)</option>
                                 @if (Model.NetworkAddresses != null)
                                 {
                                     @foreach (var addr in Model.NetworkAddresses)
