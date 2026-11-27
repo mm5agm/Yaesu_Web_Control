@@ -202,7 +202,25 @@ public sealed class MacSystemTrayService : IDisposable
 
     private void OnExit()
     {
-        if (!ConfirmExitWithOsascript())
+        if (Services.RadioMenu.TrayExitSave.Check(_portInfo.RootUrl) is { } changed)
+        {
+            switch (AskSaveWithOsascript(changed))
+            {
+                case "Cancel": return;
+                case "Save":
+                    _logger.LogInformation("[MacTrayExit] Saving the radio menu before exit");
+                    if (Services.RadioMenu.TrayExitSave.Save(_portInfo.RootUrl) is { } error)
+                    {
+                        _logger.LogWarning("[MacTrayExit] Radio menu save failed: {Error}", error);
+                        if (!RunDialog($"The radio's settings could not be saved: {error}\n\nStop Yaesu Web Control anyway?",
+                                "{\"Cancel\", \"Stop\"}", "Stop", out _))
+                            return;
+                    }
+                    break;
+                // "Don't Save": stop without saving.
+            }
+        }
+        else if (!ConfirmExitWithOsascript())
             return;
 
         _logger.LogInformation("[MacTrayExit] User confirmed exit");
@@ -252,6 +270,46 @@ public sealed class MacSystemTrayService : IDisposable
             using var proc = Process.Start(psi);
             if (proc is null) return false;
             proc.WaitForExit(15_000);
+            return proc.ExitCode == 0;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    /// <summary>Save, Don't Save or Cancel, after a front-panel level changed since the last save.</summary>
+    private static string AskSaveWithOsascript(string changed)
+    {
+        var text = changed + "\n\nSave the radio's settings before stopping Yaesu Web Control?\n\n" +
+            "WSJT-X / Log4OM / JTAlert / GridTracker / Fldigi will lose their CAT connection until YWC is restarted.";
+        if (!RunDialog(text, "{\"Cancel\", \"Don't Save\", \"Save\"}", "Save", out var output))
+            return "Cancel";
+        return output.Contains("Don't Save", StringComparison.Ordinal) ? "Don't Save" : "Save";
+    }
+
+    /// <summary>Shows an osascript dialog. False on Cancel; true (and the button) otherwise, or if osascript fails.</summary>
+    private static bool RunDialog(string text, string buttons, string defaultButton, out string output)
+    {
+        output = "";
+        try
+        {
+            static string Quote(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            var script = $"display dialog \"{Quote(text)}\" buttons {buttons} default button \"{defaultButton}\" " +
+                "cancel button \"Cancel\" with icon caution with title \"Exit Yaesu Web Control\"";
+            var psi = new ProcessStartInfo
+            {
+                FileName = "osascript",
+                ArgumentList = { "-e", script },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            using var proc = Process.Start(psi);
+            if (proc is null) return true;
+            output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(120_000);
             return proc.ExitCode == 0;
         }
         catch

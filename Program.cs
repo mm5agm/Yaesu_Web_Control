@@ -486,6 +486,9 @@ builder.Services.AddSingleton<IBandPlanService, BandPlanService>();
 
 // Register RadioStateService and CatMessageBuffer as singletons
 builder.Services.AddSingleton<RadioStateService>();
+// Notes front-panel level changes so closing YWC can ask to save the radio menu.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.RadioMenu.RadioMenuSessionWatch>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.RadioMenu.RadioMenuSessionWatch>());
 builder.Services.AddSingleton<BrowserPresence>();
 builder.Services.AddSingleton<CatMessageBuffer>();
 

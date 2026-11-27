@@ -487,7 +487,7 @@ A small **YWC tray icon** appears in the Windows system tray (down by the clock,
 | Open Yaesu Web Control | Opens YWC in your default browser. |
 | About — version vX.Y.Z | Shows version, release date, and licence. The browser About page (top nav bar) has full details and a Copy diagnostics button. |
 | Open user data folder | Opens `%APPDATA%\MM5AGM\Yaesu Web Control\` in File Explorer — handy for grabbing the backup zip after export, or inspecting/editing JSON files. |
-| Exit Yaesu Web Control | Confirms then shuts the app down cleanly. WSJT-X / Log4OM / JTAlert / GridTracker / Fldigi lose their CAT connection until you restart YWC. |
+| Exit Yaesu Web Control | Confirms then shuts the app down cleanly. If a front panel level changed since your last save of the radio menu, it offers to save first. WSJT-X / Log4OM / JTAlert / GridTracker / Fldigi lose their CAT connection until you restart YWC. |
 
 ![YWC tray icon with right-click menu open, showing Open / About / Open user data folder / Exit](pictures/SystemTrayIcon.png)
 
@@ -2155,6 +2155,8 @@ To read them, YWC switches the main band through those modes, a few seconds, and
 - your newest file was saved by an older YWC and has no front panel levels.
 
 **Save now** saves straight away, exactly like the button above. **Not now** hides the banner until YWC starts again. For the 30-day and changed reminders it also waits a week; if there is no save at all, YWC asks again at the next start. The same line shows under **Save radio menu to file** whenever it applies. To check, YWC reads only the mode and the levels in that mode: it never changes mode or sets anything. Changes made in the radio's own menu are not checked, which is why the 30-day reminder is there.
+
+**Asking when you close YWC.** If a front panel level is not what your newest file holds, in the mode you are in or in any mode where you changed a level while YWC was running, closing YWC asks first. The **Close YWC** page shows what changed and adds a green **Save and close** button: it saves, then closes. **Close YWC** closes without saving and **Cancel** keeps YWC running. The tray's **Exit Yaesu Web Control** asks the same: **Yes** saves then stops, **No** stops without saving, **Cancel** keeps YWC running. A level you turn and then turn back is not a change. YWC can't ask when Windows shuts down, or when you close the console window or the browser tab, so close YWC from the tray or the Close YWC page if you want to be asked.
 
 **Loading a file**
 

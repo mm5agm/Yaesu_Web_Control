@@ -38,14 +38,24 @@ namespace Yaesu_Web_Control.Controllers
         private readonly ICatClient _cat;
         private readonly ISettingsService _settings;
         private readonly RadioStateService _radio;
+        private readonly RadioMenuSessionWatch _watch;
         private readonly ILogger<RadioMenuController> _logger;
 
-        public RadioMenuController(ICatClient cat, ISettingsService settings, RadioStateService radio, ILogger<RadioMenuController> logger)
+        public RadioMenuController(ICatClient cat, ISettingsService settings, RadioStateService radio,
+            RadioMenuSessionWatch watch, ILogger<RadioMenuController> logger)
         {
             _cat = cat;
             _settings = settings;
             _radio = radio;
+            _watch = watch;
             _logger = logger;
+        }
+
+        /// <summary>A save or load pass is over: level reports stop being YWC's own.</summary>
+        private void EndPass()
+        {
+            _watch.Changes.PassEnded(DateTime.Now);
+            LoadGate.Release();
         }
 
         /// <summary>The knob pass's way to the radio: reads wait for the answer, sets do not.</summary>
@@ -93,6 +103,7 @@ namespace Yaesu_Web_Control.Controllers
 
             if (!await LoadGate.WaitAsync(0, ct))
                 return Conflict(new { error = "A radio menu save or load is already running." });
+            _watch.Changes.PassStarted();
             var readings = new List<RadioMenuReading>(table.Count);
             var knobReadings = new List<RadioKnobReading>();
             string? knobsStopped = null;
@@ -118,7 +129,7 @@ namespace Yaesu_Web_Control.Controllers
             }
             finally
             {
-                LoadGate.Release();
+                EndPass();
             }
 
             int missing = readings.Count(r => r.Raw is null);
@@ -145,6 +156,7 @@ namespace Yaesu_Web_Control.Controllers
                 return StatusCode(500, new { error = $"Could not write {path}: {ex.Message}" });
             }
             _reminderCache = null;
+            if (knobsStopped is null) _watch.Changes.Saved();
             return Ok(new { name, path, missing, unanswered, knobs = knobReadings.Count(k => k.Value is not null), knobsStopped });
         }
 
@@ -252,20 +264,9 @@ namespace Yaesu_Web_Control.Controllers
                 var knobs = RadioKnobs.TableFor(model);
                 if (newest is not null && knobs is not null)
                 {
-                    if (!await LoadGate.WaitAsync(0, ct))
+                    if (await ReadLevelsNowAsync(knobs, ct) is not { } read)
                         return Ok(new { supported = true, pending = true });
-                    try
-                    {
-                        var link = new KnobLink(_cat, _radio);
-                        mode = RadioKnobs.ParseModeAnswer(await link.AskAsync("MD0;", ct));
-                        var pass = NewKnobPass();
-                        foreach (var knob in knobs)
-                            live[knob.Command] = await pass.ReadAsync(knob, ct);
-                    }
-                    finally
-                    {
-                        LoadGate.Release();
-                    }
+                    (mode, live) = read;
                 }
                 result = RadioMenuReminder.Check(newest, DateTime.Now, model, mode, live);
                 _reminderCache = (DateTime.Now, result);
@@ -285,6 +286,67 @@ namespace Yaesu_Web_Control.Controllers
                 file = result.File,
                 changes = result.Changes,
             });
+        }
+
+        /// <summary>
+        /// The main band's mode and the front-panel levels in it, read now.
+        /// Reads only. Null if a save or load is running (the gate is busy).
+        /// </summary>
+        private async Task<(string? Mode, Dictionary<string, int?> Live)?> ReadLevelsNowAsync(
+            IReadOnlyList<RadioKnob> knobs, CancellationToken ct)
+        {
+            if (!await LoadGate.WaitAsync(0, ct)) return null;
+            try
+            {
+                var link = new KnobLink(_cat, _radio);
+                var mode = RadioKnobs.ParseModeAnswer(await link.AskAsync("MD0;", ct));
+                var live = new Dictionary<string, int?>();
+                var pass = NewKnobPass();
+                foreach (var knob in knobs)
+                    live[knob.Command] = await pass.ReadAsync(knob, ct);
+                return (mode, live);
+            }
+            finally
+            {
+                LoadGate.Release();
+            }
+        }
+
+        /// <summary>
+        /// GET /api/radiomenu/exit-check — closing YWC (the Close YWC page or
+        /// the tray's Exit): should it ask to save the radio menu first? Asks
+        /// when a front-panel level differs from the newest file, in the mode
+        /// read now or in any mode the user changed one in while YWC ran.
+        /// Reads only; if the radio cannot be read, the session's record is used.
+        /// </summary>
+        [HttpGet("exit-check")]
+        public async Task<IActionResult> ExitCheck(CancellationToken ct)
+        {
+            var model = _settings.GetCachedSettings().RadioModel;
+            var knobs = RadioKnobs.TableFor(model);
+            if (RadioMenuCat.TableFor(model) is null || knobs is null)
+                return Ok(new { ask = false });
+
+            string? mode = null;
+            IReadOnlyDictionary<string, int?> live = new Dictionary<string, int?>();
+            if (_cat.IsConnected)
+            {
+                try
+                {
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    cts.CancelAfter(TimeSpan.FromSeconds(4));
+                    if (await ReadLevelsNowAsync(knobs, cts.Token) is { } read)
+                        (mode, live) = read;
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // Slow radio: go on with what the session saw.
+                }
+            }
+
+            var (ask, message, changes) = RadioMenuReminder.ExitCheck(
+                NewestSave(model), DateTime.Now, model, _watch.Changes.Touched(), mode, live);
+            return Ok(new { ask, message, changes, connected = _cat.IsConnected });
         }
 
         /// <summary>
@@ -398,13 +460,14 @@ namespace Yaesu_Web_Control.Controllers
                 return BadRequest(new { error = "No menu items found. Is this a radio menu file saved by YWC?" });
             if (!await LoadGate.WaitAsync(0, ct))
                 return Conflict(new { error = "A radio menu save or load is already running." });
+            _watch.Changes.PassStarted();
             try
             {
                 return await PreviewAsync(file, model, table, ct);
             }
             finally
             {
-                LoadGate.Release();
+                EndPass();
             }
         }
 
@@ -581,6 +644,7 @@ namespace Yaesu_Web_Control.Controllers
                 return BadRequest(new { error = "Nothing was ticked." });
             if (!await LoadGate.WaitAsync(0, ct))
                 return Conflict(new { error = "A radio menu load is already running." });
+            _watch.Changes.PassStarted();
             _reminderCache = null;
             try
             {
@@ -627,7 +691,7 @@ namespace Yaesu_Web_Control.Controllers
             }
             finally
             {
-                LoadGate.Release();
+                EndPass();
             }
         }
 
