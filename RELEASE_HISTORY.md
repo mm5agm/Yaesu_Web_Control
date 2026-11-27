@@ -12,6 +12,25 @@ a different and much older format.
 
 ---
 
+## 2026-11-27 - v2.5.6-pre45 (pre-release)
+
+> **Testers urgently needed: FTDX10 owners.** This pre-release adds the radio menu file and front panel save to the FTDX10. It was built from Yaesu's manuals and has not been tried on a real FTDX10, because I don't have one. If you have an FTDX10, please save a file, check that the values match your radio's menu, and tell us how it went in [GitHub Discussions](https://github.com/mm5agm/Yaesu_Web_Control/discussions). Even "it worked" helps. v2.5.5 has been downloaded 377 times, but only two or three people have sent feedback.
+
+*The FTDX10 can now save its menu and front panel settings to a file and load them back, as the FTdx101MP and FTdx101D can. Everything in v2.5.6-pre44 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Radio menu file: FTDX10** ([#465](https://github.com/mm5agm/Yaesu_Web_Control/pull/465), [manual](USER_MANUAL.md#radio-menu))
+
+- **Save radio menu to file** (Settings) now works on the FTDX10. It saves every menu item and the front panel settings (RF GAIN, AGC, IPO, NB, MIC GAIN, PROC, power and the rest) in the same way as on the FTdx101.
+- The FTDX10 menu has its own items: AF TREBLE/MIDDLE/BASS GAIN, the FM repeater and tone settings, SPLIT FREQ DISPLAY, and CW WAVE SHAPE 4/6/8 ms.
+- RF POWER and MAX POWER go up to 100 W.
+- The FTDX10 and FTdx101 use the same menu numbers for different items. So menu items in a file from an FTdx101 are never loaded into an FTDX10, or the other way round. The preview shows them as not loaded. Front panel settings still load.
+- **Testers, please check:**
+  - that **Save** finishes and the file's values match your radio's menu;
+  - that **Load** of a file with one changed setting changes only that setting;
+  - PREAMP (IPO) and WIDTH in a few modes.
+
+---
+
 ## 2026-11-27 - v2.5.6-pre44 (pre-release)
 
 *The radio menu file now saves the front panel too: RF GAIN, AGC, IPO, NB, MIC GAIN, PROC, power and the rest. YWC reminds you to save when they change. Everything in v2.5.6-pre43 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
