@@ -3149,9 +3149,11 @@
             </div>
             <div id="radioMenuReminderLine" class="small mt-1" hidden></div>
             <p class="text-muted small mt-2">
-                Saving reads the menu, then the front panel levels (MIC GAIN, AMC, PROC, RF POWER, MONITOR and VOX GAIN)
-                in each mode, because the radio keeps some of them per mode. To read those, YWC switches the main band
-                through the modes and then puts your mode back. Nothing else on the radio is changed, and it never changes
+                Saving reads the menu, then the front panel settings: RF GAIN, SQUELCH, AGC, IPO, ATT, NB, NR, NAR, WIDTH,
+                DNF, NOTCH, CONTOUR, APF, KEY SPEED, MIC GAIN, AMC, PROC, RF POWER, MONITOR, VOX and so on. Everything on the
+                front panel except the volume (AF GAIN) and the frequency. The radio keeps some of them per mode, so YWC switches
+                the main band through the modes and then puts your mode back. Those kept per band, such as IPO and AGC, are saved
+                for the band you are on. Nothing else on the radio is changed, and it never changes
                 mode while the radio transmits. Don't transmit from another program while it runs. It takes about 15 seconds.
                 The file goes in <code id="radioMenuFolder">%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus</code>,
                 with YWC's other files.
@@ -3175,8 +3177,8 @@
             <p class="text-muted small mt-2 mb-0">
                 Loading first shows what would change, and sends nothing. Tick the items you want and press
                 <strong>Send ticked items to the radio</strong>. Items marked TX change how the radio transmits and start unticked.
-                The front panel levels are listed as, for example, MIC GAIN (USB); checking or sending them switches modes
-                the same way and puts your mode back.
+                The front panel settings are listed as, for example, MIC GAIN (USB) or AGC (USB, 20m); checking or sending them
+                switches modes the same way and puts your mode back. One saved on another band is skipped.
                 The CAT rate, time-out and RTS items are never loaded, because a wrong one would cut YWC off from the radio.
                 You can edit the file in Notepad first: change the value after <code>=</code>, as the radio shows it.
             </p>
@@ -3260,7 +3262,7 @@
         if (!btn) return;
         btn.addEventListener('click', async () => {
             btn.disabled = true;
-            statusEl.textContent = 'Reading the radio menu, then the front panel levels in each mode…';
+            statusEl.textContent = 'Reading the radio menu, then the front panel settings in each mode…';
             statusEl.className = 'ms-2 small text-muted';
             try {
                 const r = await fetch('/api/radiomenu/save', { method: 'POST' });
@@ -3272,7 +3274,7 @@
                 }
                 statusEl.textContent = `Saved to ${data.path}.` +
                     (data.missing ? ` ${window.radioMenuUnanswered(data)} The file marks them (no answer).` : '') +
-                    (data.knobsStopped ? ` Front panel levels not all saved: ${data.knobsStopped}` : '');
+                    (data.knobsStopped ? ` Front panel settings not all saved: ${data.knobsStopped}` : '');
                 document.dispatchEvent(new CustomEvent('radiomenu-saved', { detail: data.name }));
                 statusEl.className = 'ms-2 small text-success';
             } catch (e) {
@@ -3444,7 +3446,7 @@
             const file = { name: fileName };
             preview.hidden = true;
             applyStatus.textContent = '';
-            setStatus(statusEl, `Reading the radio to compare with "${file.name}"… Nothing is set yet, only mode changes to read the front panel levels.`, 'muted');
+            setStatus(statusEl, `Reading the radio to compare with "${file.name}"… Nothing is set yet, only mode changes to read the front panel settings.`, 'muted');
             try {
                 const r = await fetch('/api/radiomenu/load/preview', {
                     method: 'POST',

@@ -487,7 +487,7 @@ A small **YWC tray icon** appears in the Windows system tray (down by the clock,
 | Open Yaesu Web Control | Opens YWC in your default browser. |
 | About — version vX.Y.Z | Shows version, release date, and licence. The browser About page (top nav bar) has full details and a Copy diagnostics button. |
 | Open user data folder | Opens `%APPDATA%\MM5AGM\Yaesu Web Control\` in File Explorer — handy for grabbing the backup zip after export, or inspecting/editing JSON files. |
-| Exit Yaesu Web Control | Confirms then shuts the app down cleanly. If a front panel level changed since your last save of the radio menu, it offers to save first. WSJT-X / Log4OM / JTAlert / GridTracker / Fldigi lose their CAT connection until you restart YWC. |
+| Exit Yaesu Web Control | Confirms then shuts the app down cleanly. If a front panel setting changed since your last save of the radio menu, it offers to save first. WSJT-X / Log4OM / JTAlert / GridTracker / Fldigi lose their CAT connection until you restart YWC. |
 
 ![YWC tray icon with right-click menu open, showing Open / About / Open user data folder / Exit](pictures/SystemTrayIcon.png)
 
@@ -2053,14 +2053,14 @@ If the connection drops, the app reconnects automatically after 15 seconds. Disa
 
 | | Backup & Restore | Radio Menu |
 |---|---|---|
-| **What it saves** | YWC's own settings: COM port, band plan, memories, DX cluster, per-band memory and the rest | The radio's own menu settings: what you see when you press **FUNC** and touch **MENU** on the radio. Also the front panel levels (MIC GAIN, AMC, PROC, RF POWER, MONITOR, VOX GAIN) in each mode |
+| **What it saves** | YWC's own settings: COM port, band plan, memories, DX cluster, per-band memory and the rest | The radio's own menu settings: what you see when you press **FUNC** and touch **MENU** on the radio. Also the front panel settings (RF GAIN, AGC, IPO, NB, MIC GAIN, PROC, RF POWER and the rest) |
 | **Where those settings live** | On this PC, in `%APPDATA%\MM5AGM\Yaesu Web Control` | Inside the radio |
 | **Button** | **Export full backup** | **Save radio menu to file** |
 | **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Backups` | `YWC radio menu <model> <date> <time>.ini`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus` |
 | **Open it with** | Unzip it; the files inside are JSON | Notepad, or any text editor |
 | **Putting it back** | **Import full backup…**, then restart YWC | **Load this one** or **Load from another file…**, then tick what to send |
 | **Changing one setting** | Change it on the Settings page | **Change radio settings…**, pick the new value, then send |
-| **Does it change the radio?** | No | Saving reads the radio, and switches the mode to read the front panel levels, then puts it back. Loading changes only the items you tick |
+| **Does it change the radio?** | No | Saving reads the radio, and switches the mode to read the front panel settings, then puts it back. Loading changes only the items you tick |
 
 Use **Backup & Restore** to move YWC to a new PC or undo a change to YWC's settings. Use **Radio Menu** to keep a record of how the radio itself is set up, for example before a factory reset or a firmware update, or to keep one file for contesting and another for everyday use. Neither save includes the other: the backup zip has no radio menu settings in it, and the radio menu file has none of YWC's settings.
 
@@ -2115,7 +2115,7 @@ The quickest way to change one of the radio's menu items is **Change radio setti
 
 **Save radio menu to file**
 
-Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, then the front panel levels in each mode (below), and writes the file. It takes about 15 seconds. Available for the FTdx101MP and FTdx101D.
+Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, then the front panel settings (below), and writes the file. It takes about 15 seconds. Available for the FTdx101MP and FTdx101D.
 
 The file goes in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus`, with YWC's other files, on the PC that runs YWC. The page shows the full path after each save, and **Open that folder** opens it in Explorer. If you use YWC from a browser on another PC, pick the file under **Saved files** and click **Download a copy** to get it on that PC.
 
@@ -2134,14 +2134,26 @@ MY CALL TIME = 1 s                       ; 040102 = 01
 - **`(no answer)`** means the radio did not reply for that item, usually because it does not apply to the radio's current setup.
 - Save as many files as you like and rename them for how you use the radio, for example `YWC radio menu contest.ini`.
 
-**Front panel levels.** Some settings are not in the radio's menu but on its knobs and buttons: **MIC GAIN** (the MIC/SPEED knob), the **AMC** level and the **PROC** on/off and level (the PROC/PITCH knob), **RF POWER**, the **MONITOR** level and **VOX GAIN**. The radio keeps some of these separately for each mode, so YWC reads them all in each mode: LSB, USB, CW-U, CW-L, AM, FM, DATA-L, DATA-U, RTTY-L, RTTY-U and PSK. They go at the end of the file, one section per mode:
+**Front panel settings.** Many settings are not in the radio's menu but on its knobs and buttons. YWC saves all of them except the volume (AF GAIN) and the frequency, for the main band. The radio keeps them in four ways, and YWC saves each the way the radio keeps it:
+
+| Kept | Settings | Saved |
+|---|---|---|
+| Once for the radio | RF GAIN, SQUELCH, NB LEVEL, APF FREQ, KEY SPEED, KEY PITCH, BREAK-IN DELAY, VOX DELAY, ANTI VOX | once |
+| Per band | IPO, ATT, NB, NR, NR LEVEL | for the band you are on |
+| Per band and mode | AGC, NAR, WIDTH, DNF (not FM), NOTCH, NOTCH FREQ, CONTOUR, CONTOUR FREQ, APF (CW only) | for the band you are on, in each mode |
+| Per mode | MIC GAIN (not CW or RTTY, which have no mic), AMC LEVEL, PROC, PROC LEVEL, MIC EQ, RF POWER, MONITOR, MONITOR LEVEL, VOX GAIN, BREAK-IN and KEYER (CW only) | in each mode |
+
+WIDTH is saved as the radio's step number (0 to 23), because what each step means depends on the mode. The modes are LSB, USB, CW-U, CW-L, AM, FM, DATA-L, DATA-U, RTTY-L, RTTY-U and PSK. To save the per-band settings for another band, go to that band and save again, to another file if you like. The settings go at the end of the file: those kept once or per band in `[Front panel]`, then one section per mode:
 
 ```ini
+[Front panel]
+RF GAIN = 255                            ; RG0 = 255
+IPO (20m) = AMP 1                        ; PA0 = 1 @ 20m
+
 [Front panel > USB]
+AGC (20m) = SLOW                         ; GT0 = 3 @ 20m
 MIC GAIN = 50                            ; MG = 050  [TX]
-AMC LEVEL = 50                           ; AO = 050  [TX]
-PROC = OFF                               ; PR0 = 1  [TX]
-PROC LEVEL = 36                          ; PL = 036  [TX]
+PROC = OFF                               ; PR0 = 0  [TX]
 RF POWER = 100 W                         ; PC = 100  [TX]
 ```
 
@@ -2151,12 +2163,12 @@ To read them, YWC switches the main band through those modes, a few seconds, and
 
 - there is no saved file for this radio yet;
 - your newest file is 30 days old or more;
-- a front panel level in the mode you are in now is not what your newest file holds, for example *MIC GAIN changed from 50 to 0 in USB*;
-- your newest file was saved by an older YWC and has no front panel levels.
+- a front panel setting is not what your newest file holds, in the mode and on the band you are on now, for example *MIC GAIN changed from 50 to 0 in USB* or *IPO changed from AMP 1 to IPO on 20m*;
+- your newest file was saved by an older YWC and has no front panel settings.
 
-**Save now** saves straight away, exactly like the button above. **Not now** hides the banner until YWC starts again. For the 30-day and changed reminders it also waits a week; if there is no save at all, YWC asks again at the next start. The same line shows under **Save radio menu to file** whenever it applies. To check, YWC reads only the mode and the levels in that mode: it never changes mode or sets anything. Changes made in the radio's own menu are not checked, which is why the 30-day reminder is there.
+**Save now** saves straight away, exactly like the button above. **Not now** hides the banner until YWC starts again. For the 30-day and changed reminders it also waits a week; if there is no save at all, YWC asks again at the next start. The same line shows under **Save radio menu to file** whenever it applies. To check, YWC reads only the mode, the band and the settings there: it never changes mode or sets anything. Changes made in the radio's own menu are not checked, which is why the 30-day reminder is there.
 
-**Asking when you close YWC.** If a front panel level is not what your newest file holds, in the mode you are in or in any mode where you changed a level while YWC was running, closing YWC asks first. The **Close YWC** page shows what changed and adds a green **Save and close** button: it saves, then closes. **Close YWC** closes without saving and **Cancel** keeps YWC running. The tray's **Exit Yaesu Web Control** asks the same: **Yes** saves then stops, **No** stops without saving, **Cancel** keeps YWC running. A level you turn and then turn back is not a change. YWC can't ask when Windows shuts down, or when you close the console window or the browser tab, so close YWC from the tray or the Close YWC page if you want to be asked.
+**Asking when you close YWC.** If a front panel setting is not what your newest file holds, in the mode you are in or in any mode where you changed a setting while YWC was running, closing YWC asks first. The **Close YWC** page shows what changed and adds a green **Save and close** button: it saves, then closes. **Close YWC** closes without saving and **Cancel** keeps YWC running. The tray's **Exit Yaesu Web Control** asks the same: **Yes** saves then stops, **No** stops without saving, **Cancel** keeps YWC running. A setting you change and then change back is not a change. YWC can't ask when Windows shuts down, or when you close the console window or the browser tab, so close YWC from the tray or the Close YWC page if you want to be asked.
 
 **Loading a file**
 
@@ -2166,10 +2178,10 @@ Pick a file from **Saved files** and click **Load this one**, or click **Load fr
 - Items already the same are hidden. Tick **Show items that are already the same** to see them.
 - Items that cannot be loaded say why in the Note column, for example a value the radio does not offer.
 - **232C RATE, 232C TIME OUT TIMER, CAT RATE, CAT TIME OUT TIMER and CAT RTS are never loaded.** A wrong one would cut YWC off from the radio. Change them on the radio if you need to.
-- Front panel levels show with their mode, for example **MIC GAIN (USB)**, and are marked **TX**, so they start unticked. To compare them, YWC switches modes the same way as when saving and puts your mode back; it sets nothing until you send.
-- A file saved by an older YWC has no front panel levels. It still loads the menu as before, and a note says to save a new file to include the levels.
+- Front panel settings show with their mode and band, for example **MIC GAIN (USB)** or **AGC (USB, 20m)**. Those that change how the radio transmits are marked **TX** and start unticked; receive settings such as AGC and NB start ticked. A setting saved for another band is skipped, with a note. To compare them, YWC switches modes the same way as when saving and puts your mode back; it sets nothing until you send.
+- A file saved by an older YWC has no front panel settings. It still loads the menu as before, and a note says to save a new file to include them.
 
-Press **Send ticked items to the radio** and confirm. YWC sends each ticked item, reads it back, and shows **Sent and read back** or what went wrong. Ticked front panel levels are set one mode at a time, and then the radio goes back to the mode it was in.
+Press **Send ticked items to the radio** and confirm. YWC sends each ticked item, reads it back, and shows **Sent and read back** or what went wrong. Ticked front panel settings are set one mode at a time, and then the radio goes back to the mode it was in.
 
 **Editing the file.** You can change a value in Notepad before loading it. Change the text after `=`, as the radio's screen would show it, and leave the part after `;` alone. For example, to turn on the first band of the processor-on equaliser at 300 Hz:
 

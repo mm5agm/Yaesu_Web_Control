@@ -1,6 +1,6 @@
 // Radio menu reminder: when YWC starts, ask the user to save the radio's
 // settings if there is no save yet, the last one is a month old, or a front
-// panel level (MIC GAIN, AMC, PROC, power...) differs from it. The check is
+// panel setting (MIC GAIN, RF GAIN, AGC...) differs from it. The check is
 // GET /api/radiomenu/reminder, which only reads the radio. "Not now" hides
 // it until YWC starts again (and a week for the old/changed reminder).
 (function () {
@@ -42,14 +42,14 @@
         save.addEventListener('click', async () => {
             save.disabled = later.disabled = true;
             status.className = 'small w-100 text-muted';
-            status.textContent = 'Saving: reading the menu, then the front panel levels in each mode (about 15 seconds). Please do not transmit from another program meanwhile.';
+            status.textContent = 'Saving: reading the menu, then the front panel settings in each mode (about 15 seconds). Please do not transmit from another program meanwhile.';
             try {
                 const r = await fetch('/api/radiomenu/save', { method: 'POST' });
                 const d = await r.json().catch(() => ({}));
                 if (!r.ok) throw new Error(d.error || r.statusText);
                 box.className = 'alert alert-success d-flex flex-wrap align-items-center gap-2 mt-2 mb-2';
                 text.textContent = `Saved to ${d.path}.` +
-                    (d.knobsStopped ? ` Front panel levels not all saved: ${d.knobsStopped}` : '');
+                    (d.knobsStopped ? ` Front panel settings not all saved: ${d.knobsStopped}` : '');
                 status.textContent = '';
                 save.remove();
                 later.textContent = 'Close';

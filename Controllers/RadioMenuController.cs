@@ -12,10 +12,10 @@ namespace Yaesu_Web_Control.Controllers
     /// what would change, writing nothing; apply writes only the items the
     /// user ticked, each checked again against the table and read back.
     ///
-    /// The file also holds the front-panel levels (MIC GAIN, AMC, PROC and
-    /// so on, see <see cref="RadioKnobs"/>) for each mode. Reading or setting
-    /// those changes the main band's mode, one mode at a time, and puts it
-    /// back afterwards; never while the radio transmits.
+    /// The file also holds the front-panel settings (MIC GAIN, RF GAIN, AGC
+    /// and so on, see <see cref="RadioKnobs"/>). Reading or setting those the
+    /// radio keeps per mode changes the main band's mode, one mode at a time,
+    /// and puts it back afterwards; never while the radio transmits.
     /// </summary>
     [ApiController]
     [Route("api/radiomenu")]
@@ -75,7 +75,7 @@ namespace Yaesu_Web_Control.Controllers
         private RadioKnobPass NewKnobPass() => new(new KnobLink(_cat, _radio));
 
         /// <summary>
-        /// After a pass, read the levels again through the dispatcher, so the
+        /// After a pass, read the settings again through the dispatcher, so the
         /// pages show the values for the mode the radio is back in.
         /// </summary>
         private async Task RefreshKnobsAsync(IReadOnlyList<RadioKnob> knobs, CancellationToken ct)
@@ -116,14 +116,20 @@ namespace Yaesu_Web_Control.Controllers
                 if (knobs is not null)
                 {
                     var pass = NewKnobPass();
+                    // Per-band settings are saved for the band the radio is on now.
+                    var band = await pass.ReadBandAsync(ct);
+                    if (band is null)
+                        _logger.LogWarning("Radio menu save: the radio did not say its frequency, so the per-band settings are not saved");
+                    foreach (var knob in knobs.Where(k => !k.PerMode && (band is not null || !k.PerBand)))
+                        knobReadings.Add(new RadioKnobReading(null, knob, await pass.ReadAsync(knob, ct), knob.PerBand ? band : null));
                     await pass.RunAsync(RadioKnobs.ModesFor(model), async mode =>
                     {
-                        foreach (var knob in knobs)
-                            knobReadings.Add(new RadioKnobReading(mode, knob, await pass.ReadAsync(knob, ct)));
+                        foreach (var knob in knobs.Where(k => k.PerMode && k.AppliesIn(mode) && (band is not null || !k.PerBand)))
+                            knobReadings.Add(new RadioKnobReading(mode, knob, await pass.ReadAsync(knob, ct), knob.PerBand ? band : null));
                     }, ct);
                     knobsStopped = pass.Stopped;
                     if (knobsStopped is not null)
-                        _logger.LogWarning("Radio menu save: front panel levels: {Why}", knobsStopped);
+                        _logger.LogWarning("Radio menu save: front panel settings: {Why}", knobsStopped);
                     await RefreshKnobsAsync(knobs, ct);
                 }
             }
@@ -239,7 +245,7 @@ namespace Yaesu_Web_Control.Controllers
         /// <summary>
         /// GET /api/radiomenu/reminder — should YWC remind the user to save the
         /// radio menu? Reads only: the main band's mode and the front-panel
-        /// levels in that mode, never a mode change. The banner on every page
+        /// settings (those kept per mode, in that mode), never a mode change. The banner on every page
         /// asks when YWC starts; the Settings page shows the same line.
         /// pending means ask again shortly (radio not connected, or a save or
         /// load is running).
@@ -259,16 +265,16 @@ namespace Yaesu_Web_Control.Controllers
             else
             {
                 var newest = NewestSave(model);
-                string? mode = null;
+                string? mode = null, band = null;
                 var live = new Dictionary<string, int?>();
                 var knobs = RadioKnobs.TableFor(model);
                 if (newest is not null && knobs is not null)
                 {
-                    if (await ReadLevelsNowAsync(knobs, ct) is not { } read)
+                    if (await ReadLevelsNowAsync(model, knobs, ct) is not { } read)
                         return Ok(new { supported = true, pending = true });
-                    (mode, live) = read;
+                    (mode, band, live) = read;
                 }
-                result = RadioMenuReminder.Check(newest, DateTime.Now, model, mode, live);
+                result = RadioMenuReminder.Check(newest, DateTime.Now, model, mode, band, live);
                 _reminderCache = (DateTime.Now, result);
             }
 
@@ -289,22 +295,24 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         /// <summary>
-        /// The main band's mode and the front-panel levels in it, read now.
-        /// Reads only. Null if a save or load is running (the gate is busy).
+        /// The main band's mode and band, and the front-panel settings as they
+        /// are now (those kept per mode, in that mode). Reads only. Null if a
+        /// save or load is running (the gate is busy).
         /// </summary>
-        private async Task<(string? Mode, Dictionary<string, int?> Live)?> ReadLevelsNowAsync(
-            IReadOnlyList<RadioKnob> knobs, CancellationToken ct)
+        private async Task<(string? Mode, string? Band, Dictionary<string, int?> Live)?> ReadLevelsNowAsync(
+            string model, IReadOnlyList<RadioKnob> knobs, CancellationToken ct)
         {
             if (!await LoadGate.WaitAsync(0, ct)) return null;
             try
             {
-                var link = new KnobLink(_cat, _radio);
-                var mode = RadioKnobs.ParseModeAnswer(await link.AskAsync("MD0;", ct));
-                var live = new Dictionary<string, int?>();
                 var pass = NewKnobPass();
-                foreach (var knob in knobs)
+                var mode = await pass.ReadModeAsync(ct);
+                var band = await pass.ReadBandAsync(ct);
+                var inMode = RadioKnobs.ModesFor(model).FirstOrDefault(m => m.Code == mode);
+                var live = new Dictionary<string, int?>();
+                foreach (var knob in knobs.Where(k => !k.PerMode || (inMode is not null && k.AppliesIn(inMode))))
                     live[knob.Command] = await pass.ReadAsync(knob, ct);
-                return (mode, live);
+                return (mode, band, live);
             }
             finally
             {
@@ -327,7 +335,7 @@ namespace Yaesu_Web_Control.Controllers
             if (RadioMenuCat.TableFor(model) is null || knobs is null)
                 return Ok(new { ask = false });
 
-            string? mode = null;
+            string? mode = null, band = null;
             IReadOnlyDictionary<string, int?> live = new Dictionary<string, int?>();
             if (_cat.IsConnected)
             {
@@ -335,8 +343,8 @@ namespace Yaesu_Web_Control.Controllers
                 {
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     cts.CancelAfter(TimeSpan.FromSeconds(4));
-                    if (await ReadLevelsNowAsync(knobs, cts.Token) is { } read)
-                        (mode, live) = read;
+                    if (await ReadLevelsNowAsync(model, knobs, cts.Token) is { } read)
+                        (mode, band, live) = read;
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
@@ -345,7 +353,7 @@ namespace Yaesu_Web_Control.Controllers
             }
 
             var (ask, message, changes) = RadioMenuReminder.ExitCheck(
-                NewestSave(model), DateTime.Now, model, _watch.Changes.Touched(), mode, live);
+                NewestSave(model), DateTime.Now, model, _watch.Changes.Touched(), mode, band, live);
             return Ok(new { ask, message, changes, connected = _cat.IsConnected });
         }
 
@@ -473,7 +481,7 @@ namespace Yaesu_Web_Control.Controllers
 
         private static bool IsKnobLine(RadioMenuFileItem line) =>
             RadioKnobs.IsKnobAddress(line.Address)
-            || line.Section.StartsWith(RadioKnobs.SectionPrefix, StringComparison.OrdinalIgnoreCase);
+            || RadioKnobs.IsKnobSection(line.Section);
 
         private async Task<IActionResult> PreviewAsync(RadioMenuFile file, string model, IReadOnlyList<RadioMenuItem> table, CancellationToken ct)
         {
@@ -534,11 +542,11 @@ namespace Yaesu_Web_Control.Controllers
                 ? $"This file was saved from a {file.Radio}; the radio now is a {model}. Check each change."
                 : null;
             if (knobsStopped is not null)
-                warning = warning is null ? $"Front panel levels: {knobsStopped}" : $"{warning} Front panel levels: {knobsStopped}";
-            // An older file still loads; it just has no levels to put back.
+                warning = warning is null ? $"Front panel settings: {knobsStopped}" : $"{warning} Front panel settings: {knobsStopped}";
+            // An older file still loads; it just has no front panel settings to put back.
             if (RadioKnobs.TableFor(model) is not null && !file.Items.Any(IsKnobLine))
             {
-                const string old = "This file was saved before YWC saved the front panel levels (MIC GAIN, AMC, PROC, power), so only the menu is loaded. Save a new file to include them.";
+                const string old = "This file was saved before YWC saved the front panel settings (MIC GAIN, RF GAIN, AGC and so on), so only the menu is loaded. Save a new file to include them.";
                 warning = warning is null ? old : $"{warning} {old}";
             }
             _logger.LogInformation("Radio menu load preview: {Rows} lines, {Changes} changes", rows.Count, changes);
@@ -547,49 +555,52 @@ namespace Yaesu_Web_Control.Controllers
 
         /// <summary>
         /// The front-panel lines of a preview. Checks every line first, then
-        /// reads the radio in each mode the file has lines for.
+        /// reads the radio: the settings not kept per mode straight away, the
+        /// others in each mode the file has lines for. A per-band line saved
+        /// on another band is shown but not loaded.
         /// </summary>
         private async Task<(int Changes, string? Stopped)> PreviewKnobsAsync(
             List<RadioMenuFileItem> lines, string model, List<object> rows, HashSet<string> seen, CancellationToken ct)
         {
             if (lines.Count == 0) return (0, null);
             var knobs = RadioKnobs.TableFor(model);
-            var wanted = new List<(RadioMenuFileItem Line, RadioKnobMode Mode, RadioKnob Knob, int Value)>();
+            var band = lines.Any(l => l.Address?.Contains('@') == true) ? await NewKnobPass().ReadBandAsync(ct) : null;
+            var wanted = new List<(RadioMenuFileItem Line, RadioKnobSlot Slot, int Value)>();
             foreach (var line in lines)
             {
-                if (knobs is null || !RadioKnobs.TryParseAddress(line.Address, model, out var mode, out var knob))
+                if (knobs is null || !RadioKnobs.TryParseAddress(line.Address, model, out var slot))
                 {
-                    rows.Add(KnobRow(null, null, line, "unknown", null, null, $"Line {line.Line}: not a front panel level YWC loads on the {model}."));
+                    rows.Add(KnobRow(null, line, "unknown", null, null, $"Line {line.Line}: not a front panel setting YWC loads on the {model}."));
                     continue;
                 }
                 if (!seen.Add(line.Address!))
                 {
-                    rows.Add(KnobRow(mode, knob, line, "unknown", null, null, $"Line {line.Line}: this level is already in the file; the first one is used."));
+                    rows.Add(KnobRow(slot, line, "unknown", null, null, $"Line {line.Line}: this setting is already in the file; the first one is used."));
                     continue;
                 }
                 if (line.Value.Equals(RadioMenuLoad.NoAnswer, StringComparison.OrdinalIgnoreCase))
                 {
-                    rows.Add(KnobRow(mode, knob, line, "skipped", null, null, "The radio did not answer this level when the file was saved."));
+                    rows.Add(KnobRow(slot, line, "skipped", null, null, "The radio did not answer this setting when the file was saved."));
                     continue;
                 }
-                var value = RadioKnobs.Encode(knob, line.Value, out var error);
+                var value = RadioKnobs.Encode(slot.Knob, line.Value, out var error);
                 if (value is null)
                 {
-                    rows.Add(KnobRow(mode, knob, line, "error", null, null, error));
+                    rows.Add(KnobRow(slot, line, "error", null, null, error));
                     continue;
                 }
-                wanted.Add((line, mode, knob, value.Value));
+                if (WrongBand(slot, band) is { } wrong)
+                {
+                    rows.Add(KnobRow(slot, line, "skipped", null, value, wrong));
+                    continue;
+                }
+                wanted.Add((line, slot, value.Value));
             }
             if (wanted.Count == 0) return (0, null);
 
             var now = new Dictionary<string, int?>();
-            var pass = NewKnobPass();
-            var modes = RadioKnobs.ModesFor(model).Where(m => wanted.Any(w => w.Mode == m)).ToList();
-            await pass.RunAsync(modes, async mode =>
-            {
-                foreach (var w in wanted.Where(w => w.Mode == mode))
-                    now[w.Line.Address!] = await pass.ReadAsync(w.Knob, ct);
-            }, ct);
+            var pass = await RunSlotsAsync(wanted, w => w.Slot, model, async (w, p) =>
+                now[w.Line.Address!] = await p.ReadAsync(w.Slot.Knob, ct), ct);
             if (knobs is not null)
                 await RefreshKnobsAsync(knobs, ct);
 
@@ -597,31 +608,60 @@ namespace Yaesu_Web_Control.Controllers
             foreach (var w in wanted)
             {
                 if (!now.TryGetValue(w.Line.Address!, out var current))
-                    rows.Add(KnobRow(w.Mode, w.Knob, w.Line, "noanswer", null, null, pass.Stopped ?? "Not read."));
+                    rows.Add(KnobRow(w.Slot, w.Line, "noanswer", null, null, pass.Stopped ?? "Not read."));
                 else if (current is null)
-                    rows.Add(KnobRow(w.Mode, w.Knob, w.Line, "noanswer", null, null, "The radio did not answer, so this cannot be checked."));
+                    rows.Add(KnobRow(w.Slot, w.Line, "noanswer", null, null, "The radio did not answer, so this cannot be checked."));
                 else if (current == w.Value)
-                    rows.Add(KnobRow(w.Mode, w.Knob, w.Line, "same", current, w.Value, null));
+                    rows.Add(KnobRow(w.Slot, w.Line, "same", current, w.Value, null));
                 else
                 {
-                    rows.Add(KnobRow(w.Mode, w.Knob, w.Line, "change", current, w.Value, null));
+                    rows.Add(KnobRow(w.Slot, w.Line, "change", current, w.Value, null));
                     changes++;
                 }
             }
             return (changes, pass.Stopped);
         }
 
-        private static object KnobRow(RadioKnobMode? mode, RadioKnob? knob, RadioMenuFileItem line, string status, int? current, int? wanted, string? message) => new
+        /// <summary>Why a per-band line is not loaded: it was saved on another band. Null if it can be.</summary>
+        private static string? WrongBand(RadioKnobSlot slot, string? band) =>
+            slot.Band is null || slot.Band == band ? null
+            : band is null ? $"Saved for {slot.Band}; the radio did not say which band it is on, so this is not loaded."
+            : $"Saved for {slot.Band}; the radio is on {band} now, so this is not loaded. Change to {slot.Band} and load again to set it.";
+
+        /// <summary>
+        /// Runs <paramref name="each"/> for every slot, in the table's order
+        /// (NAR before WIDTH): those not kept per mode straight away, then the
+        /// others one mode at a time, putting the mode back afterwards.
+        /// </summary>
+        private async Task<RadioKnobPass> RunSlotsAsync<T>(List<T> wanted, Func<T, RadioKnobSlot> slotOf, string model,
+            Func<T, RadioKnobPass, Task> each, CancellationToken ct)
         {
-            address = mode is null || knob is null ? line.Address : RadioKnobs.Address(mode, knob),
+            var order = (RadioKnobs.TableFor(model) ?? []).Select((k, i) => (k.Command, i)).ToDictionary(x => x.Command, x => x.i);
+            var sorted = wanted.OrderBy(w => order.GetValueOrDefault(slotOf(w).Knob.Command)).ToList();
+            var pass = NewKnobPass();
+            foreach (var w in sorted.Where(w => slotOf(w).Mode is null))
+                await each(w, pass);
+            var modes = RadioKnobs.ModesFor(model).Where(m => sorted.Any(w => slotOf(w).Mode == m)).ToList();
+            if (modes.Count > 0)
+                await pass.RunAsync(modes, async mode =>
+                {
+                    foreach (var w in sorted.Where(w => slotOf(w).Mode == mode))
+                        await each(w, pass);
+                }, ct);
+            return pass;
+        }
+
+        private static object KnobRow(RadioKnobSlot? slot, RadioMenuFileItem line, string status, int? current, int? wanted, string? message) => new
+        {
+            address = slot?.Address ?? line.Address,
             section = line.Section,
-            function = mode is null || knob is null ? line.Name : $"{knob.Name} ({mode.Name})",
-            current = current is int c && knob is not null ? knob.Show(c) : null,
-            wanted = wanted is int v && knob is not null ? knob.Show(v) : line.Value,
+            function = slot?.Label ?? line.Name,
+            current = current is int c && slot is not null ? slot.Knob.Show(c) : null,
+            wanted = wanted is int v && slot is not null ? slot.Knob.Show(v) : line.Value,
             raw = wanted?.ToString(System.Globalization.CultureInfo.InvariantCulture),
             status,
             message,
-            tx = true,
+            tx = slot?.Knob.Tx ?? true,
         };
 
         public sealed record ApplyItem(string Address, string Raw);
@@ -687,7 +727,7 @@ namespace Yaesu_Web_Control.Controllers
                             : $"Sent, but the radio now shows {item.Decode(after)}."));
                 }
                 var stopped = await ApplyKnobsAsync(items.Where(i => RadioKnobs.IsKnobAddress(i.Address)).ToList(), model, results, ct);
-                return Ok(new { results, warning = stopped is null ? null : $"Front panel levels: {stopped}" });
+                return Ok(new { results, warning = stopped is null ? null : $"Front panel settings: {stopped}" });
             }
             finally
             {
@@ -696,73 +736,77 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         /// <summary>
-        /// Sets the ticked front-panel levels, one mode at a time: each is read,
-        /// set if it differs, and read back, then the mode is put back.
+        /// Sets the ticked front-panel settings: each is read, set if it
+        /// differs, and read back. Those kept per mode are set one mode at a
+        /// time, then the mode is put back. A per-band one is set only on the
+        /// band it was saved for.
         /// </summary>
         private async Task<string?> ApplyKnobsAsync(List<ApplyItem> items, string model, List<object> results, CancellationToken ct)
         {
             if (items.Count == 0) return null;
             var knobs = RadioKnobs.TableFor(model);
-            var wanted = new List<(string Address, RadioKnobMode Mode, RadioKnob Knob, int Value)>();
+            var band = items.Any(i => i.Address.Contains('@')) ? await NewKnobPass().ReadBandAsync(ct) : null;
+            var wanted = new List<(string Address, RadioKnobSlot Slot, int Value)>();
             foreach (var want in items)
             {
-                if (knobs is null || !RadioKnobs.TryParseAddress(want.Address, model, out var mode, out var knob))
+                if (knobs is null || !RadioKnobs.TryParseAddress(want.Address, model, out var slot))
                 {
                     results.Add(new { address = want.Address, function = (string?)null, now = (string?)null,
-                        status = "error", message = "Not a front panel level on this radio." });
+                        status = "error", message = "Not a front panel setting on this radio." });
                     continue;
                 }
+                var knob = slot.Knob;
                 if (!int.TryParse(want.Raw, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var value)
                     || value < knob.Min || value > knob.Max)
                 {
-                    results.Add(KnobResult(want.Address, mode, knob, "error", null, $"{knob.Name} takes {knob.Min} to {knob.Max}."));
+                    results.Add(KnobResult(want.Address, slot, "error", null, $"{knob.Name} takes {knob.Min} to {knob.Max}."));
                     continue;
                 }
-                wanted.Add((want.Address, mode, knob, value));
+                if (WrongBand(slot, band) is { } wrong)
+                {
+                    results.Add(KnobResult(want.Address, slot, "error", null, wrong));
+                    continue;
+                }
+                wanted.Add((want.Address, slot, value));
             }
             if (wanted.Count == 0) return null;
 
             var done = new HashSet<string>();
-            var pass = NewKnobPass();
-            var modes = RadioKnobs.ModesFor(model).Where(m => wanted.Any(w => w.Mode == m)).ToList();
-            await pass.RunAsync(modes, async mode =>
+            var pass = await RunSlotsAsync(wanted, w => w.Slot, model, async (w, p) =>
             {
-                foreach (var w in wanted.Where(w => w.Mode == mode))
+                done.Add(w.Address);
+                var current = await p.ReadAsync(w.Slot.Knob, ct);
+                if (current is null)
                 {
-                    done.Add(w.Address);
-                    var current = await pass.ReadAsync(w.Knob, ct);
-                    if (current is null)
-                    {
-                        results.Add(KnobResult(w.Address, w.Mode, w.Knob, "error", null, "The radio did not answer, so nothing was sent."));
-                        continue;
-                    }
-                    if (current == w.Value)
-                    {
-                        results.Add(KnobResult(w.Address, w.Mode, w.Knob, "same", current, null));
-                        continue;
-                    }
-                    _logger.LogInformation("Radio menu load: {Mode} {Knob} {From} -> {To}", w.Mode.Name, w.Knob.Name, current, w.Value);
-                    await _cat.SendWithoutReplyAsync(RadioKnobs.SetCommand(w.Knob, w.Value), ClientId, ct);
-                    var after = await pass.ReadAsync(w.Knob, ct);
-                    results.Add(after == w.Value
-                        ? KnobResult(w.Address, w.Mode, w.Knob, "ok", after, null)
-                        : KnobResult(w.Address, w.Mode, w.Knob, "mismatch", after, after is null
-                            ? "Sent, but the radio did not answer the read back."
-                            : $"Sent, but the radio now shows {w.Knob.Show(after.Value)}."));
+                    results.Add(KnobResult(w.Address, w.Slot, "error", null, "The radio did not answer, so nothing was sent."));
+                    return;
                 }
+                if (current == w.Value)
+                {
+                    results.Add(KnobResult(w.Address, w.Slot, "same", current, null));
+                    return;
+                }
+                _logger.LogInformation("Radio menu load: {Knob} {From} -> {To}", w.Slot.Label, current, w.Value);
+                await _cat.SendWithoutReplyAsync(RadioKnobs.SetCommand(w.Slot.Knob, w.Value), ClientId, ct);
+                var after = await p.ReadAsync(w.Slot.Knob, ct);
+                results.Add(after == w.Value
+                    ? KnobResult(w.Address, w.Slot, "ok", after, null)
+                    : KnobResult(w.Address, w.Slot, "mismatch", after, after is null
+                        ? "Sent, but the radio did not answer the read back."
+                        : $"Sent, but the radio now shows {w.Slot.Knob.Show(after.Value)}."));
             }, ct);
             foreach (var w in wanted.Where(w => !done.Contains(w.Address)))
-                results.Add(KnobResult(w.Address, w.Mode, w.Knob, "error", null, pass.Stopped ?? "Not sent."));
+                results.Add(KnobResult(w.Address, w.Slot, "error", null, pass.Stopped ?? "Not sent."));
             if (knobs is not null)
                 await RefreshKnobsAsync(knobs, ct);
             return pass.Stopped;
         }
 
-        private static object KnobResult(string address, RadioKnobMode mode, RadioKnob knob, string status, int? now, string? message) => new
+        private static object KnobResult(string address, RadioKnobSlot slot, string status, int? now, string? message) => new
         {
             address,
-            function = (string?)$"{knob.Name} ({mode.Name})",
-            now = now is int v ? knob.Show(v) : null,
+            function = (string?)slot.Label,
+            now = now is int v ? slot.Knob.Show(v) : null,
             status,
             message,
         };

@@ -36,7 +36,11 @@ namespace YaesuWebControl.Tests
         [Theory]
         [InlineData("MG", "MG050;", 50)]
         [InlineData("AO", "AO001;", 1)]
-        [InlineData("PR0", "PR02;", 2)]
+        [InlineData("PR0", "PR01;", 1)]
+        [InlineData("GT0", "GT06;", 4)]   // AUTO-SLOW reads 6, is set as AUTO
+        [InlineData("KP", "KP33;", 33)]
+        [InlineData("RG0", "RG0247;", 247)]
+        [InlineData("CO01", "CO010150;", 150)]
         [InlineData("PL", "PL036;", 36)]
         [InlineData("PC", "PC200;", 200)]
         [InlineData("ML1", "ML1100;", 100)]
@@ -68,8 +72,14 @@ namespace YaesuWebControl.Tests
         [InlineData("MG", "50", 50)]
         [InlineData("PC", "100 W", 100)]
         [InlineData("PC", "100", 100)]
-        [InlineData("PR0", "ON", 2)]
-        [InlineData("PR0", "off", 1)]
+        [InlineData("PR0", "ON", 1)]
+        [InlineData("PR0", "off", 0)]
+        [InlineData("KP", "630 Hz", 33)]
+        [InlineData("KP", "630", 33)]
+        [InlineData("BP01", "1500 Hz", 150)]
+        [InlineData("PA0", "AMP 2", 2)]
+        [InlineData("GT0", "auto", 4)]
+        [InlineData("KS", "25 wpm", 25)]
         public void Shown_values_encode(string command, string shown, int value) =>
             Assert.Equal(value, RadioKnobs.Encode(Knob(command), shown, out _));
 
@@ -78,6 +88,9 @@ namespace YaesuWebControl.Tests
         [InlineData("AO", "0")]
         [InlineData("PR0", "2")]
         [InlineData("PR0", "MAYBE")]
+        [InlineData("KP", "635 Hz")]   // not a 10 Hz step
+        [InlineData("KP", "250 Hz")]
+        [InlineData("RA0", "24 dB")]
         [InlineData("MG", "loud")]
         public void Bad_values_do_not_encode(string command, string shown)
         {
@@ -90,11 +103,11 @@ namespace YaesuWebControl.Tests
         {
             var address = RadioKnobs.Address(Mode("DATA-U"), Knob("AO"));
             Assert.Equal("knob:C:AO", address);
-            Assert.True(RadioKnobs.TryParseAddress(address, "FTdx101MP", out var mode, out var knob));
-            Assert.Equal(("DATA-U", "AO"), (mode.Name, knob.Command));
-            Assert.False(RadioKnobs.TryParseAddress("knob:Z:AO", "FTdx101MP", out _, out _));
-            Assert.False(RadioKnobs.TryParseAddress("knob:2:TX", "FTdx101MP", out _, out _));
-            Assert.False(RadioKnobs.TryParseAddress(address, "FT-991A", out _, out _));
+            Assert.True(RadioKnobs.TryParseAddress(address, "FTdx101MP", out var slot));
+            Assert.Equal(("DATA-U", "AO", (string?)null), (slot.Mode!.Name, slot.Knob.Command, slot.Band));
+            Assert.False(RadioKnobs.TryParseAddress("knob:Z:AO", "FTdx101MP", out _));
+            Assert.False(RadioKnobs.TryParseAddress("knob:2:TX", "FTdx101MP", out _));
+            Assert.False(RadioKnobs.TryParseAddress(address, "FT-991A", out _));
             Assert.False(RadioKnobs.IsKnobAddress("030401"));
         }
 
@@ -107,7 +120,7 @@ namespace YaesuWebControl.Tests
             }) + RadioKnobs.ToIni(new[]
             {
                 new RadioKnobReading(Mode("USB"), Knob("MG"), 50),
-                new RadioKnobReading(Mode("USB"), Knob("PR0"), 2),
+                new RadioKnobReading(Mode("USB"), Knob("PR0"), 1),
                 new RadioKnobReading(Mode("DATA-U"), Knob("PC"), 25),
                 new RadioKnobReading(Mode("DATA-U"), Knob("VG"), null),
             });
@@ -130,6 +143,118 @@ namespace YaesuWebControl.Tests
             Assert.Single(file.Items);
             Assert.Null(file.Items[0].Address);
         }
+
+        [Theory]
+        [InlineData("knob:RG0", "RF GAIN", "")]
+        [InlineData("knob:PA0@20m", "IPO (20m)", "on 20m")]
+        [InlineData("knob:2:MG", "MIC GAIN (USB)", "in USB")]
+        [InlineData("knob:2:GT0@40m", "AGC (USB, 40m)", "in USB on 40m")]
+        [InlineData("knob:3:BI", "BREAK-IN (CW-U)", "in CW-U")]
+        public void Each_scope_has_its_own_address(string address, string label, string where)
+        {
+            Assert.True(RadioKnobs.TryParseAddress(address, "FTdx101MP", out var slot));
+            Assert.Equal((address, label, where), (slot.Address, slot.Label, slot.Where));
+        }
+
+        [Theory]
+        [InlineData("knob:2:RG0")]       // one for the whole radio: no mode
+        [InlineData("knob:RG0@20m")]     // nor a band
+        [InlineData("knob:PA0")]         // one per band needs the band
+        [InlineData("knob:2:PA0@20m")]   // and no mode
+        [InlineData("knob:2:GT0")]       // one per mode and band needs both
+        [InlineData("knob:GT0@20m")]
+        [InlineData("knob:MG")]          // one per mode needs the mode
+        [InlineData("knob:2:BI")]        // BREAK-IN is only saved in CW
+        [InlineData("knob:PA0@11m")]     // not a band
+        public void Addresses_must_match_the_scope(string address) =>
+            Assert.False(RadioKnobs.TryParseAddress(address, "FTdx101MP", out _));
+
+        [Fact]
+        public void Global_and_band_settings_save_and_parse_back()
+        {
+            var ini = RadioKnobs.ToIni(new[]
+            {
+                new RadioKnobReading(Mode("USB"), Knob("MG"), 50),
+                new RadioKnobReading(null, Knob("RG0"), 247),
+                new RadioKnobReading(null, Knob("KP"), 33),
+                new RadioKnobReading(null, Knob("PA0"), 1, "20m"),
+                new RadioKnobReading(Mode("USB"), Knob("GT0"), 3, "20m"),
+            });
+            // The settings not kept per mode come first, in their own section.
+            Assert.True(ini.IndexOf("[Front panel]") < ini.IndexOf("[Front panel > USB]"));
+            Assert.Contains("IPO (20m) = AMP 1", ini);
+            Assert.Contains("KEY PITCH = 630 Hz", ini);
+
+            var file = RadioMenuLoad.Parse(ini);
+            var byName = file.Items.ToDictionary(i => i.Name);
+            Assert.Equal(("knob:RG0", "247", "247"), (byName["RF GAIN"].Address, byName["RF GAIN"].Value, byName["RF GAIN"].SavedRaw));
+            Assert.Equal(("knob:KP", "630 Hz"), (byName["KEY PITCH"].Address, byName["KEY PITCH"].Value));
+            Assert.Equal(("knob:PA0@20m", "AMP 1"), (byName["IPO (20m)"].Address, byName["IPO (20m)"].Value));
+            Assert.Equal(("knob:2:GT0@20m", "SLOW"), (byName["AGC (20m)"].Address, byName["AGC (20m)"].Value));
+            Assert.Equal("knob:2:MG", byName["MIC GAIN"].Address);
+            foreach (var item in file.Items)
+                Assert.True(RadioKnobs.TryParseAddress(item.Address, "FTdx101MP", out _), item.Address);
+        }
+
+        [Fact]
+        public void Only_transmit_settings_are_marked_TX()
+        {
+            var lines = RadioKnobs.ToIni(new[]
+            {
+                new RadioKnobReading(null, Knob("RG0"), 247),
+                new RadioKnobReading(Mode("USB"), Knob("MG"), 50),
+            }).Split('\n');
+            Assert.DoesNotContain("[TX]", lines.Single(l => l.StartsWith("RF GAIN")));
+            Assert.Contains("[TX]", lines.Single(l => l.StartsWith("MIC GAIN")));
+        }
+
+        [Fact]
+        public void Volume_and_frequency_are_not_saved()
+        {
+            var commands = RadioKnobs.TableFor("FTdx101MP")!.Select(k => k.Command).ToList();
+            Assert.DoesNotContain(commands, c => c.StartsWith("AG") || c.StartsWith("FA") || c.StartsWith("FB"));
+            Assert.Equal(commands.Count, commands.Distinct().Count());
+        }
+
+        [Fact]
+        public void NAR_loads_before_WIDTH()
+        {
+            var commands = RadioKnobs.TableFor("FTdx101MP")!.Select(k => k.Command).ToList();
+            Assert.True(commands.IndexOf("NA0") < commands.IndexOf("SH00"));
+        }
+
+        [Theory]
+        [InlineData("FA014074400;", "20m")]
+        [InlineData("FA007100000;", "40m")]
+        [InlineData("FA001850000;", "160m")]
+        [InlineData("FA050313000;", "6m")]
+        [InlineData("FA009500000;", "GEN")]
+        [InlineData("FB014074400;", null)]
+        [InlineData("?;", null)]
+        public void Band_answers_parse(string answer, string? band) =>
+            Assert.Equal(band, RadioKnobs.ParseBandAnswer(answer));
+
+        [Fact]
+        public void WIDTH_is_read_with_SH0_not_the_set_prefix()
+        {
+            // "SH00;" is not a read on the FTdx101 (#40); "SH0;" answers "SH0020;".
+            Assert.Equal("SH0;", RadioKnobs.ReadCommand(Knob("SH00")));
+            Assert.Equal(20, RadioKnobs.ParseAnswer(Knob("SH00"), "SH0020;"));
+            Assert.Equal("SH0020;", RadioKnobs.SetCommand(Knob("SH00"), 20));
+            Assert.Equal("MG;", RadioKnobs.ReadCommand(Knob("MG")));
+        }
+
+        [Theory]
+        [InlineData("MG", "USB", true)]
+        [InlineData("MG", "CW-U", false)]
+        [InlineData("MG", "RTTY-L", false)]
+        [InlineData("MG", "DATA-U", true)]
+        [InlineData("BC0", "FM", false)]
+        [InlineData("BC0", "AM", true)]
+        [InlineData("BI", "CW-L", true)]
+        [InlineData("BI", "USB", false)]
+        public void Settings_the_radio_has_no_answer_for_are_left_out(string command, string mode, bool applies) =>
+            Assert.Equal(applies, Knob(command).AppliesIn(Mode(mode)));
 
         /// <summary>A radio that keeps MIC GAIN per mode, answers MD0 and the knobs, and logs every command.</summary>
         private sealed class FakeRadio : IRadioKnobLink

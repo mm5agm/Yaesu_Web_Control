@@ -115,7 +115,7 @@ namespace YaesuWebControl.Tests
         public void Close_does_not_ask_when_nothing_differs()
         {
             var (ask, _, _) = RadioMenuReminder.ExitCheck(Saved(2), T0, "FTdx101MP",
-                new[] { ("2", "MG", 50) }, "C", new Dictionary<string, int?> { ["PC"] = 25 });
+                new[] { ("2", "MG", 50) }, "C", null, new Dictionary<string, int?> { ["PC"] = 25 });
             Assert.False(ask);
         }
 
@@ -123,10 +123,10 @@ namespace YaesuWebControl.Tests
         public void Close_asks_for_a_level_changed_in_another_mode()
         {
             var (ask, message, changes) = RadioMenuReminder.ExitCheck(Saved(2), T0, "FTdx101MP",
-                new[] { ("2", "MG", 10) }, "C", new Dictionary<string, int?> { ["PC"] = 25 });
+                new[] { ("2", "MG", 10) }, "C", null, new Dictionary<string, int?> { ["PC"] = 25 });
             Assert.True(ask);
             var ch = Assert.Single(changes);
-            Assert.Equal("USB", ch.Mode);
+            Assert.Equal("in USB", ch.Where);
             Assert.Contains("2 days ago", message);
             Assert.Contains("MIC GAIN changed from 50 to 10 in USB", message);
         }
@@ -136,23 +136,23 @@ namespace YaesuWebControl.Tests
         {
             // Turned to 10 earlier, back to 50 now: not a change.
             var (ask, _, _) = RadioMenuReminder.ExitCheck(Saved(2), T0, "FTdx101MP",
-                new[] { ("2", "MG", 10) }, "2", new Dictionary<string, int?> { ["MG"] = 50 });
+                new[] { ("2", "MG", 10) }, "2", null, new Dictionary<string, int?> { ["MG"] = 50 });
             Assert.False(ask);
 
             // Changed in the current mode without the session seeing it (before YWC started).
             var (ask2, _, changes2) = RadioMenuReminder.ExitCheck(Saved(2), T0, "FTdx101MP",
-                Array.Empty<(string, string, int)>(), "C", new Dictionary<string, int?> { ["PC"] = 50 });
+                Array.Empty<(string, string, int)>(), "C", null, new Dictionary<string, int?> { ["PC"] = 50 });
             Assert.True(ask2);
-            Assert.Equal("DATA-U", Assert.Single(changes2).Mode);
+            Assert.Equal("in DATA-U", Assert.Single(changes2).Where);
         }
 
         [Fact]
         public void Close_with_no_file_asks_only_if_a_level_was_changed()
         {
             Assert.False(RadioMenuReminder.ExitCheck(null, T0, "FTdx101MP",
-                Array.Empty<(string, string, int)>(), "2", NoLive).Ask);
+                Array.Empty<(string, string, int)>(), "2", null, NoLive).Ask);
             var (ask, message, _) = RadioMenuReminder.ExitCheck(null, T0, "FTdx101MP",
-                new[] { ("2", "MG", 10) }, "2", NoLive);
+                new[] { ("2", "MG", 10) }, "2", null, NoLive);
             Assert.True(ask);
             Assert.Contains("MIC GAIN in USB", message);
             Assert.Contains("never been saved", message);
@@ -162,7 +162,7 @@ namespace YaesuWebControl.Tests
         public void Close_never_asks_for_a_radio_without_levels()
         {
             Assert.False(RadioMenuReminder.ExitCheck(Saved(2), T0, "FT-991A",
-                new[] { ("2", "MG", 10) }, "2", NoLive).Ask);
+                new[] { ("2", "MG", 10) }, "2", null, NoLive).Ask);
         }
     }
 }

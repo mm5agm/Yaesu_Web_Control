@@ -63,7 +63,7 @@ public sealed class RadioMenuSessionWatch : IHostedService
                 case nameof(RadioStateService.AmcLevel):
                     if (_radio.AmcLevel is int amc) Changes.OnLevel("AO", amc, now);
                     break;
-                case nameof(RadioStateService.ProcEnabled): Changes.OnLevel("PR0", _radio.ProcEnabled ? 2 : 1, now); break;
+                case nameof(RadioStateService.ProcEnabled): Changes.OnLevel("PR0", _radio.ProcEnabled ? 1 : 0, now); break;
                 case nameof(RadioStateService.ProcLevel): Changes.OnLevel("PL", _radio.ProcLevel, now); break;
                 case nameof(RadioStateService.Power): Changes.OnLevel("PC", _radio.Power, now); break;
                 case nameof(RadioStateService.VoxGain): Changes.OnLevel("VG", _radio.VoxGain, now); break;
