@@ -263,7 +263,23 @@ namespace YaesuWebControl.Tests
             public string Mode = "C";
             public readonly Dictionary<string, int> MicGain = new() { ["2"] = 40, ["C"] = 50 };
             public readonly List<string> Sent = new();
-            public bool Transmitting { get; set; }
+            private bool _transmitting;
+            /// <summary>If set while transmitting, the radio goes back to receive after this many more
+            /// transmit checks. Counting checks, not milliseconds, keeps the tests off the clock.</summary>
+            public int? ReceiveAfterChecks;
+            public bool Transmitting
+            {
+                get
+                {
+                    if (_transmitting && ReceiveAfterChecks is int left)
+                    {
+                        if (left <= 0) { _transmitting = false; ReceiveAfterChecks = null; }
+                        else ReceiveAfterChecks = left - 1;
+                    }
+                    return _transmitting;
+                }
+                set => _transmitting = value;
+            }
             public Action<string>? OnSend;
             public bool IgnoreModeChanges;
 
@@ -330,8 +346,10 @@ namespace YaesuWebControl.Tests
                 visited.Add(m.Name);
                 if (m.Name == "USB")
                 {
+                    // Transmitting when the pass checks before AM, and at the first check
+                    // while it waits to put the mode back; receiving at the next.
                     radio.Transmitting = true;
-                    _ = Task.Delay(100).ContinueWith(_ => radio.Transmitting = false);
+                    radio.ReceiveAfterChecks = 2;
                 }
                 return Task.CompletedTask;
             }, default);
