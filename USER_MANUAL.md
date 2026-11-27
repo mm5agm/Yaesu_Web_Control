@@ -2554,6 +2554,13 @@ The default command line (`--rig-name=WebApp`) causes WSJT-X to use a separate c
 
 ![WSJT-X Radio tab settings](pictures/WSJT-X_Radio.png)
 
+**Audio tab:**
+- Input: your radio's USB codec, for example **Line (USB AUDIO CODEC)** on the FTdx101. Channel: **Mono** suits most radios. Pick **Left** or **Right** if your radio puts a different receiver on each channel.
+- Output: **Speakers (USB AUDIO CODEC)**, channel **Both**.
+- Click OK.
+
+Don't skip this tab. A new WebApp profile starts on your PC's default sound devices, so WSJT-X plays its transmit audio through your PC speakers, and the radio keys up with no power.
+
 **Reporting tab:**
 - UDP Server: `239.255.0.1`
 - UDP Server port: `2237`
@@ -3292,7 +3299,7 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 
 ### 15.1 WSJT-X transmits but the radio shows no TX audio (or zero power output) in DATA-U / DATA-L mode
 
-This is the most common digital-mode setup pitfall and it's not a YWC problem — it's a one-time radio menu setting that has to be done on the radio itself. Yaesu radios ship with the rear DATA/ACC jack as the default audio input for DATA modes, **not** the USB codec that WSJT-X is sending audio to. Until you switch the radio over, DATA-mode TX produces silence.
+This is the most common digital-mode setup pitfall, and it's not a YWC problem. The usual cause is a one-time radio menu setting that has to be done on the radio itself. If the menus are already right, work through the checklist after the table. Yaesu radios ship with the rear DATA/ACC jack as the default audio input for DATA modes, **not** the USB codec that WSJT-X is sending audio to. Until you switch the radio over, DATA-mode TX produces silence.
 
 **Fix on the radio menu:**
 
@@ -3310,6 +3317,15 @@ This is the most common digital-mode setup pitfall and it's not a YWC problem �
 The radio remembers this across power cycles, so it's a once-only change. **Why not configure it from YWC?** An earlier version of YWC tried to send the CAT commands for these menu items automatically, but testing revealed the commands were writing to the wrong menu addresses and never actually worked — the radio appeared to be correctly configured only because operators had set it manually at first install. The auto-config feature was removed rather than ship something misleading.
 
 If you can't find these menu items, your operating manual's index under "DATA MOD SOURCE" or "REAR SELECT" is the authoritative reference for your firmware version.
+
+**Menus right but still no power?** Work down this list. It applies to WSJT-X and to programs built on it, such as WSJT-Z and WS. A quick test first: if CW gives power, and so does SSB when you whistle into the mic, the transmitter is fine and the problem is in one of these steps.
+
+1. **The radio is in DATA-U, not USB.** In USB the radio takes its audio from the SSB input, normally the microphone, so it ignores WSJT-X. WSJT-X sets DATA-U itself when **Settings → Radio → Mode** is **Data/Pkt**. If you then press USB on a YWC page, the radio stays in USB until you change it back.
+2. **The mic gain and AMC level aren't at the bottom.** On the FTdx101 both affect SSB, AM and DATA, but not CW, so CW gives full power while DATA gives none. In DATA-U, turn the **MIC/SPEED** knob, then the outer **PROC/PITCH** knob (the AMC level). Each value shows on the screen for a moment. About 50 for each is a good start. Menu Clear doesn't reset either of them. On other radios, check the mic gain and the USB input level menu (RPORT GAIN on the FTdx101, about 50).
+3. **The WSJT-X Audio tab** has the codec as Output, with channel **Both** (see [§9.1](#91-wsjt-x)).
+4. **The Pwr slider** at the right of the WSJT-X main window is at the top.
+5. **Windows:** in **Settings → System → Sound**, the codec's Speakers device isn't muted and its volume is 100. Under **Volume mixer**, WSJT-X's Output device should be **Default** or the codec, not your PC speakers. The Windows default output doesn't need to be the codec; leave it on your speakers.
+6. **The WSJT-X audio has stuck.** Sometimes WSJT-X keys the radio but sends no audio, even with every setting right. Open **File → Settings → Audio**, select the Output device again and click **OK**. If that doesn't help, close WSJT-X and start it again. Changing any Windows sound device has the same effect, which can make that change look like the fix.
 
 ---
 
