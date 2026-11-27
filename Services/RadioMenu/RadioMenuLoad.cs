@@ -31,6 +31,7 @@ public static class RadioMenuLoad
 {
     private static readonly Regex SectionLine = new(@"^\[([^\]]*)\]$", RegexOptions.Compiled);
     private static readonly Regex Note = new(@"^\s*(\d{6})(?:\s*=\s*(.*?))?\s*(?:\[TX\])?\s*$", RegexOptions.Compiled);
+    private static readonly Regex KnobNote = new(@"^\s*([A-Z]{2}\d?)(?:\s*=\s*(\d+))?\s*(?:\[TX\])?\s*$", RegexOptions.Compiled);
     private static readonly Regex NumberWithUnit = new(@"^([+-]?\d+(?:\.\d+)?)\s*[A-Za-z/]+$", RegexOptions.Compiled);
 
     public const string NoAnswer = "(no answer)";
@@ -62,6 +63,16 @@ public static class RadioMenuLoad
             {
                 if (name.Equals("Program", StringComparison.OrdinalIgnoreCase)) program = value;
                 else if (name.Equals("Radio", StringComparison.OrdinalIgnoreCase)) radio = value;
+                continue;
+            }
+            var mode = RadioKnobs.ModeForSection(section, radio);
+            if (mode is not null || section.StartsWith(RadioKnobs.SectionPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                // A front-panel level: "MIC GAIN = 50 ; MG = 050". Its address is "knob:<mode>:<command>".
+                var knobNote = KnobNote.Match(comment);
+                string? knobAddress = mode is not null && knobNote.Success ? $"{RadioKnobs.AddressPrefix}{mode.Code}:{knobNote.Groups[1].Value}" : null;
+                string? knobRaw = knobNote.Success && knobNote.Groups[2].Success ? knobNote.Groups[2].Value : null;
+                items.Add(new RadioMenuFileItem(n + 1, section, name, value, knobAddress, knobRaw));
                 continue;
             }
             var note = Note.Match(comment);

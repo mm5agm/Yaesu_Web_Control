@@ -3148,7 +3148,10 @@
                 <span id="radioMenuSaveStatus" class="ms-2 small" role="status"></span>
             </div>
             <p class="text-muted small mt-2">
-                Saving only reads from the radio; nothing on the radio is changed. It takes a few seconds.
+                Saving reads the menu, then the front panel levels (MIC GAIN, AMC, PROC, RF POWER, MONITOR and VOX GAIN)
+                in each mode, because the radio keeps some of them per mode. To read those, YWC switches the main band
+                through the modes and then puts your mode back. Nothing else on the radio is changed, and it never changes
+                mode while the radio transmits. Don't transmit from another program while it runs. It takes about 15 seconds.
                 The file goes in <code id="radioMenuFolder">%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus</code>,
                 with YWC's other files.
                 <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="radioMenuOpenFolderBtn">Open that folder</button>
@@ -3171,6 +3174,8 @@
             <p class="text-muted small mt-2 mb-0">
                 Loading first shows what would change, and sends nothing. Tick the items you want and press
                 <strong>Send ticked items to the radio</strong>. Items marked TX change how the radio transmits and start unticked.
+                The front panel levels are listed as, for example, MIC GAIN (USB); checking or sending them switches modes
+                the same way and puts your mode back.
                 The CAT rate, time-out and RTS items are never loaded, because a wrong one would cut YWC off from the radio.
                 You can edit the file in Notepad first: change the value after <code>=</code>, as the radio shows it.
             </p>
@@ -3254,7 +3259,7 @@
         if (!btn) return;
         btn.addEventListener('click', async () => {
             btn.disabled = true;
-            statusEl.textContent = 'Reading the radio menu…';
+            statusEl.textContent = 'Reading the radio menu, then the front panel levels in each mode…';
             statusEl.className = 'ms-2 small text-muted';
             try {
                 const r = await fetch('/api/radiomenu/save', { method: 'POST' });
@@ -3265,7 +3270,8 @@
                     return;
                 }
                 statusEl.textContent = `Saved to ${data.path}.` +
-                    (data.missing ? ` ${window.radioMenuUnanswered(data)} The file marks them (no answer).` : '');
+                    (data.missing ? ` ${window.radioMenuUnanswered(data)} The file marks them (no answer).` : '') +
+                    (data.knobsStopped ? ` Front panel levels not all saved: ${data.knobsStopped}` : '');
                 document.dispatchEvent(new CustomEvent('radiomenu-saved', { detail: data.name }));
                 statusEl.className = 'ms-2 small text-success';
             } catch (e) {
@@ -3423,7 +3429,7 @@
             const file = { name: fileName };
             preview.hidden = true;
             applyStatus.textContent = '';
-            setStatus(statusEl, `Reading the radio to compare with "${file.name}"… Nothing is sent yet.`, 'muted');
+            setStatus(statusEl, `Reading the radio to compare with "${file.name}"… Nothing is set yet, only mode changes to read the front panel levels.`, 'muted');
             try {
                 const r = await fetch('/api/radiomenu/load/preview', {
                     method: 'POST',
@@ -3488,9 +3494,10 @@
                         tr.cells[0].replaceChildren();
                     }
                 }
-                setStatus(applyStatus, bad
+                setStatus(applyStatus, (bad
                     ? `${ok} set, ${bad} not set. See the Note column.`
-                    : `${ok} item${ok === 1 ? '' : 's'} set on the radio and read back.`, bad ? 'danger' : 'success');
+                    : `${ok} item${ok === 1 ? '' : 's'} set on the radio and read back.`) +
+                    (data.warning ? ` ${data.warning}` : ''), bad || data.warning ? 'danger' : 'success');
             } catch (e) {
                 setStatus(applyStatus, `Not sent: ${e.message}`, 'danger');
             } finally {

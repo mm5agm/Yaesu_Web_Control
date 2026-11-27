@@ -2053,14 +2053,14 @@ If the connection drops, the app reconnects automatically after 15 seconds. Disa
 
 | | Backup & Restore | Radio Menu |
 |---|---|---|
-| **What it saves** | YWC's own settings: COM port, band plan, memories, DX cluster, per-band memory and the rest | The radio's own menu settings: what you see when you press **FUNC** and touch **MENU** on the radio |
+| **What it saves** | YWC's own settings: COM port, band plan, memories, DX cluster, per-band memory and the rest | The radio's own menu settings: what you see when you press **FUNC** and touch **MENU** on the radio. Also the front panel levels (MIC GAIN, AMC, PROC, RF POWER, MONITOR, VOX GAIN) in each mode |
 | **Where those settings live** | On this PC, in `%APPDATA%\MM5AGM\Yaesu Web Control` | Inside the radio |
 | **Button** | **Export full backup** | **Save radio menu to file** |
 | **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Backups` | `YWC radio menu <model> <date> <time>.ini`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus` |
 | **Open it with** | Unzip it; the files inside are JSON | Notepad, or any text editor |
 | **Putting it back** | **Import full backup…**, then restart YWC | **Load this one** or **Load from another file…**, then tick what to send |
 | **Changing one setting** | Change it on the Settings page | **Change radio settings…**, pick the new value, then send |
-| **Does it change the radio?** | No | Saving only reads the radio. Loading changes only the items you tick |
+| **Does it change the radio?** | No | Saving reads the radio, and switches the mode to read the front panel levels, then puts it back. Loading changes only the items you tick |
 
 Use **Backup & Restore** to move YWC to a new PC or undo a change to YWC's settings. Use **Radio Menu** to keep a record of how the radio itself is set up, for example before a factory reset or a firmware update, or to keep one file for contesting and another for everyday use. Neither save includes the other: the backup zip has no radio menu settings in it, and the radio menu file has none of YWC's settings.
 
@@ -2115,7 +2115,7 @@ The quickest way to change one of the radio's menu items is **Change radio setti
 
 **Save radio menu to file**
 
-Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, a few seconds, and writes the file. Available for the FTdx101MP and FTdx101D.
+Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, then the front panel levels in each mode (below), and writes the file. It takes about 15 seconds. Available for the FTdx101MP and FTdx101D.
 
 The file goes in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus`, with YWC's other files, on the PC that runs YWC. The page shows the full path after each save, and **Open that folder** opens it in Explorer. If you use YWC from a browser on another PC, pick the file under **Saved files** and click **Download a copy** to get it on that PC.
 
@@ -2134,7 +2134,18 @@ MY CALL TIME = 1 s                       ; 040102 = 01
 - **`(no answer)`** means the radio did not reply for that item, usually because it does not apply to the radio's current setup.
 - Save as many files as you like and rename them for how you use the radio, for example `YWC radio menu contest.ini`.
 
-Saving only reads the radio. Nothing on the radio changes.
+**Front panel levels.** Some settings are not in the radio's menu but on its knobs and buttons: **MIC GAIN** (the MIC/SPEED knob), the **AMC** level and the **PROC** on/off and level (the PROC/PITCH knob), **RF POWER**, the **MONITOR** level and **VOX GAIN**. The radio keeps some of these separately for each mode, so YWC reads them all in each mode: LSB, USB, CW-U, CW-L, AM, FM, DATA-L, DATA-U, RTTY-L, RTTY-U and PSK. They go at the end of the file, one section per mode:
+
+```ini
+[Front panel > USB]
+MIC GAIN = 50                            ; MG = 050  [TX]
+AMC LEVEL = 50                           ; AO = 050  [TX]
+PROC = OFF                               ; PR0 = 1  [TX]
+PROC LEVEL = 36                          ; PL = 036  [TX]
+RF POWER = 100 W                         ; PC = 100  [TX]
+```
+
+To read them, YWC switches the main band through those modes, a few seconds, and then puts it back in the mode it was in. Nothing else changes. YWC never changes mode while the radio transmits: if you are transmitting, it does not start, and if transmit starts part way through, it stops and puts the mode back when the radio returns to receive. Don't transmit from WSJT-X or another program while it saves. Saving otherwise only reads the radio.
 
 **Loading a file**
 
@@ -2144,8 +2155,9 @@ Pick a file from **Saved files** and click **Load this one**, or click **Load fr
 - Items already the same are hidden. Tick **Show items that are already the same** to see them.
 - Items that cannot be loaded say why in the Note column, for example a value the radio does not offer.
 - **232C RATE, 232C TIME OUT TIMER, CAT RATE, CAT TIME OUT TIMER and CAT RTS are never loaded.** A wrong one would cut YWC off from the radio. Change them on the radio if you need to.
+- Front panel levels show with their mode, for example **MIC GAIN (USB)**, and are marked **TX**, so they start unticked. To compare them, YWC switches modes the same way as when saving and puts your mode back; it sets nothing until you send.
 
-Press **Send ticked items to the radio** and confirm. YWC sends each ticked item, reads it back, and shows **Sent and read back** or what went wrong.
+Press **Send ticked items to the radio** and confirm. YWC sends each ticked item, reads it back, and shows **Sent and read back** or what went wrong. Ticked front panel levels are set one mode at a time, and then the radio goes back to the mode it was in.
 
 **Editing the file.** You can change a value in Notepad before loading it. Change the text after `=`, as the radio's screen would show it, and leave the part after `;` alone. For example, to turn on the first band of the processor-on equaliser at 300 Hz:
 
