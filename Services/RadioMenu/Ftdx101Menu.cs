@@ -35,7 +35,7 @@ public static class Ftdx101Menu
     public static readonly IReadOnlyList<RadioMenuItem> ItemsD = Build(mp: false);
 
     /// <summary>How an item's value is shown and which values the radio accepts.</summary>
-    private sealed record Kind(Func<string, string> Decode, IReadOnlyList<int>? Values, int TextMax = 0);
+    internal sealed record Kind(Func<string, string> Decode, IReadOnlyList<int>? Values, int TextMax = 0);
 
     private static List<RadioMenuItem> Build(bool mp)
     {
@@ -284,16 +284,16 @@ public static class Ftdx101Menu
     // ── Decoders. Each falls back to the raw value when it cannot place it,
     //    so an unexpected answer is shown as sent rather than dropped.
 
-    private static IReadOnlyList<int> Range(int min, int max, int step = 1) =>
+    internal static IReadOnlyList<int> Range(int min, int max, int step = 1) =>
         Enumerable.Range(0, (max - min) / step + 1).Select(i => min + i * step).ToArray();
 
-    private static Kind Choice(params string[] labels) => new(raw =>
+    internal static Kind Choice(params string[] labels) => new(raw =>
         int.TryParse(raw, out var i) && i >= 0 && i < labels.Length ? labels[i] : raw, Range(0, labels.Length - 1));
 
     /// <summary>A plain number, signed if the radio signs it ("+05" is +5).</summary>
-    private static Kind Units(string unit, int min, int max, int step = 1) => new(UnitsText(unit), Range(min, max, step));
+    internal static Kind Units(string unit, int min, int max, int step = 1) => new(UnitsText(unit), Range(min, max, step));
 
-    private static Func<string, string> UnitsText(string unit) => raw =>
+    internal static Func<string, string> UnitsText(string unit) => raw =>
     {
         if (!int.TryParse(raw, out var v)) return raw;
         var text = raw.StartsWith('+') || raw.StartsWith('-') ? v.ToString("+0;-0;0") : v.ToString();
@@ -301,25 +301,25 @@ public static class Ftdx101Menu
     };
 
     /// <summary>0 = OFF, then 1 to max.</summary>
-    private static Kind OffOrUnits(string unit, int max) => new(raw =>
+    internal static Kind OffOrUnits(string unit, int max) => new(raw =>
         int.TryParse(raw, out var v) && v == 0 ? "OFF" : UnitsText(unit)(raw), Range(0, max));
 
     /// <summary>00 = OFF, then 01 = first, each step adding step, up to last.</summary>
-    private static Kind Steps(int first, int step, int last, string unit) => new(raw =>
+    internal static Kind Steps(int first, int step, int last, string unit) => new(raw =>
         !int.TryParse(raw, out var v) ? raw : v == 0 ? "OFF" : $"{first + (v - 1) * step} {unit}",
         Range(0, (last - first) / step + 1));
 
     /// <summary>1000 = the MIC GAIN knob (MCVR), 0000-0100 = a fixed gain.</summary>
-    private static Kind MicGain => new(raw =>
+    internal static Kind MicGain => new(raw =>
         !int.TryParse(raw, out var v) ? raw : v == 1000 ? "MCVR" : $"FIX {v}", Range(0, 100).Append(1000).ToArray());
 
     /// <summary>25-45 is a weight of 2.5-4.5.</summary>
-    private static Kind Tenths => new(raw =>
+    internal static Kind Tenths => new(raw =>
         int.TryParse(raw, out var v) ? (v / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) : raw,
         Range(25, 45));
 
     /// <summary>The same step table as the SD command: 30, 50, 100-300 in 50s, then 100s to 3000.</summary>
-    private static Kind BreakInDelay => new(raw =>
+    internal static Kind BreakInDelay => new(raw =>
     {
         if (!int.TryParse(raw, out var v) || v < 0 || v > 33) return raw;
         int ms = v switch { 0 => 30, 1 => 50, <= 6 => 100 + (v - 2) * 50, _ => 400 + (v - 7) * 100 };
@@ -327,5 +327,5 @@ public static class Ftdx101Menu
     }, Range(0, 33));
 
     /// <summary>Free text of up to max characters, e.g. MY CALL.</summary>
-    private static Kind Text(int max) => new(raw => raw.Trim(), null, max);
+    internal static Kind Text(int max) => new(raw => raw.Trim(), null, max);
 }

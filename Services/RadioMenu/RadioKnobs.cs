@@ -111,7 +111,7 @@ public static class RadioKnobs
     /// <summary>Knob rows use "knob:2:MG" as their address, so they can never clash with an EX address.</summary>
     public const string AddressPrefix = "knob:";
 
-    /// <summary>The FTdx101's main-band modes (MD0), in the order the file lists them.</summary>
+    /// <summary>The FTdx101's main-band modes (MD0), in the order the file lists them. The FTDX10 uses the same codes.</summary>
     public static readonly IReadOnlyList<RadioKnobMode> Ftdx101Modes =
     [
         new("1", "LSB"), new("2", "USB"),
@@ -195,11 +195,18 @@ public static class RadioKnobs
     private static readonly IReadOnlyList<RadioKnob> Ftdx101Mp = Ftdx101(200);
     private static readonly IReadOnlyList<RadioKnob> Ftdx101D = Ftdx101(100);
 
+    /// <summary>
+    /// The FTDX10 has the same front panel commands, ranges and mode codes as the
+    /// FTdx101 main band (FTDX10 CAT manual 2308-F), with RF POWER to 100 W.
+    /// </summary>
+    private static readonly IReadOnlyList<RadioKnob> Ftdx10 = Ftdx101(100);
+
     /// <summary>The knobs for a model, or null if YWC saves none for it.</summary>
     public static IReadOnlyList<RadioKnob>? TableFor(string? radioModel) => radioModel switch
     {
         "FTdx101MP" => Ftdx101Mp,
         "FTdx101D" => Ftdx101D,
+        "FTdx10" => Ftdx10,
         _ => null,
     };
 

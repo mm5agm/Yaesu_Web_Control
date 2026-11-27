@@ -92,9 +92,9 @@ namespace YaesuWebControl.Tests
         [InlineData("FTdx101MP", true)]
         [InlineData("FTdx101D", true)]
         [InlineData("FT-710", false)]
-        [InlineData("FTdx10", false)]
+        [InlineData("FTdx10", true)]
         [InlineData("FTDX3000", false)]
-        public void Only_the_FTdx101_has_a_table_so_far(string model, bool has)
+        public void Only_the_FTdx101_and_FTDX10_have_a_table_so_far(string model, bool has)
             => Assert.Equal(has, RadioMenuCat.TableFor(model) is not null);
 
         [Fact]

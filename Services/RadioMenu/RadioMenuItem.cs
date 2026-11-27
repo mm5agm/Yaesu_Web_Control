@@ -45,7 +45,26 @@ public static class RadioMenuCat
     {
         "FTdx101MP" => Ftdx101Menu.Items,
         "FTdx101D" => Ftdx101Menu.ItemsD,
+        "FTdx10" => Ftdx10Menu.Items,
         _ => null,
+    };
+
+    /// <summary>
+    /// True when a file saved from <paramref name="fileRadio"/> can have its
+    /// menu lines loaded into <paramref name="radioModel"/>. The FTdx101MP and
+    /// FTdx101D share one menu; the FTDX10 menu uses the same EX addresses for
+    /// different items (010101 is AGC FAST DELAY on one, AF TREBLE GAIN on the
+    /// other), so a file never crosses between them. A file with no radio named
+    /// is let through, as before.
+    /// </summary>
+    public static bool SameMenu(string? fileRadio, string? radioModel) =>
+        string.IsNullOrWhiteSpace(fileRadio) || MenuFamily(fileRadio) == MenuFamily(radioModel);
+
+    private static string? MenuFamily(string? radioModel) => radioModel?.Trim().ToUpperInvariant() switch
+    {
+        "FTDX101MP" or "FTDX101D" => "FTdx101",
+        null => null,
+        var other => other,
     };
 
     public static string ReadCommand(string address)
