@@ -12,6 +12,54 @@ a different and much older format.
 
 ---
 
+## 2026-11-27 - v2.5.6-pre44 (pre-release)
+
+*The radio menu file now saves the front panel too: RF GAIN, AGC, IPO, NB, MIC GAIN, PROC, power and the rest. YWC reminds you to save when they change. Everything in v2.5.6-pre43 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Radio menu file: front panel settings** ([#462](https://github.com/mm5agm/Yaesu_Web_Control/pull/462), [manual](USER_MANUAL.md#radio-menu))
+
+- **Save radio menu to file** (Settings, FTdx101MP and FTdx101D) now also saves every front panel setting except the volume (AF GAIN) and the frequency.
+- Each is saved the way the radio keeps it:
+  - once for the radio: RF GAIN, SQUELCH, KEY SPEED and similar;
+  - per band: IPO, ATT, NB and NR;
+  - per band and mode: AGC, WIDTH, NOTCH and CONTOUR;
+  - per mode: MIC GAIN, AMC, PROC, RF POWER, MONITOR and VOX GAIN.
+- Per-band settings are saved for the band you are on. To keep another band's, change band and save again.
+- To read the per-mode settings, YWC switches the main band through the modes and then puts your mode back. It never changes mode while the radio transmits.
+- Loading lists them as, for example, **MIC GAIN (USB)** or **AGC (USB, 20m)**.
+  - Settings that change how the radio transmits are marked TX and start unticked.
+  - A setting saved for another band is skipped, with a note.
+- Files from an older YWC still load as before.
+
+**Reminder to save the radio menu**
+
+- When YWC starts, a banner asks you to save if:
+  - there is no saved file yet;
+  - the newest file is 30 days old;
+  - a front panel setting differs from the newest file, for example *MIC GAIN changed from 50 to 0 in USB*.
+- **Save now** saves straight away. **Not now** waits a week.
+- When you close YWC, the Close YWC page and the tray's Exit offer **Save and close** if a front panel setting changed while YWC was running.
+
+**Manual: no power in DATA-U** ([#461](https://github.com/mm5agm/Yaesu_Web_Control/pull/461), [manual](USER_MANUAL.md#151-wsjt-x-transmits-but-the-radio-shows-no-tx-audio-or-zero-power-output-in-data-u--data-l-mode))
+
+- The WSJT-X setup now covers the Audio tab.
+- FAQ 15.1 has a checklist for when the radio shows no power.
+
+## 2026-11-26 - v2.5.6-pre43 (pre-release)
+
+*Two fixes from an FT-817 tester: the power meter no longer sits at full scale, and Settings keeps the baud rate you choose. Everything in v2.5.6-pre42 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT-817/818/857/897 power meter at full scale** ([#458](https://github.com/mm5agm/Yaesu_Web_Control/pull/458), Discussion [#379](https://github.com/mm5agm/Yaesu_Web_Control/discussions/379))
+
+- If you first ran YWC before it had a table for your radio, your calibration file kept the table for a 200 W radio. On that scale even 1 bar of power showed as 5 W or more.
+- YWC now checks each meter when it starts. If a meter still has a table you never edited, and that table isn't the one for your radio, YWC swaps in the right one.
+- Meters you calibrated yourself are kept.
+
+**Settings: Baud Rate and Web Address are kept** ([#458](https://github.com/mm5agm/Yaesu_Web_Control/pull/458))
+
+- Saving Settings changed any baud rate below 38400 (4800, 9600, 19200) to 38400, and changed Web Address "localhost" to All Interfaces. Both now keep what you chose.
+- If either was changed on you, set it once more in Settings and save.
+
 ## 2026-11-25 - v2.5.6-pre42 (pre-release)
 
 *Close YWC from any browser with one click, and free the radio's COM port for another program. Everything in v2.5.6-pre41 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
