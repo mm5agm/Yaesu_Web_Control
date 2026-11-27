@@ -17,10 +17,11 @@ namespace YaesuWebControl.Tests
         private static RadioKnobMode Mode(string name) => RadioKnobs.Ftdx101Modes.Single(m => m.Name == name);
 
         [Fact]
-        public void Only_the_FTdx101_has_knobs()
+        public void Only_the_FTdx101_and_FTDX10_have_knobs()
         {
             Assert.NotNull(RadioKnobs.TableFor("FTdx101MP"));
             Assert.NotNull(RadioKnobs.TableFor("FTdx101D"));
+            Assert.NotNull(RadioKnobs.TableFor("FTdx10"));
             Assert.Null(RadioKnobs.TableFor("FT-991A"));
             Assert.Empty(RadioKnobs.ModesFor("FT-991A"));
         }

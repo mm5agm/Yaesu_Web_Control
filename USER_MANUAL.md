@@ -2115,7 +2115,7 @@ The quickest way to change one of the radio's menu items is **Change radio setti
 
 **Save radio menu to file**
 
-Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, then the front panel settings (below), and writes the file. It takes about 15 seconds. Available for the FTdx101MP and FTdx101D.
+Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, then the front panel settings (below), and writes the file. It takes about 15 seconds. Available for the FTdx101MP, FTdx101D and FTDX10. FTDX10 support is new and needs testers: if you have one, please try it and tell us on GitHub how it went.
 
 The file goes in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus`, with YWC's other files, on the PC that runs YWC. The page shows the full path after each save, and **Open that folder** opens it in Explorer. If you use YWC from a browser on another PC, pick the file under **Saved files** and click **Download a copy** to get it on that PC.
 
@@ -2191,7 +2191,7 @@ P PRMTRC EQ1 FREQ = 300 Hz               ; 030312 = 00  [TX]
 
 The value after `=` is what counts; the number after `;` is only used when you have not changed the value. Capitals, spaces and a leading `+` do not matter, and you can leave the unit off (`300` works as well as `300 Hz`). The value must be one the radio offers: `ON` is not, because this item's settings are OFF and 100 to 700 Hz. If you type something the radio does not offer, the Note column says so and lists what the item takes. MY CALL takes up to 12 letters, numbers and symbols, except `;`.
 
-A file saved from an FTdx101MP can be loaded into an FTdx101D, and the other way round. YWC warns you, and any power setting above the D's 100 W is refused.
+A file saved from an FTdx101MP can be loaded into an FTdx101D, and the other way round. YWC warns you, and any power setting above the D's 100 W is refused. An FTDX10 menu is different: the same menu number is a different item. So menu items in a file from an FTdx101 are never loaded into an FTDX10, or the other way round. The preview lists them as not loaded. Front panel settings that suit the radio still load, and any power above the FTDX10's 100 W is refused.
 
 ---
 

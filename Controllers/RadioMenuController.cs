@@ -488,8 +488,14 @@ namespace Yaesu_Web_Control.Controllers
             var rows = new List<object>();
             var seen = new HashSet<string>();
             int changes = 0;
+            bool sameMenu = RadioMenuCat.SameMenu(file.Radio, model);
             foreach (var line in file.Items.Where(l => !IsKnobLine(l)))
             {
+                if (!sameMenu)
+                {
+                    rows.Add(Row(null, line, "unknown", null, null, $"Line {line.Line}: saved from a {file.Radio}, whose menu is different from the {model}'s, so it is not loaded."));
+                    continue;
+                }
                 var item = RadioMenuLoad.Find(table, line);
                 if (item is null)
                 {
@@ -538,9 +544,11 @@ namespace Yaesu_Web_Control.Controllers
             var (knobChanges, knobsStopped) = await PreviewKnobsAsync(file.Items.Where(IsKnobLine).ToList(), model, rows, seen, ct);
             changes += knobChanges;
 
-            string? warning = file.Radio is not null && !string.Equals(file.Radio, model, StringComparison.OrdinalIgnoreCase)
-                ? $"This file was saved from a {file.Radio}; the radio now is a {model}. Check each change."
-                : null;
+            string? warning = file.Radio is null || string.Equals(file.Radio, model, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : sameMenu
+                    ? $"This file was saved from a {file.Radio}; the radio now is a {model}. Check each change."
+                    : $"This file was saved from a {file.Radio}; the radio now is a {model}. The two menus are different, so no menu items are loaded. Front panel settings that suit the {model} still load; check each change.";
             if (knobsStopped is not null)
                 warning = warning is null ? $"Front panel settings: {knobsStopped}" : $"{warning} Front panel settings: {knobsStopped}";
             // An older file still loads; it just has no front panel settings to put back.
