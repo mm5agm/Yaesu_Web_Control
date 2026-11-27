@@ -3147,6 +3147,7 @@
                 </button>
                 <span id="radioMenuSaveStatus" class="ms-2 small" role="status"></span>
             </div>
+            <div id="radioMenuReminderLine" class="small mt-1" hidden></div>
             <p class="text-muted small mt-2">
                 Saving reads the menu, then the front panel levels (MIC GAIN, AMC, PROC, RF POWER, MONITOR and VOX GAIN)
                 in each mode, because the radio keeps some of them per mode. To read those, YWC switches the main band
@@ -3394,6 +3395,20 @@
         }
         listSaved();
         document.addEventListener('radiomenu-saved', listSaved);
+
+        // The same check as the start-up banner, always shown here (a "Not now" only hides the banner).
+        const reminderLine = document.getElementById('radioMenuReminderLine');
+        async function showReminder() {
+            try {
+                const r = await fetch('/api/radiomenu/reminder');
+                const d = await r.json();
+                reminderLine.hidden = !(d.supported && !d.pending && d.kind && d.kind !== 'ok');
+                reminderLine.textContent = d.message || '';
+                reminderLine.className = `small mt-1 text-${d.kind === 'changed' || d.kind === 'none' ? 'warning-emphasis' : 'muted'}`;
+            } catch { reminderLine.hidden = true; }
+        }
+        showReminder();
+        document.addEventListener('radiomenu-saved', () => setTimeout(showReminder, 500));
 
         document.getElementById('radioMenuOpenFolderBtn').addEventListener('click', async () => {
             const r = await fetch('/api/radiomenu/open-folder', { method: 'POST' });

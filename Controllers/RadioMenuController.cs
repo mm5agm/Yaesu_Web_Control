@@ -144,6 +144,7 @@ namespace Yaesu_Web_Control.Controllers
                 _logger.LogError(ex, "Radio menu save: could not write {Path}", path);
                 return StatusCode(500, new { error = $"Could not write {path}: {ex.Message}" });
             }
+            _reminderCache = null;
             return Ok(new { name, path, missing, unanswered, knobs = knobReadings.Count(k => k.Value is not null), knobsStopped });
         }
 
@@ -175,6 +176,136 @@ namespace Yaesu_Web_Control.Controllers
             if (download)
                 return PhysicalFile(path, "text/plain", name);
             return Ok(new { name, text = await System.IO.File.ReadAllTextAsync(path, ct) });
+        }
+
+        /// <summary>"Not now" on the reminder: hides it until YWC starts again.</summary>
+        private static bool _reminderDismissedThisRun;
+
+        /// <summary>The last check, so a page change does not read the radio again.</summary>
+        private static (DateTime At, RadioMenuReminderResult Result)? _reminderCache;
+
+        private static readonly TimeSpan ReminderCacheFor = TimeSpan.FromSeconds(60);
+
+        /// <summary>"Not now" on an old or changed reminder also keeps it away for this long.</summary>
+        public const int ReminderSnoozeDays = 7;
+
+        private static string SnoozeFile => Path.Combine(SavesFolder, "reminder-snooze.txt");
+
+        /// <summary>The newest file YWC saved for this radio model, or null.</summary>
+        private static RadioMenuSaveInfo? NewestSave(string model)
+        {
+            var dir = new DirectoryInfo(SavesFolder);
+            if (!dir.Exists) return null;
+            // Newest first; a few only, so a folder of hundreds stays quick.
+            foreach (var f in dir.GetFiles("*.ini").OrderByDescending(f => f.LastWriteTime).Take(20))
+            {
+                string text;
+                try { text = System.IO.File.ReadAllText(f.FullName); }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+                if (string.Equals(RadioMenuLoad.Parse(text).Radio, model, StringComparison.OrdinalIgnoreCase))
+                    return new RadioMenuSaveInfo(f.Name, f.LastWriteTime, text);
+            }
+            return null;
+        }
+
+        private static DateTime? SnoozedUntil()
+        {
+            try
+            {
+                return System.IO.File.Exists(SnoozeFile)
+                    && DateTime.TryParse(System.IO.File.ReadAllText(SnoozeFile).Trim(), System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.RoundtripKind, out var until)
+                    ? until : null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// GET /api/radiomenu/reminder — should YWC remind the user to save the
+        /// radio menu? Reads only: the main band's mode and the front-panel
+        /// levels in that mode, never a mode change. The banner on every page
+        /// asks when YWC starts; the Settings page shows the same line.
+        /// pending means ask again shortly (radio not connected, or a save or
+        /// load is running).
+        /// </summary>
+        [HttpGet("reminder")]
+        public async Task<IActionResult> Reminder(CancellationToken ct)
+        {
+            var model = _settings.GetCachedSettings().RadioModel;
+            if (RadioMenuCat.TableFor(model) is null)
+                return Ok(new { supported = false });
+            if (!_cat.IsConnected)
+                return Ok(new { supported = true, pending = true });
+
+            RadioMenuReminderResult result;
+            if (_reminderCache is { } cached && DateTime.Now - cached.At < ReminderCacheFor)
+                result = cached.Result;
+            else
+            {
+                var newest = NewestSave(model);
+                string? mode = null;
+                var live = new Dictionary<string, int?>();
+                var knobs = RadioKnobs.TableFor(model);
+                if (newest is not null && knobs is not null)
+                {
+                    if (!await LoadGate.WaitAsync(0, ct))
+                        return Ok(new { supported = true, pending = true });
+                    try
+                    {
+                        var link = new KnobLink(_cat, _radio);
+                        mode = RadioKnobs.ParseModeAnswer(await link.AskAsync("MD0;", ct));
+                        var pass = NewKnobPass();
+                        foreach (var knob in knobs)
+                            live[knob.Command] = await pass.ReadAsync(knob, ct);
+                    }
+                    finally
+                    {
+                        LoadGate.Release();
+                    }
+                }
+                result = RadioMenuReminder.Check(newest, DateTime.Now, model, mode, live);
+                _reminderCache = (DateTime.Now, result);
+            }
+
+            // No save at all is asked at every start; the others wait out a "Not now".
+            bool snoozed = _reminderDismissedThisRun
+                || (result.Kind != "none" && SnoozedUntil() is DateTime until && until > DateTime.Now);
+            return Ok(new
+            {
+                supported = true,
+                pending = false,
+                kind = result.Kind,
+                show = result.Kind != "ok" && !snoozed,
+                message = RadioMenuReminder.Message(result),
+                days = result.Days,
+                file = result.File,
+                changes = result.Changes,
+            });
+        }
+
+        /// <summary>
+        /// POST /api/radiomenu/reminder/later — "Not now": no banner until YWC
+        /// starts again, and no old/changed reminder for a week. A missing save
+        /// is still asked at the next start.
+        /// </summary>
+        [HttpPost("reminder/later")]
+        public IActionResult ReminderLater()
+        {
+            _reminderDismissedThisRun = true;
+            try
+            {
+                Directory.CreateDirectory(SavesFolder);
+                System.IO.File.WriteAllText(SnoozeFile, DateTime.Now.AddDays(ReminderSnoozeDays).ToString("o"));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Radio menu reminder: could not write {Path}", SnoozeFile);
+            }
+            return Ok(new { snoozeDays = ReminderSnoozeDays });
         }
 
         /// <summary>
@@ -341,6 +472,12 @@ namespace Yaesu_Web_Control.Controllers
                 : null;
             if (knobsStopped is not null)
                 warning = warning is null ? $"Front panel levels: {knobsStopped}" : $"{warning} Front panel levels: {knobsStopped}";
+            // An older file still loads; it just has no levels to put back.
+            if (RadioKnobs.TableFor(model) is not null && !file.Items.Any(IsKnobLine))
+            {
+                const string old = "This file was saved before YWC saved the front panel levels (MIC GAIN, AMC, PROC, power), so only the menu is loaded. Save a new file to include them.";
+                warning = warning is null ? old : $"{warning} {old}";
+            }
             _logger.LogInformation("Radio menu load preview: {Rows} lines, {Changes} changes", rows.Count, changes);
             return Ok(new { model, fileRadio = file.Radio, warning, rows });
         }
@@ -444,6 +581,7 @@ namespace Yaesu_Web_Control.Controllers
                 return BadRequest(new { error = "Nothing was ticked." });
             if (!await LoadGate.WaitAsync(0, ct))
                 return Conflict(new { error = "A radio menu load is already running." });
+            _reminderCache = null;
             try
             {
                 var results = new List<object>();

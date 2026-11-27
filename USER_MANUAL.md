@@ -2147,6 +2147,15 @@ RF POWER = 100 W                         ; PC = 100  [TX]
 
 To read them, YWC switches the main band through those modes, a few seconds, and then puts it back in the mode it was in. Nothing else changes. YWC never changes mode while the radio transmits: if you are transmitting, it does not start, and if transmit starts part way through, it stops and puts the mode back when the radio returns to receive. Don't transmit from WSJT-X or another program while it saves. Saving otherwise only reads the radio.
 
+**Reminder to save.** When YWC starts and the radio is connected, a banner at the top of the page asks you to save if:
+
+- there is no saved file for this radio yet;
+- your newest file is 30 days old or more;
+- a front panel level in the mode you are in now is not what your newest file holds, for example *MIC GAIN changed from 50 to 0 in USB*;
+- your newest file was saved by an older YWC and has no front panel levels.
+
+**Save now** saves straight away, exactly like the button above. **Not now** hides the banner until YWC starts again. For the 30-day and changed reminders it also waits a week; if there is no save at all, YWC asks again at the next start. The same line shows under **Save radio menu to file** whenever it applies. To check, YWC reads only the mode and the levels in that mode: it never changes mode or sets anything. Changes made in the radio's own menu are not checked, which is why the 30-day reminder is there.
+
 **Loading a file**
 
 Pick a file from **Saved files** and click **Load this one**, or click **Load from another file…** to pick a file from anywhere else, such as one a friend emailed you. YWC reads the radio again and shows a table of what would change: the item, its value on the radio now, and its value in the file. **Nothing is sent at this point.**
@@ -2156,6 +2165,7 @@ Pick a file from **Saved files** and click **Load this one**, or click **Load fr
 - Items that cannot be loaded say why in the Note column, for example a value the radio does not offer.
 - **232C RATE, 232C TIME OUT TIMER, CAT RATE, CAT TIME OUT TIMER and CAT RTS are never loaded.** A wrong one would cut YWC off from the radio. Change them on the radio if you need to.
 - Front panel levels show with their mode, for example **MIC GAIN (USB)**, and are marked **TX**, so they start unticked. To compare them, YWC switches modes the same way as when saving and puts your mode back; it sets nothing until you send.
+- A file saved by an older YWC has no front panel levels. It still loads the menu as before, and a note says to save a new file to include the levels.
 
 Press **Send ticked items to the radio** and confirm. YWC sends each ticked item, reads it back, and shows **Sent and read back** or what went wrong. Ticked front panel levels are set one mode at a time, and then the radio goes back to the mode it was in.
 
