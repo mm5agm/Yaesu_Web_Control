@@ -34,6 +34,11 @@
         #exAsk, #exDone { display: contents; }
         #exAsk[hidden], #exDone[hidden] { display: none; }
         #exError { color: #c62828; font-weight: 600; min-height: 1.5em; }
+        #exSaveAsk { background: #fff4e0; border: 3px solid #c77700; border-radius: 0.8rem; padding: 1rem 1.25rem; }
+        #exSaveAsk[hidden] { display: none; }
+        #exSaveClose { background: #1e7d32; border-color: #145a23; color: #fff; }
+        #exSaveClose:disabled { opacity: 0.6; cursor: default; }
+        #exSaveClose[hidden] { display: none; }
     </style>
 </head>
 <body>
@@ -52,7 +57,11 @@
         {
             <p class="ex-warn">YWC is running in Docker here. Stop it with docker compose down instead.</p>
         }
+        <p id="exSaveAsk" hidden></p>
         <div class="ex-buttons">
+            <button type="button" id="exSaveClose" aria-label="Save and close" hidden>
+                Save and close<small>save the radio's settings first</small>
+            </button>
             <button type="button" id="exClose" aria-label="Close YWC" @(Model.InContainer ? "disabled" : "")>
                 Close YWC<small>and free the radio</small>
             </button>
@@ -78,26 +87,68 @@
             } catch { /* keep /radio */ }
 
             const button = document.getElementById("exClose");
+            const saveClose = document.getElementById("exSaveClose");
+            const saveAsk = document.getElementById("exSaveAsk");
             const error = document.getElementById("exError");
-            button.addEventListener("click", async () => {
-                button.disabled = true;
-                error.textContent = "";
+
+            async function closeYwc() {
                 try {
                     const r = await fetch("/api/app/exit", { method: "POST" });
                     if (!r.ok) {
                         const d = await r.json().catch(() => ({}));
                         error.textContent = d.error || `YWC refused (${r.status})`;
-                        button.disabled = false;
-                        return;
+                        return false;
                     }
                 } catch {
                     error.textContent = "YWC isn't answering. It may already be closed.";
-                    button.disabled = false;
-                    return;
+                    return false;
                 }
                 document.getElementById("exAsk").hidden = true;
                 document.getElementById("exDone").hidden = false;
+                return true;
+            }
+
+            button.addEventListener("click", async () => {
+                button.disabled = saveClose.disabled = true;
+                error.textContent = "";
+                if (!await closeYwc()) button.disabled = saveClose.disabled = false;
             });
+
+            // A front-panel level changed since the last save of the radio's settings: offer to save first.
+            saveClose.addEventListener("click", async () => {
+                button.disabled = saveClose.disabled = true;
+                error.textContent = "";
+                saveAsk.textContent = "Saving the radio's settings. This takes a few seconds…";
+                try {
+                    const r = await fetch("/api/radiomenu/save", { method: "POST" });
+                    const d = await r.json().catch(() => ({}));
+                    if (!r.ok) {
+                        saveAsk.textContent = `The save failed: ${d.error || r.status}. Close YWC anyway, or Cancel and try again from Settings.`;
+                        button.disabled = false;
+                        saveClose.hidden = true;
+                        return;
+                    }
+                } catch {
+                    saveAsk.textContent = "YWC isn't answering, so the save could not be made.";
+                    button.disabled = false;
+                    return;
+                }
+                saveAsk.textContent = "Saved.";
+                if (!await closeYwc()) button.disabled = false;
+            });
+
+            if (!button.disabled) {
+                fetch("/api/radiomenu/exit-check")
+                    .then(r => r.ok ? r.json() : null)
+                    .then(d => {
+                        if (!d || !d.ask || button.disabled) return;
+                        saveAsk.textContent = `${d.message} Save the radio's settings before closing?`;
+                        saveAsk.hidden = false;
+                        saveClose.hidden = false;
+                        button.querySelector("small").textContent = "without saving";
+                    })
+                    .catch(() => { /* no prompt: close as before */ });
+            }
         })();
     </script>
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>

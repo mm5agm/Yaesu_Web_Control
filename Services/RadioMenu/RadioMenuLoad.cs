@@ -31,6 +31,7 @@ public static class RadioMenuLoad
 {
     private static readonly Regex SectionLine = new(@"^\[([^\]]*)\]$", RegexOptions.Compiled);
     private static readonly Regex Note = new(@"^\s*(\d{6})(?:\s*=\s*(.*?))?\s*(?:\[TX\])?\s*$", RegexOptions.Compiled);
+    private static readonly Regex KnobNote = new(@"^\s*([A-Z]{2}\d{0,2})(?:\s*=\s*(\d+))?(?:\s*@\s*(\w+))?\s*(?:\[TX\])?\s*$", RegexOptions.Compiled);
     private static readonly Regex NumberWithUnit = new(@"^([+-]?\d+(?:\.\d+)?)\s*[A-Za-z/]+$", RegexOptions.Compiled);
 
     public const string NoAnswer = "(no answer)";
@@ -62,6 +63,21 @@ public static class RadioMenuLoad
             {
                 if (name.Equals("Program", StringComparison.OrdinalIgnoreCase)) program = value;
                 else if (name.Equals("Radio", StringComparison.OrdinalIgnoreCase)) radio = value;
+                continue;
+            }
+            var mode = RadioKnobs.ModeForSection(section, radio);
+            if (RadioKnobs.IsKnobSection(section))
+            {
+                // A front-panel setting: "MIC GAIN = 50 ; MG = 050", or "IPO (20m) = IPO ; PA0 = 0 @ 20m".
+                // Its address is "knob:<mode>:<command>@<band>", without the parts the radio does not keep it by.
+                var knobNote = KnobNote.Match(comment);
+                bool perModeSection = section.StartsWith(RadioKnobs.SectionPrefix, StringComparison.OrdinalIgnoreCase);
+                string? knobAddress = knobNote.Success && (mode is not null || !perModeSection)
+                    ? RadioKnobs.AddressPrefix + (mode is null ? "" : mode.Code + ":") + knobNote.Groups[1].Value
+                      + (knobNote.Groups[3].Success ? "@" + knobNote.Groups[3].Value : "")
+                    : null;
+                string? knobRaw = knobNote.Success && knobNote.Groups[2].Success ? knobNote.Groups[2].Value : null;
+                items.Add(new RadioMenuFileItem(n + 1, section, name, value, knobAddress, knobRaw));
                 continue;
             }
             var note = Note.Match(comment);
