@@ -3299,7 +3299,7 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 
 ### 15.1 WSJT-X transmits but the radio shows no TX audio (or zero power output) in DATA-U / DATA-L mode
 
-This is the most common digital-mode setup pitfall, and it's not a YWC problem. The usual cause is a one-time radio menu setting that has to be done on the radio itself. If the menus are already right, work through the checklist after the table. Yaesu radios ship with the rear DATA/ACC jack as the default audio input for DATA modes, **not** the USB codec that WSJT-X is sending audio to. Until you switch the radio over, DATA-mode TX produces silence.
+This is the most common digital-mode setup pitfall, and it's not a YWC problem. The usual cause is a one-time radio menu setting that has to be done on the radio itself. Yaesu radios ship with the rear DATA/ACC jack as the default audio input for DATA modes, **not** the USB codec that WSJT-X is sending audio to. Until you switch the radio over, DATA-mode TX produces silence. If the menus are already right, work through the checklist after the table.
 
 **Fix on the radio menu:**
 
@@ -3321,7 +3321,7 @@ If you can't find these menu items, your operating manual's index under "DATA MO
 **Menus right but still no power?** Work down this list. It applies to WSJT-X and to programs built on it, such as WSJT-Z and WS. A quick test first: if CW gives power, and so does SSB when you whistle into the mic, the transmitter is fine and the problem is in one of these steps.
 
 1. **The radio is in DATA-U, not USB.** In USB the radio takes its audio from the SSB input, normally the microphone, so it ignores WSJT-X. WSJT-X sets DATA-U itself when **Settings → Radio → Mode** is **Data/Pkt**. If you then press USB on a YWC page, the radio stays in USB until you change it back.
-2. **The mic gain and AMC level aren't at the bottom.** On the FTdx101 both affect SSB, AM and DATA, but not CW, so CW gives full power while DATA gives none. In DATA-U, turn the **MIC/SPEED** knob, then the outer **PROC/PITCH** knob (the AMC level). Each value shows on the screen for a moment. About 50 for each is a good start. Menu Clear doesn't reset either of them. On other radios, check the mic gain and the USB input level menu (RPORT GAIN on the FTdx101, about 50).
+2. **The mic gain and AMC level aren't at the bottom.** On the FTdx101 both affect SSB, AM and DATA, but not CW, so CW gives full power while DATA gives none. In DATA-U, turn the **MIC/SPEED** knob, then the outer **PROC/PITCH** knob (the AMC level, with the speech processor off). Each value shows on the screen for a moment. About 50 for each is a good start. Menu Clear doesn't reset either of them. Also check the USB input level menu, RPORT GAIN, is about 50. On other radios, check the mic gain and the USB input level menu.
 3. **The WSJT-X Audio tab** has the codec as Output, with channel **Both** (see [§9.1](#91-wsjt-x)).
 4. **The Pwr slider** at the right of the WSJT-X main window is at the top.
 5. **Windows:** in **Settings → System → Sound**, the codec's Speakers device isn't muted and its volume is 100. Under **Volume mixer**, WSJT-X's Output device should be **Default** or the codec, not your PC speakers. The Windows default output doesn't need to be the codec; leave it on your speakers.
