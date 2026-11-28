@@ -12,6 +12,21 @@ a different and much older format.
 
 ---
 
+## 2026-11-28 - v2.5.6-pre50 (pre-release)
+
+*The Spot Map fits one whole world in the window. Everything in v2.5.6-pre49 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Spot Map: one whole world** ([#476](https://github.com/mm5agm/Yaesu_Web_Control/pull/476), [manual](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/USER_MANUAL.md#96-spot-map-psk-reporter))
+
+- The map opens with exactly **one world across the window**, centred on you, and keeps it fitted when you resize the window or the right-hand side.
+- The mouse wheel and the **+** and **−** buttons zoom in **small steps**, so you can get the view just right.
+- Pan or zoom, and the page **opens on that view** next time.
+- **World** at the top brings back the whole world.
+
+FT-710, FT-991A and FTDX10 owners: testers are still wanted for the radio menu file and front panel save in v2.5.6-pre45 and pre47. Please tell us how it went in [GitHub Discussions](https://github.com/mm5agm/Yaesu_Web_Control/discussions).
+
+See the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md) for earlier pre-releases.
+
 ## 2026-11-28 - v2.5.6-pre49 (pre-release)
 
 *The Spot Map gets a UTC clock, the grey line and a Best DX box. Everything in v2.5.6-pre48 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
