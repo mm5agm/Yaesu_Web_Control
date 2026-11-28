@@ -173,6 +173,7 @@ namespace Yaesu_Web_Control.Services
                     }
                     var (ok, error) = await SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: true, autoCall: false), "Auto CQ on");
                     if (!ok) _logger.LogWarning("[WSJT-X UDP] Auto CQ on not sent: {Error}", error);
+                    else CqRun.Start(_settingsService.GetCachedSettings().Ft8TilesCqLimit, IsTransmitting);
                 }
                 catch (OperationCanceledException)
                 {
@@ -198,8 +199,29 @@ namespace Yaesu_Web_Control.Services
             }
         }
 
+        /// <summary>Counts Call CQ's CQs, to stop after the limit in Settings.</summary>
+        public WsjtxCqRun CqRun { get; } = new();
+
+        private DateTime _cqAutoStoppedUtc = DateTime.MinValue;
+
+        /// <summary>When a Call CQ run last stopped by itself at its limit; MinValue if never.</summary>
+        public DateTime CqAutoStoppedUtc { get { lock (_lock) return _cqAutoStoppedUtc; } }
+
+        // The limit was reached and the last CQ has finished: Auto CQ off,
+        // and Enable Tx off (autoTxOnly), which never cuts a transmission short.
+        private async Task StopCqRunAsync(int sent)
+        {
+            lock (_lock) _cqAutoStoppedUtc = DateTime.UtcNow;
+            _logger.LogInformation("[WSJT-X UDP] Call CQ: {Sent} CQs with no answer, stopping", sent);
+            var off = await SendAsync(id => WsjtxProtocol.BuildAutoConfigure(id, autoCq: false, autoCall: false), "Auto CQ off (CQ limit)");
+            var halt = await SendAsync(id => WsjtxProtocol.BuildHaltTx(id, true), "Halt auto Tx (CQ limit)");
+            if (!off.Ok || !halt.Ok)
+                _logger.LogWarning("[WSJT-X UDP] Call CQ limit: stop not sent: {Error}", off.Error ?? halt.Error);
+        }
+
         private void CancelPendingCq()
         {
+            CqRun.Cancel();
             CancellationTokenSource? cts;
             lock (_lock)
             {
@@ -410,6 +432,7 @@ namespace Yaesu_Web_Control.Services
                     }
                     CallList.MyCall = msg.DeCall;
                     if (bandChanged) CallList.Clear();
+                    if (CqRun.Update(msg.Transmitting, msg.TxMessage)) _ = StopCqRunAsync(CqRun.Sent);
 
                     // Log every status message with frequency info for debugging
                     _logger.LogDebug("WSJT-X Status: Id={Id}, DialFreq={Freq}, Mode={Mode}, TX={TX}",

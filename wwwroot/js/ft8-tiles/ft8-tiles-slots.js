@@ -121,6 +121,49 @@ export function callingCq(d) {
 }
 
 /**
+ * The words on the Call CQ tile. cqRun is from /api/wsjtx/calls: sent is the
+ * CQs in a row with no answer, limit the most allowed (0 = no limit), and
+ * stoppedSecondsAgo when a run last stopped at its limit.
+ */
+export function cqTileText(cq, waiting, cqRun) {
+    const run = cqRun || {};
+    const limit = run.limit || 0;
+    if (cq) {
+        return {
+            big: limit && run.active ? `Calling CQ ${Math.max(1, run.sent)} of ${limit}` : "Calling CQ",
+            small: "Stop transmit ends it",
+        };
+    }
+    if (waiting) return { big: "CQ next period", small: "Stop transmit ends it" };
+    if (run.stoppedSecondsAgo != null && run.stoppedSecondsAgo < 120 && limit) {
+        return { big: "Call CQ", small: `stopped after ${limit}, no answer` };
+    }
+    return { big: "Call CQ", small: limit ? `stops after ${limit} if no answer` : "until someone answers" };
+}
+
+/** How long the last transmission's levels stay on the status line. */
+export const TX_LEVELS_SHOW_SECONDS = 600;
+
+/**
+ * The ALC and SWR on the status line: the transmission now, or the last one
+ * for 10 minutes. For FT8 the ALC should sit near 0; at or over the TX alert
+ * limit it says what to do. Returns { text, high } or null.
+ */
+export function txLevelsText(txPeaks) {
+    if (!txPeaks) return null;
+    const now = txPeaks.current;
+    const p = now || (txPeaks.last && txPeaks.last.ageSeconds < TX_LEVELS_SHOW_SECONDS ? txPeaks.last : null);
+    if (!p) return null;
+    const alcHigh = txPeaks.alcLimit != null && p.alc >= txPeaks.alcLimit;
+    const swrHigh = txPeaks.swrLimit != null && p.swr >= txPeaks.swrLimit;
+    const parts = [
+        `${now ? "" : "Last TX: "}ALC ${p.alc}%${alcHigh ? " too high: turn Pwr down in WSJT-Z" : now ? "" : " good"}`,
+        `SWR ${p.swr.toFixed(1)}:1${swrHigh ? " high" : ""}`,
+    ];
+    return { text: parts.join(" · "), high: alcHigh || swrHigh };
+}
+
+/**
  * Remembers the last QSO for the status line: the station WSJT-Z was working,
  * and whether WSJT-Z logged it. A QSO counts as over when WSJT-Z logs it or
  * moves on to another station (or none).

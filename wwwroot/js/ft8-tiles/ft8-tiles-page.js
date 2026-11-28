@@ -6,7 +6,7 @@
 // "Auto Call on", "Call CQ", "Next page", "Change band", "Sort",
 // "Main page", and the band names. Saying "click Call 3" clicks the third station tile.
 
-import { TileSlots, SORT_MODES, SORT_LABEL, sortCalls, txStatus, callingCq, LastQso } from "./ft8-tiles-slots.js";
+import { TileSlots, SORT_MODES, SORT_LABEL, sortCalls, txStatus, callingCq, cqTileText, txLevelsText, LastQso } from "./ft8-tiles-slots.js";
 
 const PER_PAGE = 9;
 const POLL_MS = 1000;
@@ -87,8 +87,12 @@ function renderHeader(d) {
     const waiting = !cq && d.cqStartsIn != null;
     el("ftCallCq").classList.toggle("ft-calling-cq", cq);
     el("ftCallCq").classList.toggle("ft-cq-waiting", waiting);
-    setText("ftCallCqBig", cq ? "Calling CQ" : waiting ? "CQ next period" : "Call CQ");
-    setText("ftCallCqSmall", cq || waiting ? "Stop transmit ends it" : "until someone answers");
+    const words = cqTileText(cq, waiting, d.cqRun);
+    setText("ftCallCqBig", words.big);
+    setText("ftCallCqSmall", words.small);
+    const levels = txLevelsText(d.txPeaks);
+    setText("ftTxLevels", levels ? levels.text : "");
+    el("ftTxLevels").classList.toggle("ft-level-high", !!levels && levels.high);
     el("ftChangeBandNow").textContent = band ? `now ${band}` : "";
 }
 
@@ -257,7 +261,9 @@ function wire() {
         if (await post("/api/wsjtx/autocall", { on: true })) showMessage("Auto Call on");
     });
     el("ftCallCq").addEventListener("click", async () => {
-        if (await post("/api/wsjtx/autocq", { on: true })) showMessage("CQ starts at the next period: Stop transmit ends it");
+        const limit = lastData && lastData.cqRun ? lastData.cqRun.limit : 0;
+        if (await post("/api/wsjtx/autocq", { on: true }))
+            showMessage(limit ? `CQ starts at the next period, and stops after ${limit} if nobody answers` : "CQ starts at the next period: Stop transmit ends it");
     });
     el("ftNextPage").addEventListener("click", () => {
         pageIndex = (pageIndex + 1) % slots.pageCount(PER_PAGE);

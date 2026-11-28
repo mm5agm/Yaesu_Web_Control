@@ -103,6 +103,8 @@
         #ftStatusLine[hidden] { display: none; }
         #ftLastQso { margin-left: auto; font-size: 1.3rem; color: var(--ft-muted); }
         #ftLastQso.ft-logged { color: #2e7d32; }
+        #ftTxLevels { font-size: 1.3rem; color: #2e7d32; }
+        #ftTxLevels.ft-level-high { color: var(--ft-red); }
 
         #ftBands { grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; }
         .ft-band { align-items: center; font-size: clamp(1.6rem, 5vh, 2.8rem); font-weight: 700; border-color: var(--ft-blue); }
@@ -127,6 +129,7 @@
     </header>
     <div id="ftStatusLine" class="ft-off">
         <span id="ftTxLine" aria-live="polite"></span>
+        <span id="ftTxLevels"></span>
         <span id="ftLastQso" aria-live="polite"></span>
     </div>
     <div id="ftLogged" role="status" aria-live="polite" hidden></div>
@@ -169,7 +172,7 @@
         </button>
         <button type="button" class="ft-tile ft-action" id="ftCallCq" aria-label="Call CQ">
             <span class="ft-big" id="ftCallCqBig">Call CQ</span>
-            <span class="ft-small" id="ftCallCqSmall">until someone answers</span>
+            <span class="ft-small" id="ftCallCqSmall">stops after 6 if no answer</span>
         </button>
         <button type="button" class="ft-tile ft-action" id="ftNextPage" aria-label="Next page" disabled>
             <span class="ft-big">Next page</span>
