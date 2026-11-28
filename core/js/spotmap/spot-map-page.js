@@ -38,8 +38,9 @@ const WINDOWS = [[300, '5 minutes'], [600, '10 minutes'], [900, '15 minutes'], [
                  [3600, '1 hour'], [10800, '3 hours'], [21600, '6 hours'], [86400, '24 hours']];
 const FRESH_SECS = 180;          // spots from the last 3 minutes are drawn bigger
 const HISTORY_GAP_MS = 5.5 * 60 * 1000;
-// World always shows this much: 75 N clears Svalbard and the top of Norway, 57 S Cape Horn.
-const WORLD_NORTH = 75, WORLD_SOUTH = -57;
+// World always shows this much: 80 N clears all of Svalbard (Longyearbyen 78 N, Ny-Alesund 79 N),
+// 57 S Cape Horn and South Georgia.
+const WORLD_NORTH = 80, WORLD_SOUTH = -57;
 // The map repeats sideways, so spots go on the copies either side too.
 const COPIES = [-360, 0, 360];
 const STATION_POLL_MS = 15000;
