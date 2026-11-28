@@ -183,6 +183,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
           ${WINDOWS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}
         </select></label>
         <label><select data-sm="units" aria-label="Distance units"><option value="km">km</option><option value="mi">miles</option></select></label>
+        <button type="button" data-sm="worldBtn" title="Fit one whole world across the window, centred on you">World</button>
         <button type="button" data-sm="greyBtn" aria-pressed="true" title="Show or hide the grey line: the night side of the Earth, shaded">Grey line</button>
         <button type="button" data-sm="bestBtn" aria-pressed="true" title="Show or hide the furthest station each way">Best DX</button>
         <button type="button" data-sm="bandsBtn" aria-pressed="true" title="Show or hide the stations per band">Bands</button>
@@ -338,7 +339,9 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     $('source').textContent = `Callsign ${source}.`;
 
     // ---- Map ----
-    const map = L.map($('map'), { worldCopyJump: true }).setView([45, -10], 3);
+    // zoomSnap 0: any zoom, not only whole steps, so one world can fill the window exactly.
+    const map = L.map($('map'), { worldCopyJump: true, zoomSnap: 0, zoomDelta: 0.5, wheelPxPerZoomLevel: 120, minZoom: 1 })
+        .setView([20, 0], 2);
     // Esri basemaps need no API key.
     const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
     L.tileLayer(esri + 'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
@@ -378,7 +381,42 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     const markers = new Map();   // kind:call -> marker, for a click in the list
     const store = new SpotStore();
     let home = gridToLatLon(station.grid);
-    let homeMarker = null, fitted = false;
+    let homeMarker = null;
+
+    // ---- The view: one whole world across the window, or where you left it ----
+    let worldMode = false, worldLon = null, settingView = false;
+    const setViewQuietly = (centre, zoom) => {
+        settingView = true;
+        try { map.setView(centre, zoom, { animate: false }); } finally { settingView = false; }
+    };
+    function fitWorld() {
+        worldMode = true;
+        save('view', { world: true });
+        const size = map.getSize();
+        if (!size.x || !size.y) return;          // not laid out yet: the resize watcher calls again
+        const zoom = Math.log2(size.x / 256);    // the world is 256 px wide at zoom 0
+        worldLon = home ? home[1] : 0;
+        // The world is as tall as it is wide. If that is taller than the window, keep the
+        // top at 80 N, so it is the empty far south that gets cut off.
+        const x = map.project([0, worldLon], zoom).x;
+        const top = map.project([80, worldLon], zoom).y;
+        const y = Math.min(Math.max(top + size.y / 2, size.y / 2), size.x - size.y / 2);
+        setViewQuietly(map.unproject([x, y], zoom), zoom);
+    }
+    const view = load('view', null);
+    if (view && !view.world && Number.isFinite(view.zoom) && Number.isFinite(view.lat) && Number.isFinite(view.lng)) {
+        setViewQuietly([view.lat, view.lng], view.zoom);
+    } else {
+        fitWorld();
+    }
+    // Pan or zoom by hand and the page remembers that view instead.
+    map.on('dragstart zoomstart', () => { if (!settingView) worldMode = false; });
+    map.on('moveend', () => {
+        if (settingView || worldMode) return;
+        const c = map.getCenter();
+        save('view', { lat: c.lat, lng: c.lng, zoom: map.getZoom() });
+    });
+    $('worldBtn').addEventListener('click', fitWorld);
 
     showList(load('listShown', true) !== false);
     showBands(load('bandsShown', true) !== false);
@@ -418,7 +456,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         save('listWidth', parseInt(side.style.width, 10));
         map.invalidateSize();
     });
-    new ResizeObserver(() => map.invalidateSize()).observe($('map'));
+    new ResizeObserver(() => { map.invalidateSize(); if (worldMode) fitWorld(); }).observe($('map'));
 
     // ---- Drawing ----
     const kindsShown = () => kindsSel.value === 'both' ? KINDS : [kindsSel.value];
@@ -437,8 +475,9 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             homeMarker = L.circleMarker(home, { radius: 9, color: '#fff', weight: 2, fillColor: '#ffd23d', fillOpacity: 1 })
                 .bindTooltip(esc(CALL)).addTo(map);
         }
+        // Home found after the start: centre the whole-world view on it.
+        if (worldMode && home && worldLon !== home[1]) fitWorld();
         const shown = kindsShown();
-        const pts = [];
         markers.clear();
         for (const kind of KINDS) {
             layers[kind].clearLayers();
@@ -461,14 +500,6 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
                 m.bindTooltip(`<b>${esc(line)}</b><br>${esc(s.band)} ${esc(s.mode)}${snr}<br>${esc(s.grid)} · ${ago(s.t)}`);
                 m.addTo(layers[kind]);
                 markers.set(kind + ':' + s.call, m);
-                pts.push(L.latLng(ll));
-            }
-        }
-        if (!fitted && pts.length) {
-            if (home) pts.push(L.latLng(home));
-            if (pts.length > 1) {
-                map.fitBounds(L.latLngBounds(pts).pad(0.15), { maxZoom: 5 });
-                fitted = true;
             }
         }
         drawList(now, windowSecs, shown);
