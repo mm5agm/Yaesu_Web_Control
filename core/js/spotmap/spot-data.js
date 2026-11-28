@@ -10,8 +10,30 @@
 // Two kinds of spot, both from PSK Reporter:
 //   heardMe - the operator transmitted and another station reported it;
 //   iHeard  - the operator's station reported hearing another.
+//
+// A station with no grid can still go on the map at an approximate position,
+// the centre of its country from the callsign (countryFor, from cty-data.js).
+// Such a spot has ll and approx (the country) and an empty grid.
+
+import { CTY } from './cty-data.js';
 
 export const KINDS = ['heardMe', 'iHeard'];
+
+/**
+ * What a station decoded by the app's own WSJT-X was doing, from its last
+ * message: CQ or QRZ, calling the operator, in a QSO with someone else, or
+ * just finished one (RR73, RRR, 73). Only "I heard" spots from WSJT-X carry it.
+ */
+export const STATES = ['cq', 'you', 'qso', 'fin'];
+export const STATE_LABEL = { cq: 'CQ', you: 'Calling you', qso: 'In QSO', fin: '73 sent' };
+/** A state older than this says little about now, so the spot goes back to plain "I heard". */
+export const STATE_SECS = 120;
+
+/** A spot's state ('cq', 'you', 'qso', 'fin') if it is recent enough to mean something, else ''. */
+export function spotState(s, nowSecs) {
+    if (!s || s.kind !== 'iHeard' || !STATES.includes(s.st)) return '';
+    return nowSecs - s.t <= STATE_SECS ? s.st : '';
+}
 
 /** A Maidenhead locator (4 or 6 characters) to [lat, lon] at the square's centre, or null. */
 export function gridToLatLon(grid) {
@@ -29,6 +51,61 @@ export function gridToLatLon(grid) {
         lat += 0.5;
     }
     return [lat, lon];
+}
+
+let ctyTable = null;
+function cty() {
+    if (ctyTable) return ctyTable;
+    const prefixes = new Map(), exact = new Map();
+    let longest = 0;
+    for (const line of CTY.split('\n')) {
+        const [name, lat, lon, toks] = line.split('|');
+        if (!toks) continue;
+        for (const tok of toks.split(',')) {
+            const [key, at] = tok.split('@');
+            const [la, lo] = at ? at.split('/') : [lat, lon];
+            const c = { name, lat: Number(la), lon: Number(lo) };
+            if (key.startsWith('=')) exact.set(key.slice(1), c);
+            else { prefixes.set(key, c); longest = Math.max(longest, key.length); }
+        }
+    }
+    return (ctyTable = { prefixes, exact, longest });
+}
+
+const SUFFIXES = new Set(['P', 'M', 'A', 'QRP', 'LH', 'B', 'R', 'J', 'T']);
+
+/**
+ * The country a callsign belongs to, as { name, lat, lon } at its centre
+ * (east positive), or null: an exact match first, then the longest prefix.
+ * A portable prefix (EA8/G4ABC) wins; /P, /M, /QRP and the like are ignored;
+ * /MM and /AM are at sea or in the air, so nowhere.
+ */
+export function countryFor(call) {
+    const c = String(call ?? '').trim().toUpperCase().replace(/^<|>$/g, '');
+    if (!c) return null;
+    const t = cty();
+    if (t.exact.has(c)) return t.exact.get(c);
+    let parts = c.split('/').filter(Boolean);
+    if (parts.some(p => p === 'MM' || p === 'AM')) return null;
+    parts = parts.filter(p => !SUFFIXES.has(p) && !/^\d$/.test(p));
+    if (!parts.length) return null;
+    let base = parts[0];
+    if (parts.length > 1) {
+        if (t.exact.has(parts.join('/'))) return t.exact.get(parts.join('/'));
+        // The shorter part is the prefix where the station is operating.
+        base = parts.reduce((a, b) => (b.length < a.length ? b : a));
+        if (t.exact.has(base)) return t.exact.get(base);
+    }
+    for (let n = Math.min(base.length, t.longest); n > 0; n--) {
+        const hit = t.prefixes.get(base.slice(0, n));
+        if (hit) return hit;
+    }
+    return null;
+}
+
+/** A spot's position: its grid square's centre, or its approximate position. */
+export function spotLatLon(s) {
+    return s?.ll ?? gridToLatLon(s?.grid);
 }
 
 /** Great-circle distance in km between two [lat, lon] points, or null if either is missing. */
@@ -129,6 +206,10 @@ export class SpotStore {
      * Adds one spot in MQTT field names. Returns the stored spot, or null if
      * it was a repeat, had no other station or grid, or was older than both
      * the station's latest spot and its latest spot on that band.
+     *
+     * With raw.ll ([lat, lon]) and raw.approx (the country) and no grid, the
+     * spot goes on at that approximate position. It never replaces a spot
+     * with a real grid, and a real grid replaces it even if a little older.
      */
     add(kind, raw) {
         if (!this.byKind[kind]) return null;
@@ -141,7 +222,8 @@ export class SpotStore {
         const other = String((kind === 'heardMe' ? raw.rc : raw.sc) ?? '').trim().toUpperCase();
         const grid = String((kind === 'heardMe' ? raw.rl : raw.sl) ?? '').trim().toUpperCase();
         const myGrid = String((kind === 'heardMe' ? raw.sl : raw.rl) ?? '').trim().toUpperCase();
-        if (!other || !grid || !gridToLatLon(grid)) return null;
+        const approx = !gridToLatLon(grid) && Array.isArray(raw.ll) ? String(raw.approx ?? '') : null;
+        if (!other || (approx === null && !gridToLatLon(grid))) return null;
         if (!this.gridFromSpots && gridToLatLon(myGrid)) this.gridFromSpots = myGrid;
         const t = Number(raw.t) || 0;
         const spot = {
@@ -154,15 +236,33 @@ export class SpotStore {
             mode: raw.md || '',
             snr: toNumberOrNull(raw.rp),
         };
+        if (raw.st) { spot.st = String(raw.st); spot.to = String(raw.to ?? ''); }
+        // From the app's own WSJT-X decodes, so its Call button can answer it.
+        if (String(raw.sq ?? '').startsWith('ws')) spot.ws = true;
+        if (approx !== null) { spot.grid = ''; spot.ll = [Number(raw.ll[0]), Number(raw.ll[1])]; spot.approx = approx; }
+        // A real grid beats an approximate position, whichever is newer.
+        const beats = held => {
+            if (!held) return true;
+            const heldApprox = held.approx !== undefined, newApprox = approx !== null;
+            if (heldApprox !== newApprox) return heldApprox;
+            return held.t <= t;
+        };
         const bandKey = other + '|' + spot.band;
-        const heldOnBand = this.byBand[kind].get(bandKey);
         // A spot with no frequency has no band, so it isn't counted on one.
-        const newOnBand = !!spot.band && (!heldOnBand || heldOnBand.t <= t);
+        const newOnBand = !!spot.band && beats(this.byBand[kind].get(bandKey));
         if (newOnBand) this.byBand[kind].set(bandKey, spot);
-        const held = this.byKind[kind].get(other);
-        if (held && held.t > t) return newOnBand ? spot : null;
+        if (!beats(this.byKind[kind].get(other))) return newOnBand ? spot : null;
         this.byKind[kind].set(other, spot);
         return spot;
+    }
+
+    /** A station's grid from any spot held for it, or ''. */
+    gridFor(call) {
+        for (const kind of KINDS) {
+            const s = this.byKind[kind].get(call);
+            if (s?.grid) return s.grid;
+        }
+        return '';
     }
 
     /**
@@ -212,7 +312,7 @@ export class SpotStore {
  * largest/newest first.
  */
 export function listRows(spots, home, sortKey = 'time', desc = true) {
-    const rows = spots.map(s => ({ ...s, km: distanceKm(home, gridToLatLon(s.grid)) }));
+    const rows = spots.map(s => ({ ...s, km: distanceKm(home, spotLatLon(s)) }));
     const val = r => {
         switch (sortKey) {
             case 'call': return r.call;
@@ -234,11 +334,13 @@ export function listRows(spots, home, sortKey = 'time', desc = true) {
 /**
  * Best DX: the furthest station each way among the spots given, as
  * { heardMe, iHeard }, each the spot plus km, or null. Spots without a
- * distance (no home grid yet) don't count.
+ * distance (no home grid yet) don't count, nor approximate ones: the middle
+ * of a big country is no measure of how far the signal went.
  */
 export function bestDx(spots, home) {
     const best = { heardMe: null, iHeard: null };
     for (const s of spots) {
+        if (s.approx !== undefined) continue;
         const km = distanceKm(home, gridToLatLon(s.grid));
         if (km === null || !(s.kind in best)) continue;
         const held = best[s.kind];

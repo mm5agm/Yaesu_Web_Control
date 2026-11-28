@@ -45,6 +45,9 @@ namespace Yaesu_Web_Control.Services
         /// <summary>Stations the big-tile page can call (issue #332).</summary>
         public WsjtxCallList CallList { get; } = new();
 
+        /// <summary>Every station WSJT-X decodes, for the Spot Map's instant "I heard".</summary>
+        public WsjtxHeardList HeardList { get; } = new();
+
         // Where in the audio WSJT-X has decoded something lately, for the
         // audio waterfall's mode labels.
         private readonly List<(double OffsetHz, string Mode, DateTime At)> _recentDecodes = new();
@@ -117,6 +120,23 @@ namespace Yaesu_Web_Control.Services
             if (!CallList.TryGet(call, out var entry) || entry is null)
                 return (false, $"{call} is no longer in the list");
             return await SendAsync(id => WsjtxProtocol.BuildReply(entry.Decode, id), $"Reply to {entry.Call}");
+        }
+
+        /// <summary>How old a decode the Spot Map's Call button will still answer.</summary>
+        public static readonly TimeSpan HeardReplyMaxAge = TimeSpan.FromMinutes(30);
+
+        /// <summary>
+        /// The Spot Map's Call button: asks WSJT-X/WS to answer a station's
+        /// latest decode, as a double-click would. WSJT-X ignores it if that
+        /// decode is no longer in its Band Activity window.
+        /// </summary>
+        public async Task<(bool Ok, string? Error)> SendHeardReplyAsync(string call)
+        {
+            if (!HeardList.TryGetLatest(call, out var decode, out var at) || decode is null)
+                return (false, $"{call} hasn't been decoded since YWC started");
+            if (DateTime.UtcNow - at > HeardReplyMaxAge)
+                return (false, $"{call} was last decoded over {HeardReplyMaxAge.TotalMinutes:0} minutes ago");
+            return await SendAsync(id => WsjtxProtocol.BuildReply(decode, id), $"Reply to {call} (Spot Map)");
         }
 
         /// <summary>Stops transmitting now (autoTxOnly=false) or just turns Enable Tx off.</summary>
@@ -393,6 +413,7 @@ namespace Yaesu_Web_Control.Services
                     {
                         CallList.Add(decode, DateTime.UtcNow);
                         RememberDecode(decode, DateTime.UtcNow);
+                        HeardList.Add(decode, DialFrequency, WsjtxMode, DeCall, DateTime.UtcNow);
                     }
                     break;
 

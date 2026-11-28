@@ -2874,12 +2874,12 @@ The Spot Map shows who hears you, and who you hear, on a world map and in a list
 
 **The map:**
 
-- **Orange**: stations that heard you. **Blue**: stations you heard. **Yellow**: you.
+- **Orange**: stations that heard you. **Blue**: stations you heard. **Yellow**: you. Stations you decoded can also take a colour for what they are doing (below). **Colours** at the top changes any of them.
 - Each station shows once, at its latest spot, with a line from you. Spots from the last 3 minutes are drawn bigger.
 - Hold the mouse over a dot for the callsign, band, mode, SNR and how long ago.
 - **The grey line** (*new in v2.5.6-pre49*): the night side of the Earth is shaded, with a thin yellow line where the sun is rising or setting. Grey-line paths often open up along it. The ☀ marks where the sun is overhead. It moves with the time, and **Grey line** at the top hides or shows it.
 - **One whole world** (*new in v2.5.6-pre50*): the map opens with exactly one world across the window, centred on you, and keeps it fitted when you resize the window or the right-hand side. On a very wide window, such as a wide second monitor, it zooms out a little so that everything from Svalbard down to Cape Horn fits top to bottom, so South Africa, Australia and South America are never cut off (*v2.5.6-pre52*). The map then repeats at the left and right edges, spots included. The mouse wheel and the **+** and **−** buttons zoom in small steps. Pan or zoom, and the page opens on that view next time. **World** at the top brings back the whole world.
-- **No spots yet** (*new in v2.5.6-pre52*): if PSK Reporter has nothing for your callsign in the last 24 hours, a notice on the map says so, instead of leaving an empty world. Spots appear as soon as they arrive: **Heard me** when someone hears you transmit, **I heard** when WSJT-X reports what you decode to PSK Reporter (in WSJT-X, **Settings → Reporting**, tick **Enable PSK Reporter Spotting**). PSK Reporter's history sometimes runs behind: it may know when you were last heard but send no spots. If it gives that time, the notice shows it.
+- **No spots yet** (*new in v2.5.6-pre52*): if PSK Reporter has nothing for your callsign in the last 24 hours, a notice on the map says so, instead of leaving an empty world. Spots appear as soon as they arrive: **Heard me** when someone hears you transmit, **I heard** as soon as WSJT-X decodes a station whose grid is known (see **How quickly spots appear** below). PSK Reporter's history sometimes runs behind: it may know when you were last heard but send no spots. If it gives that time, the notice shows it.
 
 **The list** (right-hand side): **Who**, **Band**, **SNR**, **Distance** and **Time UTC**, newest first. Click a column heading to sort by it, and again to reverse it. Click a row to go to that station on the map. **List** at the top hides or shows it.
 
@@ -2891,11 +2891,33 @@ Drag the bar between the map and the right-hand side to resize them.
 
 **At the top:** the **UTC clock** (*new in v2.5.6-pre49*) shows the time from your PC's clock. **Show** picks both kinds, or only one. **Last** picks how far back (5 minutes to 24 hours). **km**/**miles** sets the distance units. All of these are remembered.
 
+**How quickly spots appear** (*new in v2.5.6-pre52*):
+
+- **I heard: within seconds.** YWC gets every decode from WSJT-X (or WS, JTDX) over the UDP link, so a station you decode goes on the map a second or two after the end of the period, without waiting for PSK Reporter. The top bar counts them, for example "WSJT-X decodes: 12". YWC needs the station's grid square to place it on the map. A station sends its grid in its CQ ("CQ K1ABC FN42") or in its first reply to someone ("W9XYZ K1ABC FN42"), and YWC remembers it. A station heard only in the middle of a QSO ("W9XYZ K1ABC -10") goes on straight away at an **approximate position**: the middle of its country, worked out from the callsign (JY4CH goes in the middle of Jordan). It is drawn as a **hollow, dashed ring** with a dashed line, its tooltip says "approximate position (from the callsign)", and the list shows its distance with a **~** in front. As soon as its real grid is known, from a PSK Reporter spot (for example, if it also heard you) or when YWC hears its grid later, it moves there and turns into a normal dot. Approximate stations never count for **Best DX**, because the middle of a big country says little about how far the signal went. This works only when the callsign comes from WSJT-X, not when you typed one in.
+- **Heard me: in bursts, every few minutes.** Only PSK Reporter knows who heard you. Each station that hears you sends its spots to PSK Reporter in a batch, usually every 5 minutes, and the live feed passes them on within seconds. So orange dots arrive in bursts, with quiet gaps of a minute or more. That's normal, and pskreporter.info and other sites have the same delay.
+- **Why another site can look faster.** Some sites, such as HamSpots, also take your decodes straight from your PC (through JTAlert or their own uploader) and mark them separately: HamSpots shows them as **S** and PSK Reporter's spots as **P**. Their **P** spots are as late as YWC's.
+- **Only the WSJT modes are instant.** The instant "I heard" comes from WSJT-X's decodes: FT8, FT4 and the other WSJT modes. CW, RTTY and PSK31 spots reach the map only through PSK Reporter, from programs such as fldigi and CW skimmers that report to it, with the same batch delay. YWC's own CW and RTTY decoders don't add anything to the map, because a CW or RTTY signal doesn't say where the station is.
+- With **Last** set to 5 minutes, the map thins out just before each burst. 15 minutes gives a steadier picture.
+
+**What each station is doing** (*new in v2.5.6-pre52*): a station you decoded takes a colour for its last message, for 2 minutes after it. Then it goes back to blue.
+
+| Colour | Shown as | Its last message |
+|---|---|---|
+| Yellow | **CQ** | CQ or QRZ: free to call |
+| White | **Calling you** | your callsign is in it |
+| Grey | **In QSO** | a QSO with someone else: wait for its 73 |
+| Turquoise | **73 sent** | RR73, RRR or 73: free to call |
+
+The list shows the same words after the callsign, and the tooltip says who it is working, for example "In QSO with DL1ABC", so nothing depends on the colour alone. This needs WSJT-X (or WS, JTDX) connected over the UDP link; PSK Reporter doesn't say what a station was doing.
+
+**Colours** (*new in v2.5.6-pre52*): click **Colours** at the top to change the colour of any kind of spot. Your colours are kept in that browser. **Standard colours** puts them back. The standard colours were picked to stay apart for people with red-green or blue-yellow colour blindness, as well as for normal sight.
+
+**Calling a station** (*new in v2.5.6-pre52*): click a station you decoded, on the map or in the list, for its **Call** button. Clicking **Call** does the same as double-clicking that station's last decode in WSJT-X's Band Activity: WSJT-X sets up the QSO and, if **Enable Tx** is on (or its settings turn it on), **starts transmitting** on the next period. If the station is **In QSO**, the button says "Call anyway": it's better manners to wait for its 73. WSJT-X can answer only a decode still in its Band Activity window, and YWC won't send a call for a decode older than 30 minutes. If WSJT-X doesn't start calling, double-click the station in WSJT-X instead. Stations seen only through PSK Reporter have no Call button.
+
 **Notes:**
 
-- **Spots can be up to 5 minutes late.** WSJT-X and WS send their spots to PSK Reporter in batches, about every 5 minutes. That's normal.
 - **History:** when the page opens it loads the last 24 hours. PSK Reporter allows one query about every 5 minutes, so "heard me" loads at once and "I heard" about 5½ minutes later.
-- The page needs the internet for the map and the spots. It never touches the radio.
+- The page needs the internet for the map and the spots. It never touches the radio itself. The **Call** button asks WSJT-X to answer a station, and WSJT-X may then transmit.
 - Data from PSK Reporter by Philip Gladstone. Live spots come from mqtt.pskreporter.info, run by Tom Fanning M0LTE.
 
 ---

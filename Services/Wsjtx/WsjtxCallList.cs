@@ -155,10 +155,10 @@ namespace Yaesu_Web_Control.Services.Wsjtx
             return (from, CallKind.Cq, "", true);
         }
 
-        private static string Unhash(string token) =>
+        internal static string Unhash(string token) =>
             token.Length > 2 && token[0] == '<' && token[^1] == '>' ? token[1..^1] : token;
 
-        private static bool IsCallsign(string token) =>
+        internal static bool IsCallsign(string token) =>
             token is not ("RR73" or "RRR" or "73") && CallsignPattern.IsMatch(token) && !GridPattern.IsMatch(token)
             && !(token.Length >= 2 && (token[0] == 'R' && (token[1] == '-' || token[1] == '+')));
     }

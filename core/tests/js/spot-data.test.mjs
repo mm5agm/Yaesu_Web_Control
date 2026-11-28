@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {
     gridToLatLon, distanceKm, bandOf, bandRank, topicCall, topicsFor, isCallsign,
     KINDS, classifyMqtt, fromReceptionReport, SpotStore, listRows, utcHhmm, formatDistance,
-    bestDx, utcHhmmss, subsolarPoint, nightPolygon,
+    bestDx, utcHhmmss, subsolarPoint, nightPolygon, countryFor, spotLatLon,
+    STATES, spotState,
 } from '../../js/spotmap/spot-data.js';
 
 const near = (a, b, tol) => assert.ok(Math.abs(a - b) <= tol, `${a} not within ${tol} of ${b}`);
@@ -215,4 +216,81 @@ test('grey line: every point is 90 degrees from the sun, closed round the dark p
         // The dark pole is the one away from the sun.
         assert.equal(poly.at(-1)[0], sun[0] > 0 ? -90 : 90);
     }
+});
+
+test('countryFor: callsign to country centre', () => {
+    assert.equal(countryFor('JY4CH').name, 'Jordan');
+    assert.equal(countryFor('MM5AGM').name, 'Scotland');
+    assert.equal(countryFor('PC9K').name, 'Netherlands');
+    assert.equal(countryFor('KH6XX').name, 'Hawaii');
+    assert.equal(countryFor('UA0ABC').name, 'Asiatic Russia');
+    const jy = countryFor('jy4ch');
+    near(jy.lat, 31.18, 0.01);
+    near(jy.lon, 36.42, 0.01);   // east positive, unlike cty.dat
+});
+
+test('countryFor: portable calls and rubbish', () => {
+    assert.equal(countryFor('EA8/G4ABC').name, 'Canary Islands');
+    assert.equal(countryFor('G4ABC/P').name, 'England');
+    assert.equal(countryFor('<JY4CH>').name, 'Jordan');
+    assert.equal(countryFor('G4ABC/MM'), null);
+    assert.equal(countryFor(''), null);
+    assert.equal(countryFor(null), null);
+});
+
+test('store: an approximate spot goes on, and a real grid replaces it', () => {
+    const store = new SpotStore();
+    const approx = store.add('iHeard', { sc: 'JY4CH', sl: '', rc: 'MM5AGM', t: 1000, f: 14075000, md: 'FT8', rp: -5, sq: 'a', ll: [31.18, 36.42], approx: 'Jordan' });
+    assert.ok(approx);
+    assert.equal(approx.grid, '');
+    assert.equal(approx.approx, 'Jordan');
+    assert.deepEqual(spotLatLon(approx), [31.18, 36.42]);
+    assert.equal(store.gridFor('JY4CH'), '');   // an approximate spot is no grid
+    // A real grid wins even when a little older.
+    const real = store.add('iHeard', { sc: 'JY4CH', sl: 'KM71', rc: 'MM5AGM', t: 900, f: 14075000, md: 'FT8', rp: -5, sq: 'b' });
+    assert.ok(real);
+    assert.equal(store.byKind.iHeard.get('JY4CH').grid, 'KM71');
+    assert.equal(store.gridFor('JY4CH'), 'KM71');
+    // And a newer approximate spot doesn't push the real one off.
+    assert.equal(store.add('iHeard', { sc: 'JY4CH', sl: '', rc: 'MM5AGM', t: 2000, f: 14075000, sq: 'c', ll: [31, 36], approx: 'Jordan' }), null);
+    assert.equal(store.byKind.iHeard.get('JY4CH').grid, 'KM71');
+});
+
+test('store: no grid and no position is still turned away', () => {
+    const store = new SpotStore();
+    assert.equal(store.add('iHeard', { sc: 'JY4CH', sl: '', rc: 'MM5AGM', t: 1000 }), null);
+});
+
+test('best DX leaves out approximate spots', () => {
+    const home = gridToLatLon('IO85');
+    const spots = [
+        { kind: 'iHeard', call: 'VK2X', grid: '', ll: [-23.7, 132.33], approx: 'Australia', t: 1, band: '20m', mode: 'FT8', snr: 0 },
+        { kind: 'iHeard', call: 'JY4CH', grid: 'KM71', t: 1, band: '20m', mode: 'FT8', snr: 0 },
+    ];
+    assert.equal(bestDx(spots, home).iHeard.call, 'JY4CH');
+    assert.ok(listRows(spots, home).find(r => r.call === 'VK2X').km > 10000);   // the list still shows a distance
+});
+
+test('state: what a decoded station was doing, for 2 minutes', () => {
+    const store = new SpotStore();
+    const s = store.add('iHeard', { sc: 'JY4CH', sl: 'KM71', rc: 'MM5AGM', t: 1000, f: 14075000, md: 'FT8', rp: -5, sq: 'ws1', st: 'qso', to: 'DL1ABC' });
+    assert.equal(s.st, 'qso');
+    assert.equal(s.to, 'DL1ABC');
+    assert.equal(s.ws, true);
+    assert.equal(spotState(s, 1060), 'qso');
+    assert.equal(spotState(s, 1120), 'qso');
+    assert.equal(spotState(s, 1121), '');
+    assert.deepEqual(STATES, ['cq', 'you', 'qso', 'fin']);
+});
+
+test('state: only from the decodes, and only known states', () => {
+    const store = new SpotStore();
+    const mqtt = store.add('iHeard', { sc: 'K1ABC', sl: 'FN42', rc: 'MM5AGM', t: 1000, f: 14075000, md: 'FT8', rp: -5, sq: 'p1' });
+    assert.equal(mqtt.ws, undefined);
+    assert.equal(spotState(mqtt, 1000), '');
+    const odd = store.add('iHeard', { sc: 'K2ABC', sl: 'FN31', rc: 'MM5AGM', t: 1000, f: 14075000, md: 'FT8', rp: -5, sq: 'ws2', st: 'tx' });
+    assert.equal(spotState(odd, 1000), '');
+    const heardMe = store.add('heardMe', { sc: 'MM5AGM', sl: 'IO85', rc: 'K3ABC', rl: 'FN20', t: 1000, f: 14075000, md: 'FT8', rp: -5, sq: 'p2', st: 'cq' });
+    assert.equal(spotState(heardMe, 1000), '');
+    assert.equal(spotState(null, 1000), '');
 });
