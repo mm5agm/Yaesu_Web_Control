@@ -12,6 +12,20 @@ a different and much older format.
 
 ---
 
+## 2026-11-28 - v2.5.6-pre49 (pre-release)
+
+*The Spot Map gets a UTC clock, the grey line and a Best DX box. Everything in v2.5.6-pre48 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Spot Map: clock, grey line and Best DX** ([#474](https://github.com/mm5agm/Yaesu_Web_Control/pull/474), [manual](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/USER_MANUAL.md#96-spot-map-psk-reporter))
+
+- A **UTC clock** in the top bar.
+- **The grey line:** the night side of the Earth is shaded on the map, with a thin yellow line where the sun is rising or setting, and a sun where it is overhead. It moves with the time. **Grey line** at the top hides or shows it.
+- **Best DX** at the top of the right-hand side: your furthest station each way, the one that heard you and the one you heard, with band, time and distance. It follows **Last** and a band picked in the band panel. Click one to go to it on the map. **Best DX** at the top hides or shows it.
+
+FT-710, FT-991A and FTDX10 owners: testers are still wanted for the radio menu file and front panel save in v2.5.6-pre45 and pre47. Please tell us how it went in [GitHub Discussions](https://github.com/mm5agm/Yaesu_Web_Control/discussions).
+
+See the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md) for earlier pre-releases.
+
 ## 2026-11-28 - v2.5.6-pre48 (pre-release)
 
 *The Spot Map gets a band panel: who heard you, and who you heard, on each band. Everything in v2.5.6-pre47 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
