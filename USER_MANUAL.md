@@ -2570,7 +2570,7 @@ If you want a "one click for FT8" workflow in the app, the recommended approach 
 
 The app integrates with WSJT-X in two ways:
 
-1. **CAT control via rigctld** — the app runs a rigctld-compatible server on TCP port 4532. WSJT-X connects to this to control the radio (frequency, mode, PTT).
+1. **CAT control via rigctld** — the app runs a rigctld-compatible server on TCP port 4532. WSJT-X connects to this to control the radio (frequency, mode, PTT). If another program has port 4532 when YWC starts, YWC tries again every 2 seconds, and the log names the program holding the port. **Settings → WSJT-X and loggers (rigctld)** shows whether YWC is listening and how many programs are connected *(new in v2.5.6-pre46)*. If WSJT-X says **Rig failure** or "connection refused", look there first.
 2. **UDP status sync** — WSJT-X sends status packets (frequency, mode, TX state) to the app via UDP. The app uses these to keep VFO A in sync.
 
 **Configuring WSJT-X for use with this app:**
@@ -3320,7 +3320,8 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 **App shuts down unexpectedly after closing the browser**
 
 - This is normal behaviour. When the last browser tab is closed, the app waits 30 seconds for a reconnection before exiting. **Any** page counts as an open tab, including the Remote Audio and Radio Display pop-out windows, so listening on Remote Audio alone will not let the app quit underneath you.
-- If you want the app to keep running with no browser open at all — while WSJT-X is using it via rigctld, say — turn off **Automatically exit when no browser is connected** in **Settings**, and quit it from the system tray on Windows or with Ctrl+C in the console on macOS and Linux. (In Docker the app ignores the setting and always stays up.) Otherwise, just leave any one tab open.
+- YWC also stays open while WSJT-X, a logger or N1MM is connected to it (rigctld on port 4532 or the N1MM CAT port), even with no browser open. It closes about 30 seconds after the last of them disconnects *(new in v2.5.6-pre46)*.
+- If you want the app to keep running with nothing connected at all, turn off **Automatically exit when no browser is connected** in **Settings**, and quit it from the system tray on Windows or with Ctrl+C in the console on macOS and Linux. (In Docker the app ignores the setting and always stays up.) Otherwise, just leave any one tab open.
 - If you need to force-quit immediately without waiting, open Windows Task Manager (**Ctrl+Shift+Esc**), find **Yaesu_Web_Control.exe**, and click **End Task**.
 
 **Cannot access the app from a tablet**

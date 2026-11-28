@@ -77,6 +77,11 @@ namespace Yaesu_Web_Control.Pages
 
         public List<string> NetworkAddresses { get; set; } = new();
 
+        /// <summary>The rigctld port's state (WSJT-X and loggers), for its Settings section.</summary>
+        public (bool Listening, string? Why, int Clients)? RigctldStatus =>
+            HttpContext?.RequestServices.GetService(typeof(Yaesu_Web_Control.Services.RigctldServer))
+                is Yaesu_Web_Control.Services.RigctldServer s ? s.Status : null;
+
         /// <summary>The N1MM CAT port's state, for its Settings section.</summary>
         public (bool Listening, int Port, int Clients)? N1mmStatus =>
             HttpContext?.RequestServices.GetService(typeof(Yaesu_Web_Control.Services.N1mm.N1mmCatServer))

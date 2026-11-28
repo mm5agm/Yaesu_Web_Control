@@ -507,7 +507,12 @@ builder.Services.AddSingleton<ICatClient, MultiplexedCatClient>();
 builder.Services.AddSingleton<FrequencyRejectionNotifier>();
 
 // Register the rigctld server as a background service
-builder.Services.AddHostedService<RigctldServer>();
+// Programs on the CAT ports (rigctld, N1MM): while any is connected,
+// closing the last browser tab doesn't close YWC.
+builder.Services.AddSingleton<CatClientPresence>();
+// A singleton too, so the Settings page can show whether it is listening.
+builder.Services.AddSingleton<RigctldServer>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<RigctldServer>());
 // TCP CAT port for N1MM Logger+ (off until turned on in Settings).
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.N1mm.N1mmCatServer>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.N1mm.N1mmCatServer>());

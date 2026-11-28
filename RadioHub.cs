@@ -18,6 +18,7 @@ namespace Yaesu_Web_Control.Hubs
         // Registered on Windows only, with the ACC board's reader; null elsewhere.
         private readonly Services.Sdr.AccAudioService? _accAudio;
         private readonly AudioWaterfallService? _audioWaterfall;
+        private readonly CatClientPresence? _catClients;
 
         // Every currently open SignalR connection, and the whole of what the
         // host means by "a browser is watching". Presence used to mean a
@@ -35,6 +36,9 @@ namespace Yaesu_Web_Control.Hubs
         private static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(30);
         private static CancellationTokenSource? _shutdownCts;
         private static readonly object _shutdownLock = new();
+        // Set when the countdown found WSJT-X or N1MM still connected, so the
+        // log says so once rather than every 30 s.
+        private static bool _keptForCatClients;
 
         public RadioHub(
             ILogger<RadioHub> logger,
@@ -48,6 +52,7 @@ namespace Yaesu_Web_Control.Hubs
         {
             _accAudio = services.GetService<Services.Sdr.AccAudioService>();
             _audioWaterfall = services.GetService<AudioWaterfallService>();
+            _catClients = services.GetService<CatClientPresence>();
             _presence = presence;
             _cwKeying = cwKeying;
             _logger   = logger;
@@ -257,6 +262,21 @@ namespace Yaesu_Web_Control.Hubs
                 {
                     if (!t.IsCanceled && _connections.IsEmpty)
                     {
+                        // WSJT-X, a logger or N1MM still using the radio through
+                        // YWC: closing now would cut it off (W2JAZ, 2026-11-27).
+                        // Look again in another ShutdownGrace.
+                        if (_catClients is { Any: true } cat)
+                        {
+                            if (!_keptForCatClients)
+                            {
+                                _keptForCatClients = true;
+                                _logger.LogInformation(
+                                    "No browser tabs open, but {Programs} connected to YWC, so YWC keeps running. It closes about {s}s after they disconnect, unless a browser reconnects.",
+                                    cat.Describe(), ShutdownGrace.TotalSeconds);
+                            }
+                            ScheduleShutdown();
+                            return;
+                        }
                         _logger.LogInformation("No clients reconnected — stopping application.");
                         _lifetime.StopApplication();
                     }
@@ -272,6 +292,7 @@ namespace Yaesu_Web_Control.Hubs
         {
             lock (_shutdownLock)
             {
+                _keptForCatClients = false;
                 if (_shutdownCts is not null)
                 {
                     _shutdownCts.Cancel();

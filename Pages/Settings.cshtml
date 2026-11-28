@@ -2065,6 +2065,32 @@
         </div>
     </details>
 
+    <!-- rigctld port for WSJT-X and loggers: its state only, nothing to set -->
+    <details class="settings-section" id="rigctldSettings">
+        <summary><i class="bi bi-plug" aria-hidden="true"></i>&nbsp;WSJT-X and loggers (rigctld)</summary>
+        <div class="section-body">
+            <p class="form-text mt-0">
+                WSJT-X, JTDX, Log4OM and other Hamlib programs control the radio through Yaesu Web Control on
+                port <strong>@Yaesu_Web_Control.Services.RigctldServer.RigctldPort</strong>. In WSJT-X choose
+                <strong>Hamlib NET rigctl</strong> with <strong>localhost:@Yaesu_Web_Control.Services.RigctldServer.RigctldPort</strong>.
+                If another program has the port when YWC starts, YWC tries again every few seconds.
+            </p>
+            @if (Model.RigctldStatus is { } rs)
+            {
+                <p class="form-text mb-0" id="rigctldStatus">
+                    @if (rs.Listening)
+                    {
+                        <span><i class="bi bi-check-circle text-success" aria-hidden="true"></i>&nbsp;Listening on port @Yaesu_Web_Control.Services.RigctldServer.RigctldPort. Programs connected: @rs.Clients.</span>
+                    }
+                    else
+                    {
+                        <span><i class="bi bi-exclamation-triangle text-warning" aria-hidden="true"></i>&nbsp;Not listening. @(rs.Why ?? "Starting.")</span>
+                    }
+                </p>
+            }
+        </div>
+    </details>
+
     <!-- N1MM Logger+ CAT port (YWC #394) -->
     <details class="settings-section" id="n1mmSettings" @(ViewContext.ModelState.IsValid ? "" : "open")>
         <summary><i class="bi bi-diagram-3" aria-hidden="true"></i>&nbsp;N1MM Logger+</summary>
