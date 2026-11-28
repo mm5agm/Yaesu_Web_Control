@@ -68,6 +68,9 @@ namespace YaesuWebControl.Tests
             Assert.Equal("EX030111;", RadioMenuCat.ReadCommand("030111"));
             Assert.Throws<ArgumentException>(() => RadioMenuCat.ReadCommand("0301113"));
             Assert.Throws<ArgumentException>(() => RadioMenuCat.ReadCommand("03011;"));
+            Assert.Equal("EX057;", RadioMenuCat.ReadCommand("057"));
+            Assert.Throws<ArgumentException>(() => RadioMenuCat.ReadCommand("0571"));
+            Assert.Throws<ArgumentException>(() => RadioMenuCat.ReadCommand("57"));
         }
 
         [Fact]
@@ -91,10 +94,12 @@ namespace YaesuWebControl.Tests
         [Theory]
         [InlineData("FTdx101MP", true)]
         [InlineData("FTdx101D", true)]
-        [InlineData("FT-710", false)]
+        [InlineData("FT-710", true)]
+        [InlineData("FT-991A", true)]
         [InlineData("FTdx10", true)]
         [InlineData("FTDX3000", false)]
-        public void Only_the_FTdx101_and_FTDX10_have_a_table_so_far(string model, bool has)
+        [InlineData("FT-891", false)]
+        public void Only_the_FTdx101_FTDX10_FT710_and_FT991A_have_a_table_so_far(string model, bool has)
             => Assert.Equal(has, RadioMenuCat.TableFor(model) is not null);
 
         [Fact]

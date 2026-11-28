@@ -30,7 +30,7 @@ public sealed record RadioMenuFile(string? Program, string? Radio, IReadOnlyList
 public static class RadioMenuLoad
 {
     private static readonly Regex SectionLine = new(@"^\[([^\]]*)\]$", RegexOptions.Compiled);
-    private static readonly Regex Note = new(@"^\s*(\d{6})(?:\s*=\s*(.*?))?\s*(?:\[TX\])?\s*$", RegexOptions.Compiled);
+    private static readonly Regex Note = new(@"^\s*(\d{6}|\d{3})(?:\s*=\s*(.*?))?\s*(?:\[TX\])?\s*$", RegexOptions.Compiled);
     private static readonly Regex KnobNote = new(@"^\s*([A-Z]{2}\d{0,2})(?:\s*=\s*(\d+))?(?:\s*@\s*(\w+))?\s*(?:\[TX\])?\s*$", RegexOptions.Compiled);
     private static readonly Regex NumberWithUnit = new(@"^([+-]?\d+(?:\.\d+)?)\s*[A-Za-z/]+$", RegexOptions.Compiled);
 

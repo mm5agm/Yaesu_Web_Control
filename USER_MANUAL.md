@@ -2115,7 +2115,7 @@ The quickest way to change one of the radio's menu items is **Change radio setti
 
 **Save radio menu to file**
 
-Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, then the front panel settings (below), and writes the file. It takes about 15 seconds. Available for the FTdx101MP, FTdx101D and FTDX10. FTDX10 support is new and needs testers: if you have one, please try it and tell us on GitHub how it went.
+Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, 150 to 300 items depending on the model, then the front panel settings (below), and writes the file. It takes about 15 seconds. Available for the FTdx101MP, FTdx101D, FTDX10, FT-710 and FT-991A. The FTDX10, FT-710 and FT-991A are new and need testers: if you have one, please try it and tell us on GitHub how it went. The FT-991A menu is numbered 001 to 153, so its file shows three-digit menu numbers.
 
 The file goes in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus`, with YWC's other files, on the PC that runs YWC. The page shows the full path after each save, and **Open that folder** opens it in Explorer. If you use YWC from a browser on another PC, pick the file under **Saved files** and click **Download a copy** to get it on that PC.
 
@@ -2143,7 +2143,7 @@ MY CALL TIME = 1 s                       ; 040102 = 01
 | Per band and mode | AGC, NAR, WIDTH, DNF (not FM), NOTCH, NOTCH FREQ, CONTOUR, CONTOUR FREQ, APF (CW only) | for the band you are on, in each mode |
 | Per mode | MIC GAIN (not CW or RTTY, which have no mic), AMC LEVEL, PROC, PROC LEVEL, MIC EQ, RF POWER, MONITOR, MONITOR LEVEL, VOX GAIN, BREAK-IN and KEYER (CW only) | in each mode |
 
-WIDTH is saved as the radio's step number (0 to 23), because what each step means depends on the mode. The modes are LSB, USB, CW-U, CW-L, AM, FM, DATA-L, DATA-U, RTTY-L, RTTY-U and PSK. To save the per-band settings for another band, go to that band and save again, to another file if you like. The settings go at the end of the file: those kept once or per band in `[Front panel]`, then one section per mode:
+WIDTH is saved as the radio's step number (0 to 23; 0 to 21 on the FT-991A, where 0 is the mode's default width), because what each step means depends on the mode. The modes are LSB, USB, CW-U, CW-L, AM, FM, DATA-L, DATA-U, RTTY-L, RTTY-U and PSK (no PSK on the FT-991A). The FT-710 saves the same front panel settings as the FTdx101. The FT-991A has no AMC LEVEL or ANTI VOX command, its ATT is OFF/ON, and its BREAK-IN DELAY, VOX DELAY and VOX GAIN are menu items, so they are saved with the menu instead. On the FT-991A, 2m and 70cm are bands of their own. To save the per-band settings for another band, go to that band and save again, to another file if you like. The settings go at the end of the file: those kept once or per band in `[Front panel]`, then one section per mode:
 
 ```ini
 [Front panel]
@@ -2191,7 +2191,7 @@ P PRMTRC EQ1 FREQ = 300 Hz               ; 030312 = 00  [TX]
 
 The value after `=` is what counts; the number after `;` is only used when you have not changed the value. Capitals, spaces and a leading `+` do not matter, and you can leave the unit off (`300` works as well as `300 Hz`). The value must be one the radio offers: `ON` is not, because this item's settings are OFF and 100 to 700 Hz. If you type something the radio does not offer, the Note column says so and lists what the item takes. MY CALL takes up to 12 letters, numbers and symbols, except `;`.
 
-A file saved from an FTdx101MP can be loaded into an FTdx101D, and the other way round. YWC warns you, and any power setting above the D's 100 W is refused. An FTDX10 menu is different: the same menu number is a different item. So menu items in a file from an FTdx101 are never loaded into an FTDX10, or the other way round. The preview lists them as not loaded. Front panel settings that suit the radio still load, and any power above the FTDX10's 100 W is refused.
+A file saved from an FTdx101MP can be loaded into an FTdx101D, and the other way round. YWC warns you, and any power setting above the D's 100 W is refused. An FTDX10 menu is different: the same menu number is a different item. So menu items in a file from an FTdx101 are never loaded into an FTDX10, or the other way round. The preview lists them as not loaded. Front panel settings that suit the radio still load, and any power above the FTDX10's 100 W is refused. The FT-710 and FT-991A menus are their own too, so menu items only load into the same model.
 
 ---
 

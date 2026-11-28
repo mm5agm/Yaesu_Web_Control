@@ -3,7 +3,8 @@ namespace Yaesu_Web_Control.Services.RadioMenu;
 /// <summary>
 /// One item of a radio's menu, reached with EX.
 /// </summary>
-/// <param name="Address">P1 P2 P3, six digits, e.g. "010306".</param>
+/// <param name="Address">P1 P2 P3, six digits, e.g. "010306"; on the FT-991A one
+/// three-digit menu number, e.g. "057".</param>
 /// <param name="Section">P1's name on the radio, e.g. "RADIO SETTING".</param>
 /// <param name="Group">P2's name, e.g. "MODE FM".</param>
 /// <param name="Function">The item's name as the radio shows it.</param>
@@ -34,7 +35,7 @@ public sealed record RadioMenuReading(RadioMenuItem Item, string? Raw)
 
 /// <summary>
 /// EX traffic for the menu save and load. A read is "EX" plus the six-digit
-/// address and nothing else, and <see cref="ReadCommand"/> refuses anything
+/// address (three digits on the FT-991A) and nothing else, and <see cref="ReadCommand"/> refuses anything
 /// that is not exactly that. A set adds the value; <see cref="SetCommand"/>
 /// only takes values that <see cref="RadioMenuLoad"/> has checked.
 /// </summary>
@@ -46,6 +47,8 @@ public static class RadioMenuCat
         "FTdx101MP" => Ftdx101Menu.Items,
         "FTdx101D" => Ftdx101Menu.ItemsD,
         "FTdx10" => Ftdx10Menu.Items,
+        "FT-710" => Ft710Menu.Items,
+        "FT-991A" => Ft991aMenu.Items,
         _ => null,
     };
 
@@ -69,8 +72,8 @@ public static class RadioMenuCat
 
     public static string ReadCommand(string address)
     {
-        if (address.Length != 6 || !address.All(char.IsAsciiDigit))
-            throw new ArgumentException($"Not a six-digit EX address: '{address}'", nameof(address));
+        if (address.Length is not (3 or 6) || !address.All(char.IsAsciiDigit))
+            throw new ArgumentException($"Not a three- or six-digit EX address: '{address}'", nameof(address));
         return $"EX{address};";
     }
 

@@ -161,7 +161,7 @@ namespace YaesuWebControl.Tests
         [Fact]
         public void Close_never_asks_for_a_radio_without_levels()
         {
-            Assert.False(RadioMenuReminder.ExitCheck(Saved(2), T0, "FT-991A",
+            Assert.False(RadioMenuReminder.ExitCheck(Saved(2), T0, "FTDX3000",
                 new[] { ("2", "MG", 10) }, "2", null, NoLive).Ask);
         }
     }
