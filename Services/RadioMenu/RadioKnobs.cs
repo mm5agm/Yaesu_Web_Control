@@ -111,7 +111,7 @@ public static class RadioKnobs
     /// <summary>Knob rows use "knob:2:MG" as their address, so they can never clash with an EX address.</summary>
     public const string AddressPrefix = "knob:";
 
-    /// <summary>The FTdx101's main-band modes (MD0), in the order the file lists them. The FTDX10 uses the same codes.</summary>
+    /// <summary>The FTdx101's main-band modes (MD0), in the order the file lists them. The FTDX10 and FT-710 use the same codes.</summary>
     public static readonly IReadOnlyList<RadioKnobMode> Ftdx101Modes =
     [
         new("1", "LSB"), new("2", "USB"),
@@ -122,9 +122,22 @@ public static class RadioKnobs
         new("E", "PSK"),
     ];
 
+    /// <summary>
+    /// The FT-991A's modes (MD0): the same codes for the HF modes, but no PSK
+    /// (its E is C4FM, a digital voice mode with no knobs of its own to save).
+    /// </summary>
+    public static readonly IReadOnlyList<RadioKnobMode> Ft991aModes =
+    [
+        new("1", "LSB"), new("2", "USB"),
+        new("3", "CW-U"), new("7", "CW-L"),
+        new("5", "AM"), new("4", "FM"),
+        new("8", "DATA-L"), new("C", "DATA-U"),
+        new("6", "RTTY-L"), new("9", "RTTY-U"),
+    ];
+
     /// <summary>The band names a saved per-band value can have.</summary>
     public static readonly IReadOnlyList<string> Bands =
-        ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "4m", "GEN"];
+        ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "4m", "2m", "70cm", "GEN"];
 
     private static string Level(int v) => v.ToString(CultureInfo.InvariantCulture);
 
@@ -201,18 +214,72 @@ public static class RadioKnobs
     /// </summary>
     private static readonly IReadOnlyList<RadioKnob> Ftdx10 = Ftdx101(100);
 
+    /// <summary>
+    /// The FT-710 also matches the FTdx101 for every one of these commands
+    /// (FT-710 CAT manual 2306-C), with RF POWER to 100 W.
+    /// </summary>
+    private static readonly IReadOnlyList<RadioKnob> Ft710 = Ftdx101(100);
+
+    /// <summary>
+    /// The FT-991A (FT-991 CAT Operation Reference Book). Most commands match
+    /// the FTdx101; the differences: ATT is OFF/ON, WIDTH is two digits after
+    /// SH0 (00 is the mode's default width), and there is no AMC LEVEL or ANTI
+    /// VOX command. BREAK-IN DELAY, VOX DELAY and VOX GAIN are left out here:
+    /// on this radio they are also menu items (057, 144, 143), saved there.
+    /// PROC is set 0/1, as on the FTdx101, though the manual says 1/2. Where
+    /// each is kept (radio, band or mode) is taken from the FTdx101; not yet
+    /// checked on an FT-991A.
+    /// </summary>
+    private static readonly IReadOnlyList<RadioKnob> Ft991a =
+    [
+        Lvl("RG0", "RF GAIN", 0, 255, 3, G),
+        Lvl("SQ0", "SQUELCH", 0, 100, 3, G),
+        Lvl("NL0", "NB LEVEL", 0, 10, 3, G),
+        Lvl("CO03", "APF FREQ", 0, 50, 4, G),
+        Lvl("KS", "KEY SPEED", 4, 60, 3, G, tx: true, unit: " wpm"),
+        Lvl("KP", "KEY PITCH", 0, 75, 2, G, step: 10, offset: 300, unit: " Hz"),
+
+        Pick("PA0", "IPO", 1, B, ["IPO", "AMP 1", "AMP 2"]),
+        Pick("RA0", "ATT", 1, B, OffOn),
+        Pick("NB0", "NB", 1, B, OffOn),
+        Pick("NR0", "NR", 1, B, OffOn),
+        Lvl("RL0", "NR LEVEL", 1, 15, 2, B),
+
+        Pick("GT0", "AGC", 1, BM, ["OFF", "FAST", "MID", "SLOW", "AUTO"], fold: v => v is 5 or 6 ? 4 : v),
+        Pick("NA0", "NAR", 1, BM, OffOn),
+        Lvl("SH0", "WIDTH", 0, 21, 2, BM),
+        Pick("BC0", "DNF", 1, BM, OffOn, notIn: ["FM"]),
+        Pick("BP00", "NOTCH", 3, BM, OffOn),
+        Lvl("BP01", "NOTCH FREQ", 1, 320, 3, BM, step: 10, unit: " Hz"),
+        Pick("CO00", "CONTOUR", 4, BM, OffOn),
+        Lvl("CO01", "CONTOUR FREQ", 10, 3200, 4, BM, unit: " Hz"),
+        Pick("CO02", "APF", 4, BM, OffOn, onlyIn: "CW"),
+
+        Lvl("MG", "MIC GAIN", 0, 100, 3, M, tx: true, notIn: ["CW", "RTTY"]),
+        Pick("PR0", "PROC", 1, M, OffOn, tx: true),
+        Lvl("PL", "PROC LEVEL", 0, 100, 3, M, tx: true),
+        Pick("PR1", "MIC EQ", 1, M, OffOn, tx: true),
+        Lvl("PC", "RF POWER", 5, 100, 3, M, tx: true, unit: " W"),
+        Pick("ML0", "MONITOR", 3, M, OffOn, tx: true),
+        Lvl("ML1", "MONITOR LEVEL", 0, 100, 3, M, tx: true),
+        Pick("BI", "BREAK-IN", 1, M, OffOn, tx: true, onlyIn: "CW"),
+        Pick("KR", "KEYER", 1, M, OffOn, tx: true, onlyIn: "CW"),
+    ];
+
     /// <summary>The knobs for a model, or null if YWC saves none for it.</summary>
     public static IReadOnlyList<RadioKnob>? TableFor(string? radioModel) => radioModel switch
     {
         "FTdx101MP" => Ftdx101Mp,
         "FTdx101D" => Ftdx101D,
         "FTdx10" => Ftdx10,
+        "FT-710" => Ft710,
+        "FT-991A" => Ft991a,
         _ => null,
     };
 
     /// <summary>The modes the knobs are read in for a model.</summary>
     public static IReadOnlyList<RadioKnobMode> ModesFor(string? radioModel) =>
-        TableFor(radioModel) is null ? [] : Ftdx101Modes;
+        TableFor(radioModel) is null ? [] : radioModel == "FT-991A" ? Ft991aModes : Ftdx101Modes;
 
     /// <summary>The address of a per-mode knob: "knob:2:MG".</summary>
     public static string Address(RadioKnobMode mode, RadioKnob knob) => new RadioKnobSlot(knob, mode, null).Address;
@@ -263,7 +330,9 @@ public static class RadioKnobs
     {
         if (!section.StartsWith(SectionPrefix, StringComparison.OrdinalIgnoreCase)) return null;
         var name = section[SectionPrefix.Length..].Trim();
-        return Ftdx101Modes.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        var modes = ModesFor(radioModel);
+        return (modes.Count > 0 ? modes : Ftdx101Modes)
+            .FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
     }
 
     public static string ReadCommand(RadioKnob knob) => (knob.Query ?? knob.Command) + ";";
@@ -349,6 +418,8 @@ public static class RadioKnobs
         >= 27_900 and <= 29_800 => "10m",
         >= 49_900 and <= 54_100 => "6m",
         >= 69_900 and <= 71_600 => "4m",
+        >= 144_000 and <= 148_000 => "2m",
+        >= 430_000 and <= 450_000 => "70cm",
         _ => "GEN",
     };
 
