@@ -12,6 +12,21 @@ a different and much older format.
 
 ---
 
+## 2026-11-28 - v2.5.6-pre48 (pre-release)
+
+*The Spot Map gets a band panel: who heard you, and who you heard, on each band. Everything in v2.5.6-pre47 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Spot Map: band panel** ([#471](https://github.com/mm5agm/Yaesu_Web_Control/pull/471), [#472](https://github.com/mm5agm/Yaesu_Web_Control/pull/472), [manual](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/USER_MANUAL.md#96-spot-map-psk-reporter))
+
+- A panel above the spot list shows, for each band, how many stations **heard you** (orange bar) and how many **you heard** (blue bar), over the **Last** time you picked. The busiest band stands out at a glance.
+- A station heard on two bands counts on both, so the bands can add up to more than the totals at the top.
+- **Click a band** to show only that band on the map, in the list and in the totals. Click it again, or **All bands**, to see every band.
+- **Bands** at the top hides or shows the panel, and is remembered like **List**. Drag the bar beside the map to resize the right-hand side.
+
+FT-710, FT-991A and FTDX10 owners: testers are still wanted for the radio menu file and front panel save in v2.5.6-pre45 and pre47. Please tell us how it went in [GitHub Discussions](https://github.com/mm5agm/Yaesu_Web_Control/discussions).
+
+See the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md) for earlier pre-releases.
+
 ## 2026-11-28 - v2.5.6-pre47 (pre-release)
 
 > **Testers urgently needed: FT-710 and FT-991A owners.** This pre-release adds the radio menu file and front panel save to the FT-710 and FT-991A. It was built from Yaesu's CAT manuals and has not been tried on either radio, because I don't have one. If you have an FT-710 or FT-991A, please save a file, check that the values match your radio's menu, and tell us how it went in [GitHub Discussions](https://github.com/mm5agm/Yaesu_Web_Control/discussions). Even "it worked" helps. FTDX10 owners are still wanted for v2.5.6-pre45 too.
