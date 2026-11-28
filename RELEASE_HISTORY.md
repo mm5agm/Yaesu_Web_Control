@@ -12,6 +12,21 @@ a different and much older format.
 
 ---
 
+## 2026-11-28 - v2.5.6-pre51 (pre-release)
+
+*FT8 Tiles: Call CQ stops by itself, and the status line shows your transmit levels. Everything in v2.5.6-pre50 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**FT8 Tiles: Call CQ stops after 6, and ALC and SWR** ([#478](https://github.com/mm5agm/Yaesu_Web_Control/pull/478), [manual](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/USER_MANUAL.md#242-using-the-tiles))
+
+- **Call CQ stops by itself** after 6 CQs in a row that nobody answered. The last CQ finishes first, and an answer starts the count again, so a QSO is never cut off. The tile says **Calling CQ 3 of 6** while it calls, and **stopped after 6, no answer** when it stops. It works with the browser closed.
+- Change the number in Settings, under WSJT-X UDP Settings: **Call CQ stops after**. 0 keeps calling until you click **Stop transmit**.
+- **Your transmit levels** on the status line: the radio's ALC and SWR while you transmit, for example **ALC 4% · SWR 1.2:1**, and the last transmission for 10 minutes after. It turns red over the TX alert limits, and says to turn **Pwr** down in WSJT-X if the ALC is too high.
+- Thanks to Mike 2E0UMF, who asked for both.
+
+FT-710, FT-991A and FTDX10 owners: testers are still wanted for the radio menu file and front panel save in v2.5.6-pre45 and pre47. Please tell us how it went in [GitHub Discussions](https://github.com/mm5agm/Yaesu_Web_Control/discussions).
+
+See the [release history](https://github.com/mm5agm/Yaesu_Web_Control/blob/develop/RELEASE_HISTORY.md) for earlier pre-releases.
+
 ## 2026-11-28 - v2.5.6-pre50 (pre-release)
 
 *The Spot Map fits one whole world in the window. Everything in v2.5.6-pre49 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
