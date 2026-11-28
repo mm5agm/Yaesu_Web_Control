@@ -28,7 +28,7 @@
 // app's page from its own wwwroot/lib, and an empty element to draw into.
 
 import {
-    KINDS, SpotStore, gridToLatLon, isCallsign, topicsFor, topicCall, classifyMqtt,
+    KINDS, SpotStore, gridToLatLon, spotLatLon, countryFor, isCallsign, topicsFor, topicCall, classifyMqtt,
     fromReceptionReport, listRows, utcHhmm, formatDistance, bestDx, utcHhmmss, nightPolygon, subsolarPoint,
 } from './spot-data.js';
 
@@ -63,6 +63,7 @@ const CSS = `
 .sm-bar button[aria-pressed="true"] { background: #2d4f6e; border-color: #3db4ff; }
 .sm-bar a { color: #8bd; }
 .sm-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.sm-dot.sm-approx { background: transparent !important; border: 2px dashed currentColor; width: 7px; height: 7px; }
 .sm-muted { color: #9aa; font-size: 12px; }
 .sm-status b { color: #6f6; font-weight: 600; }
 .sm-body { flex: 1 1 auto; min-height: 0; display: flex; }
@@ -536,18 +537,26 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             $('n' + kind).textContent = spots.length;
             if (!shown.includes(kind)) continue;
             for (const s of spots) {
-                const ll = gridToLatLon(s.grid);
+                const ll = spotLatLon(s);
                 const fresh = now - s.t < FRESH_SECS;
+                const approx = s.approx !== undefined;
                 const line = kind === 'heardMe' ? `${s.call} heard ${CALL}` : `${CALL} heard ${s.call}`;
                 const snr = s.snr !== null ? ` · ${s.snr} dB` : '';
-                const tip = `<b>${esc(line)}</b><br>${esc(s.band)} ${esc(s.mode)}${snr}<br>${esc(s.grid)} · ${ago(s.t)}`;
+                const where = approx ? `${esc(s.approx)}, approximate position (from the callsign)` : esc(s.grid);
+                const tip = `<b>${esc(line)}</b><br>${esc(s.band)} ${esc(s.mode)}${snr}<br>${where} · ${ago(s.t)}`;
                 for (const shift of COPIES) {
                     const at = [ll[0], ll[1] + shift];
                     if (home) {
-                        L.polyline([[home[0], home[1] + shift], at], { color: COLOURS[kind], weight: fresh ? 2 : 1, opacity: fresh ? 0.8 : 0.3 })
-                            .addTo(layers[kind]);
+                        L.polyline([[home[0], home[1] + shift], at], {
+                            color: COLOURS[kind], weight: fresh ? 2 : 1, opacity: fresh ? 0.8 : 0.3,
+                            dashArray: approx ? '4 6' : null,
+                        }).addTo(layers[kind]);
                     }
-                    const m = L.circleMarker(at, {
+                    // An approximate position (country centre) is a hollow, dashed ring.
+                    const m = L.circleMarker(at, approx ? {
+                        radius: fresh ? 11 : 7, color: COLOURS[kind], weight: 2, dashArray: '3 3',
+                        fillColor: COLOURS[kind], fillOpacity: 0.12,
+                    } : {
                         radius: fresh ? 11 : 7, color: fresh ? '#fff' : '#111', weight: fresh ? 2 : 1,
                         fillColor: COLOURS[kind], fillOpacity: 0.9,
                     }).bindTooltip(tip).addTo(layers[kind]);
@@ -615,12 +624,18 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         $('rows').innerHTML = rows.map(r => {
             const age = now - r.t;
             const cls = age < FRESH_SECS ? 'sm-fresh' : age > 3600 ? 'sm-old' : '';
-            const tip = `${KIND_LABEL[r.kind]} · ${r.mode} · ${r.grid} · ${ago(r.t)}`;
+            const approx = r.approx !== undefined;
+            const where = approx ? `${r.approx}, approximate position from the callsign` : r.grid;
+            const tip = `${KIND_LABEL[r.kind]} · ${r.mode} · ${where} · ${ago(r.t)}`;
+            const dot = approx
+                ? `<span class="sm-dot sm-approx" style="color:${COLOURS[r.kind]}" aria-label="${KIND_LABEL[r.kind]}, approximate position"></span>`
+                : `<span class="sm-dot" style="background:${COLOURS[r.kind]}" aria-label="${KIND_LABEL[r.kind]}"></span>`;
+            const km = formatDistance(r.km, miles);
             return `<tr class="${cls}" data-key="${esc(r.kind + ':' + r.call)}" title="${esc(tip)}">`
-                + `<td><span class="sm-dot" style="background:${COLOURS[r.kind]}" aria-label="${KIND_LABEL[r.kind]}"></span>${esc(r.call)}</td>`
+                + `<td>${dot}${esc(r.call)}</td>`
                 + `<td>${esc(r.band)}</td>`
                 + `<td class="sm-num">${r.snr === null ? '' : esc(r.snr)}</td>`
-                + `<td class="sm-num">${formatDistance(r.km, miles)}</td>`
+                + `<td class="sm-num">${approx && km ? '~' + km : km}</td>`
                 + `<td class="sm-num">${utcHhmm(r.t)}</td></tr>`;
         }).join('');
         $('empty').hidden = rows.length > 0;
@@ -720,12 +735,16 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         return heardUp ? ` · ${esc(programName)} decodes: ${heardCount}` : ` · ${esc(programName)} decodes: not running`;
     }
     const heardWaiting = new Map();
-    function addHeard(i, grid) {
+    // grid '' with a country puts the station at the country's centre for
+    // now; the real grid replaces it once known (a different sq, so the store
+    // doesn't take it for a repeat).
+    function addHeard(i, grid, country = null) {
         const added = store.add('iHeard', {
             sc: i.call, sl: grid, rc: CALL, rl: station.grid || '',
-            f: i.f, md: i.md, rp: i.rp, t: i.t, sq: `ws${i.seq}`,
+            f: i.f, md: i.md, rp: i.rp, t: i.t, sq: country ? `ws${i.seq}~` : `ws${i.seq}`,
+            ...(country ? { ll: [country.lat, country.lon], approx: country.name } : {}),
         });
-        if (added) { heardCount++; scheduleDraw(); }
+        if (added) { if (country || !i.approxShown) heardCount++; scheduleDraw(); }
     }
     async function pollHeard() {
         try {
@@ -734,12 +753,16 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             const d = await r.json();
             heardUp = !!d.connected;
             if (d.seq < heardSeq) { heardSeq = 0; return; }   // the app restarted: start again
-            // A station whose grid WSJT-X hasn't heard yet waits here until a
-            // spot from PSK Reporter (either kind) shows where it is.
+            // A station whose grid WSJT-X hasn't heard yet goes on at its
+            // country's centre (from the callsign), and waits here until a
+            // spot from PSK Reporter (either kind) shows where it really is.
             for (const i of d.items ?? []) {
-                if (i.grid) heardWaiting.delete(i.call);
-                else heardWaiting.set(i.call, i);
-                if (i.grid) addHeard(i, i.grid);
+                if (i.grid) { heardWaiting.delete(i.call); addHeard(i, i.grid); continue; }
+                const grid = store.gridFor(i.call);
+                if (grid) { heardWaiting.delete(i.call); addHeard(i, grid); continue; }
+                heardWaiting.set(i.call, i);
+                const country = countryFor(i.call);
+                if (country) { addHeard(i, '', country); i.approxShown = true; }
             }
             const now = Date.now() / 1000;
             for (const [call, i] of heardWaiting) {
