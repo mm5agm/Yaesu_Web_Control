@@ -38,6 +38,11 @@ const WINDOWS = [[300, '5 minutes'], [600, '10 minutes'], [900, '15 minutes'], [
                  [3600, '1 hour'], [10800, '3 hours'], [21600, '6 hours'], [86400, '24 hours']];
 const FRESH_SECS = 180;          // spots from the last 3 minutes are drawn bigger
 const HISTORY_GAP_MS = 5.5 * 60 * 1000;
+// World always shows this much: 80 N clears all of Svalbard (Longyearbyen 78 N, Ny-Alesund 79 N),
+// 57 S Cape Horn and South Georgia.
+const WORLD_NORTH = 80, WORLD_SOUTH = -57;
+// The map repeats sideways, so spots go on the copies either side too.
+const COPIES = [-360, 0, 360];
 const STATION_POLL_MS = 15000;
 const GREY_LINE_MS = 60000;      // the grey line moves a quarter of a degree a minute
 const KEY = 'spotmap.';
@@ -383,7 +388,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     let home = gridToLatLon(station.grid);
     let homeMarker = null;
 
-    // ---- The view: one whole world across the window, or where you left it ----
+    // ---- The view: the whole world, or where you left it ----
     let worldMode = false, worldLon = null, settingView = false;
     const setViewQuietly = (centre, zoom) => {
         settingView = true;
@@ -394,13 +399,17 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         save('view', { world: true });
         const size = map.getSize();
         if (!size.x || !size.y) return;          // not laid out yet: the resize watcher calls again
-        const zoom = Math.log2(size.x / 256);    // the world is 256 px wide at zoom 0
+        // One world across the window, unless that is taller than the window and would
+        // cut off land between WORLD_NORTH and WORLD_SOUTH (Svalbard to Cape Horn). Then
+        // zoom out until that fits; the map repeats at the sides, spots and all.
+        const band = lat => map.project([lat, 0], 0).y;
+        const bandPx = band(WORLD_SOUTH) - band(WORLD_NORTH);   // at zoom 0
+        const zoom = Math.min(Math.log2(size.x / 256), Math.log2(size.y / bandPx));
         worldLon = home ? home[1] : 0;
-        // The world is as tall as it is wide. If that is taller than the window, keep the
-        // top at 80 N, so it is the empty far south that gets cut off.
         const x = map.project([0, worldLon], zoom).x;
-        const top = map.project([80, worldLon], zoom).y;
-        const y = Math.min(Math.max(top + size.y / 2, size.y / 2), size.x - size.y / 2);
+        const mid = (map.project([WORLD_NORTH, 0], zoom).y + map.project([WORLD_SOUTH, 0], zoom).y) / 2;
+        const worldPx = 256 * Math.pow(2, zoom);
+        const y = Math.min(Math.max(mid, size.y / 2), worldPx - size.y / 2);
         setViewQuietly(map.unproject([x, y], zoom), zoom);
     }
     const view = load('view', null);
@@ -472,8 +481,9 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         const windowSecs = Number(windowSel.value);
         if (!home && store.gridFromSpots) home = gridToLatLon(store.gridFromSpots);
         if (home && !homeMarker) {
-            homeMarker = L.circleMarker(home, { radius: 9, color: '#fff', weight: 2, fillColor: '#ffd23d', fillOpacity: 1 })
-                .bindTooltip(esc(CALL)).addTo(map);
+            homeMarker = L.layerGroup(COPIES.map(shift =>
+                L.circleMarker([home[0], home[1] + shift], { radius: 9, color: '#fff', weight: 2, fillColor: '#ffd23d', fillOpacity: 1 })
+                    .bindTooltip(esc(CALL)))).addTo(map);
         }
         // Home found after the start: centre the whole-world view on it.
         if (worldMode && home && worldLon !== home[1]) fitWorld();
@@ -487,19 +497,21 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             for (const s of spots) {
                 const ll = gridToLatLon(s.grid);
                 const fresh = now - s.t < FRESH_SECS;
-                if (home) {
-                    L.polyline([home, ll], { color: COLOURS[kind], weight: fresh ? 2 : 1, opacity: fresh ? 0.8 : 0.3 })
-                        .addTo(layers[kind]);
-                }
-                const m = L.circleMarker(ll, {
-                    radius: fresh ? 11 : 7, color: fresh ? '#fff' : '#111', weight: fresh ? 2 : 1,
-                    fillColor: COLOURS[kind], fillOpacity: 0.9,
-                });
                 const line = kind === 'heardMe' ? `${s.call} heard ${CALL}` : `${CALL} heard ${s.call}`;
                 const snr = s.snr !== null ? ` · ${s.snr} dB` : '';
-                m.bindTooltip(`<b>${esc(line)}</b><br>${esc(s.band)} ${esc(s.mode)}${snr}<br>${esc(s.grid)} · ${ago(s.t)}`);
-                m.addTo(layers[kind]);
-                markers.set(kind + ':' + s.call, m);
+                const tip = `<b>${esc(line)}</b><br>${esc(s.band)} ${esc(s.mode)}${snr}<br>${esc(s.grid)} · ${ago(s.t)}`;
+                for (const shift of COPIES) {
+                    const at = [ll[0], ll[1] + shift];
+                    if (home) {
+                        L.polyline([[home[0], home[1] + shift], at], { color: COLOURS[kind], weight: fresh ? 2 : 1, opacity: fresh ? 0.8 : 0.3 })
+                            .addTo(layers[kind]);
+                    }
+                    const m = L.circleMarker(at, {
+                        radius: fresh ? 11 : 7, color: fresh ? '#fff' : '#111', weight: fresh ? 2 : 1,
+                        fillColor: COLOURS[kind], fillOpacity: 0.9,
+                    }).bindTooltip(tip).addTo(layers[kind]);
+                    if (shift === 0) markers.set(kind + ':' + s.call, m);
+                }
             }
         }
         drawList(now, windowSecs, shown);
