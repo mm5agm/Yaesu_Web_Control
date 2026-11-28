@@ -2879,7 +2879,7 @@ The Spot Map shows who hears you, and who you hear, on a world map and in a list
 - Hold the mouse over a dot for the callsign, band, mode, SNR and how long ago.
 - **The grey line** (*new in v2.5.6-pre49*): the night side of the Earth is shaded, with a thin yellow line where the sun is rising or setting. Grey-line paths often open up along it. The ☀ marks where the sun is overhead. It moves with the time, and **Grey line** at the top hides or shows it.
 - **One whole world** (*new in v2.5.6-pre50*): the map opens with exactly one world across the window, centred on you, and keeps it fitted when you resize the window or the right-hand side. On a very wide window, such as a wide second monitor, it zooms out a little so that everything from Svalbard down to Cape Horn fits top to bottom, so South Africa, Australia and South America are never cut off (*v2.5.6-pre52*). The map then repeats at the left and right edges, spots included. The mouse wheel and the **+** and **−** buttons zoom in small steps. Pan or zoom, and the page opens on that view next time. **World** at the top brings back the whole world.
-- **No spots yet** (*new in v2.5.6-pre52*): if PSK Reporter has nothing for your callsign in the last 24 hours, a notice on the map says so, instead of leaving an empty world. Spots appear as soon as they arrive: **Heard me** when someone hears you transmit, **I heard** when WSJT-X reports what you decode to PSK Reporter (in WSJT-X, **Settings → Reporting**, tick **Enable PSK Reporter Spotting**). PSK Reporter's history sometimes runs behind: it may know when you were last heard but send no spots. If it gives that time, the notice shows it.
+- **No spots yet** (*new in v2.5.6-pre52*): if PSK Reporter has nothing for your callsign in the last 24 hours, a notice on the map says so, instead of leaving an empty world. Spots appear as soon as they arrive: **Heard me** when someone hears you transmit, **I heard** as soon as WSJT-X decodes a station whose grid is known (see **How quickly spots appear** below). PSK Reporter's history sometimes runs behind: it may know when you were last heard but send no spots. If it gives that time, the notice shows it.
 
 **The list** (right-hand side): **Who**, **Band**, **SNR**, **Distance** and **Time UTC**, newest first. Click a column heading to sort by it, and again to reverse it. Click a row to go to that station on the map. **List** at the top hides or shows it.
 
@@ -2891,9 +2891,16 @@ Drag the bar between the map and the right-hand side to resize them.
 
 **At the top:** the **UTC clock** (*new in v2.5.6-pre49*) shows the time from your PC's clock. **Show** picks both kinds, or only one. **Last** picks how far back (5 minutes to 24 hours). **km**/**miles** sets the distance units. All of these are remembered.
 
+**How quickly spots appear** (*new in v2.5.6-pre52*):
+
+- **I heard: within seconds.** YWC gets every decode from WSJT-X (or WS, JTDX) over the UDP link, so a station you decode goes on the map a second or two after the end of the period, without waiting for PSK Reporter. The top bar counts them, for example "WSJT-X decodes: 12". YWC needs the station's grid square to place it on the map. A station sends its grid in its CQ ("CQ K1ABC FN42") or in its first reply to someone ("W9XYZ K1ABC FN42"), and YWC remembers it. A station heard only in the middle of a QSO ("W9XYZ K1ABC -10") waits until YWC hears its grid, or until PSK Reporter's next batch brings it. This works only when the callsign comes from WSJT-X, not when you typed one in.
+- **Heard me: in bursts, every few minutes.** Only PSK Reporter knows who heard you. Each station that hears you sends its spots to PSK Reporter in a batch, usually every 5 minutes, and the live feed passes them on within seconds. So orange dots arrive in bursts, with quiet gaps of a minute or more. That's normal, and pskreporter.info and other sites have the same delay.
+- **Why another site can look faster.** Some sites, such as HamSpots, also take your decodes straight from your PC (through JTAlert or their own uploader) and mark them separately: HamSpots shows them as **S** and PSK Reporter's spots as **P**. Their **P** spots are as late as YWC's.
+- **Only the WSJT modes are instant.** The instant "I heard" comes from WSJT-X's decodes: FT8, FT4 and the other WSJT modes. CW, RTTY and PSK31 spots reach the map only through PSK Reporter, from programs such as fldigi and CW skimmers that report to it, with the same batch delay. YWC's own CW and RTTY decoders don't add anything to the map, because a CW or RTTY signal doesn't say where the station is.
+- With **Last** set to 5 minutes, the map thins out just before each burst. 15 minutes gives a steadier picture.
+
 **Notes:**
 
-- **Spots can be up to 5 minutes late.** WSJT-X and WS send their spots to PSK Reporter in batches, about every 5 minutes. That's normal.
 - **History:** when the page opens it loads the last 24 hours. PSK Reporter allows one query about every 5 minutes, so "heard me" loads at once and "I heard" about 5½ minutes later.
 - The page needs the internet for the map and the spots. It never touches the radio.
 - Data from PSK Reporter by Philip Gladstone. Live spots come from mqtt.pskreporter.info, run by Tom Fanning M0LTE.

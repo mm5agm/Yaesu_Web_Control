@@ -44,6 +44,8 @@ const WORLD_NORTH = 80, WORLD_SOUTH = -57;
 // The map repeats sideways, so spots go on the copies either side too.
 const COPIES = [-360, 0, 360];
 const STATION_POLL_MS = 15000;
+// How often the app's WSJT-X decodes are fetched for the instant "I heard".
+const HEARD_POLL_MS = 3000;
 const GREY_LINE_MS = 60000;      // the grey line moves a quarter of a degree a minute
 const KEY = 'spotmap.';
 
@@ -171,8 +173,12 @@ async function fetchStation(url) {
  * options.app      short app name for the MQTT client id ('ywc', 'iwc')
  * options.stationUrl  GET endpoint returning { call, grid } from WSJT-X, or ''
  * options.programName what to call the station source in messages ('WSJT-X')
+ * options.heardUrl    GET endpoint returning { connected, seq, items } of the
+ *                     stations WSJT-X decoded since ?since=seq, or ''. With it,
+ *                     "I heard" appears straight away instead of waiting for
+ *                     PSK Reporter, which gets WSJT-X's reports in batches.
  */
-export async function startSpotMap(root, { app = 'rwc', stationUrl = '', programName = 'WSJT-X' } = {}) {
+export async function startSpotMap(root, { app = 'rwc', stationUrl = '', programName = 'WSJT-X', heardUrl = '' } = {}) {
     const L = window.L, mqtt = window.mqtt;
     const style = document.createElement('style');
     style.textContent = CSS;
@@ -344,6 +350,10 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         return;
     }
     const CALL = station.call;
+    // Instant "I heard" from the app's WSJT-X decodes (see pollHeard), only when
+    // the callsign came from WSJT-X: then its decodes are this station's.
+    const useHeard = !!heardUrl && source === `from ${programName}`;
+    let heardSeq = 0, heardCount = 0, heardUp = false;
     $('title').textContent = `${CALL} spots`;
     document.title = `${CALL} Spot Map`;
     $('source').textContent = `Callsign ${source}.`;
@@ -498,8 +508,10 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             ? `PSK Reporter says ${esc(CALL)} was last spotted at ${hhmm(Math.max(...known))} UTC, but it sent no reports for the last 24 hours. Its history service is probably running behind. `
             : 'PSK Reporter has nothing for the last 24 hours. ';
         html += `New spots appear here as soon as they arrive: <b>Heard me</b> when someone hears you transmit, `
-            + `and <b>I heard</b> when ${esc(programName)} reports what you decode to PSK Reporter `
-            + `(${esc(programName)} Settings, Reporting tab: tick Enable PSK Reporter Spotting).`;
+            + (useHeard
+                ? `and <b>I heard</b> as soon as ${esc(programName)} decodes a station whose grid is known.`
+                : `and <b>I heard</b> when ${esc(programName)} reports what you decode to PSK Reporter `
+                  + `(${esc(programName)} Settings, Reporting tab: tick Enable PSK Reporter Spotting).`);
         el.innerHTML = html;
         el.hidden = false;
     }
@@ -660,8 +672,9 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     const liveEl = $('live');
     let client = null, retryDelay = 5000, lastLive = 0, liveCount = 0;
     const showLive = () => {
+        if (!client?.connected) return;
         const last = lastLive ? `last spot ${new Date(lastLive).toLocaleTimeString()}` : 'no spots yet';
-        liveEl.innerHTML = `Live feed: <b>connected</b> · ${liveCount} live · ${last}`;
+        liveEl.innerHTML = `Live feed: <b>connected</b> · ${liveCount} live · ${last}` + heardText();
     };
     function connectLive() {
         client = mqtt.connect('wss://mqtt.pskreporter.info:1886', {
@@ -697,7 +710,37 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         client.on('close', retry);
         client.on('error', retry);
     }
-    setInterval(() => { if (client?.connected) showLive(); }, 30000);
+    setInterval(showLive, 30000);
+
+    // ---- Instant "I heard" from the app's own WSJT-X decodes ----
+    // PSK Reporter gets WSJT-X's reports in batches a few minutes apart, so
+    // with heardUrl the map takes "I heard" straight from the decodes as well.
+    function heardText() {
+        if (!useHeard) return '';
+        return heardUp ? ` · ${esc(programName)} decodes: ${heardCount}` : ` · ${esc(programName)} decodes: not running`;
+    }
+    async function pollHeard() {
+        try {
+            const r = await fetch(`${heardUrl}?since=${heardSeq}`, { cache: 'no-store' });
+            if (!r.ok) throw new Error(r.status);
+            const d = await r.json();
+            heardUp = !!d.connected;
+            if (d.seq < heardSeq) { heardSeq = 0; return; }   // the app restarted: start again
+            const myGrid = station.grid || '';
+            for (const i of d.items ?? []) {
+                const added = store.add('iHeard', {
+                    sc: i.call, sl: i.grid, rc: CALL, rl: myGrid,
+                    f: i.f, md: i.md, rp: i.rp, t: i.t, sq: `ws${i.seq}`,
+                });
+                if (added) { heardCount++; scheduleDraw(); }
+            }
+            heardSeq = d.seq;
+        } catch {
+            heardUp = false;
+        }
+        showLive();
+    }
+    if (useHeard) { pollHeard(); setInterval(pollHeard, HEARD_POLL_MS); }
     connectLive();
 
     // ---- History at start-up (PSK Reporter query API, JSONP) ----

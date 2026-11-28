@@ -193,6 +193,32 @@ namespace Yaesu_Web_Control.Controllers
             grid = _udpService.DeGrid,
         });
 
+        // GET api/wsjtx/heard?since=N: stations WSJT-X/WS decoded since sequence
+        // number N, for the Spot Map's "I heard". PSK Reporter gets the same
+        // decodes only in batches minutes apart, so the map polls this instead
+        // of waiting. Read-only and local, like station above.
+        [HttpGet("heard")]
+        public IActionResult Heard([FromQuery] long since = 0)
+        {
+            var (seq, items) = _udpService.HeardList.Since(since);
+            return Ok(new
+            {
+                connected = _udpService.IsConnected,
+                seq,
+                items = items.Select(i => new
+                {
+                    seq = i.Seq,
+                    call = i.Call,
+                    grid = i.Grid,
+                    t = i.UnixSeconds,
+                    f = i.FrequencyHz,
+                    md = i.Mode,
+                    rp = i.Snr,
+                    dt = i.DeltaTime,
+                }),
+            });
+        }
+
         // --- The big-tile page (issue #332) ---
 
         // The page is opt-in (Settings, ApplicationSettings.Ft8TilesEnabled).

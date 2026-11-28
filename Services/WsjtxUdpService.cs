@@ -45,6 +45,9 @@ namespace Yaesu_Web_Control.Services
         /// <summary>Stations the big-tile page can call (issue #332).</summary>
         public WsjtxCallList CallList { get; } = new();
 
+        /// <summary>Every station WSJT-X decodes, for the Spot Map's instant "I heard".</summary>
+        public WsjtxHeardList HeardList { get; } = new();
+
         // Where in the audio WSJT-X has decoded something lately, for the
         // audio waterfall's mode labels.
         private readonly List<(double OffsetHz, string Mode, DateTime At)> _recentDecodes = new();
@@ -393,6 +396,7 @@ namespace Yaesu_Web_Control.Services
                     {
                         CallList.Add(decode, DateTime.UtcNow);
                         RememberDecode(decode, DateTime.UtcNow);
+                        HeardList.Add(decode, DialFrequency, WsjtxMode, DeCall, DateTime.UtcNow);
                     }
                     break;
 
