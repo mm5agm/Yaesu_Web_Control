@@ -2877,14 +2877,17 @@ The Spot Map shows who hears you, and who you hear, on a world map and in a list
 - **Orange**: stations that heard you. **Blue**: stations you heard. **Yellow**: you.
 - Each station shows once, at its latest spot, with a line from you. Spots from the last 3 minutes are drawn bigger.
 - Hold the mouse over a dot for the callsign, band, mode, SNR and how long ago.
+- **The grey line** (*new in v2.5.6-pre49*): the night side of the Earth is shaded, with a thin yellow line where the sun is rising or setting. Grey-line paths often open up along it. The ☀ marks where the sun is overhead. It moves with the time, and **Grey line** at the top hides or shows it.
 
 **The list** (right-hand side): **Who**, **Band**, **SNR**, **Distance** and **Time UTC**, newest first. Click a column heading to sort by it, and again to reverse it. Click a row to go to that station on the map. **List** at the top hides or shows it.
+
+**Best DX** (top of the right-hand side, *new in v2.5.6-pre49*): your furthest station each way, the one that heard you and the one you heard, with band, time and distance. It follows **Last** and a band picked in the band panel. Click one to go to it on the map. **Best DX** at the top hides or shows it. It needs your grid square, from WSJT-X or typed in.
 
 **The band panel** (above the list, *new in v2.5.6-pre48*): how many stations heard you, and how many you heard, on each band, over the **Last** time you picked. The orange and blue bars make the busiest band easy to spot. A station heard on two bands counts on both, so the bands can add up to more than the totals at the top. Click a band to show only that band on the map, in the list and in the totals; click it again, or **All bands**, to see every band. **Bands** at the top hides or shows the panel.
 
 Drag the bar between the map and the right-hand side to resize them.
 
-**At the top:** **Show** picks both kinds, or only one. **Last** picks how far back (5 minutes to 24 hours). **km**/**miles** sets the distance units. All of these are remembered.
+**At the top:** the **UTC clock** (*new in v2.5.6-pre49*) shows the time from your PC's clock. **Show** picks both kinds, or only one. **Last** picks how far back (5 minutes to 24 hours). **km**/**miles** sets the distance units. All of these are remembered.
 
 **Notes:**
 

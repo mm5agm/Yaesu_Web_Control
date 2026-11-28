@@ -231,6 +231,66 @@ export function listRows(spots, home, sortKey = 'time', desc = true) {
     return rows;
 }
 
+/**
+ * Best DX: the furthest station each way among the spots given, as
+ * { heardMe, iHeard }, each the spot plus km, or null. Spots without a
+ * distance (no home grid yet) don't count.
+ */
+export function bestDx(spots, home) {
+    const best = { heardMe: null, iHeard: null };
+    for (const s of spots) {
+        const km = distanceKm(home, gridToLatLon(s.grid));
+        if (km === null || !(s.kind in best)) continue;
+        const held = best[s.kind];
+        if (!held || km > held.km || (km === held.km && s.t > held.t)) best[s.kind] = { ...s, km };
+    }
+    return best;
+}
+
+/** Unix seconds to 'HH:MM:SS' UTC, for the clock. */
+export function utcHhmmss(secs) {
+    return new Date(secs * 1000).toISOString().slice(11, 19);
+}
+
+/**
+ * Where the sun is overhead at a moment (ms since 1970), as [lat, lon] in
+ * degrees. A low-precision solar formula (about 0.01 degree from 1950 to
+ * 2050), plenty for a grey line on a world map.
+ */
+export function subsolarPoint(ms) {
+    const rad = Math.PI / 180;
+    const d = ms / 86400000 - 10957.5;                  // days since 2000-01-01 12:00 UTC
+    const g = (357.529 + 0.98560028 * d) * rad;         // mean anomaly
+    const q = 280.459 + 0.98564736 * d;                 // mean longitude
+    const lambda = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * rad;
+    const eps = (23.439 - 0.00000036 * d) * rad;
+    const ra = Math.atan2(Math.cos(eps) * Math.sin(lambda), Math.cos(lambda)) / rad;
+    const dec = Math.asin(Math.sin(eps) * Math.sin(lambda)) / rad;
+    const gmst = (18.697374558 + 24.06570982441908 * d) * 15;   // degrees
+    const lon = ((ra - gmst) % 360 + 540) % 360 - 180;
+    return [dec, lon];
+}
+
+/**
+ * The night side of the Earth at a moment, as a polygon of [lat, lon] for the
+ * map: the grey line (where the sun is on the horizon) from 180 W to 180 E,
+ * closed round the pole that is in darkness. stepDeg sets the spacing.
+ */
+export function nightPolygon(ms, stepDeg = 2) {
+    const rad = Math.PI / 180;
+    const [sunLat, sunLon] = subsolarPoint(ms);
+    // At an equinox the sun is over the equator and the line runs pole to pole.
+    const tanDec = Math.tan((Math.abs(sunLat) < 1e-6 ? 1e-6 : sunLat) * rad);
+    const pts = [];
+    for (let lon = -180; lon <= 180 + 1e-9; lon += stepDeg) {
+        const lat = Math.atan(-Math.cos((lon - sunLon) * rad) / tanDec) / rad;
+        pts.push([lat, lon]);
+    }
+    const darkPole = sunLat > 0 ? -90 : 90;
+    pts.push([darkPole, 180], [darkPole, -180]);
+    return pts;
+}
+
 /** Unix seconds to 'HH:MM' UTC. */
 export function utcHhmm(secs) {
     return new Date(secs * 1000).toISOString().slice(11, 16);

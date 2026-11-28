@@ -5,8 +5,10 @@
 //
 // Who hears me, and who I hear, on a map and in a list, live from PSK Reporter.
 // Made for a second monitor: the page is one window, the map on the left and
-// the band panel and the spot list on the right with a grip between them;
-// either can be hidden. Clicking a band shows only that band everywhere.
+// the best DX, the band panel and the spot list on the right with a grip
+// between them; each can be hidden. Clicking a band shows only that band
+// everywhere. A UTC clock sits in the top bar, and the grey line (the night
+// side of the Earth) is shaded on the map.
 //
 //   Live spots: the PSK Reporter MQTT feed (mqtt.pskreporter.info, run by
 //   Tom Fanning M0LTE), pushed within seconds of PSK Reporter getting them.
@@ -27,7 +29,7 @@
 
 import {
     KINDS, SpotStore, gridToLatLon, isCallsign, topicsFor, topicCall, classifyMqtt,
-    fromReceptionReport, listRows, utcHhmm, formatDistance,
+    fromReceptionReport, listRows, utcHhmm, formatDistance, bestDx, utcHhmmss, nightPolygon, subsolarPoint,
 } from './spot-data.js';
 
 const COLOURS = { heardMe: '#ff6b3d', iHeard: '#3db4ff' };
@@ -37,6 +39,7 @@ const WINDOWS = [[300, '5 minutes'], [600, '10 minutes'], [900, '15 minutes'], [
 const FRESH_SECS = 180;          // spots from the last 3 minutes are drawn bigger
 const HISTORY_GAP_MS = 5.5 * 60 * 1000;
 const STATION_POLL_MS = 15000;
+const GREY_LINE_MS = 60000;      // the grey line moves a quarter of a degree a minute
 const KEY = 'spotmap.';
 
 const CSS = `
@@ -45,6 +48,8 @@ const CSS = `
 .sm-bar { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 6px 12px;
   background: #1b1d22; border-bottom: 1px solid #333; }
 .sm-bar h1 { font-size: 17px; margin: 0; font-weight: 600; }
+.sm-clock { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .5px; color: #fff; }
+.sm-clock small { font-size: 12px; font-weight: 400; color: #9aa; margin-left: 4px; letter-spacing: 0; }
 .sm-bar select, .sm-bar button { background: #26292f; color: #eee; border: 1px solid #555; border-radius: 4px;
   font: inherit; padding: 2px 6px; }
 .sm-bar button { cursor: pointer; }
@@ -62,7 +67,18 @@ const CSS = `
 /* No shrinking: a long spot list would squeeze the band panel to nothing. */
 .sm-bands { flex: 0 0 auto; max-height: 45%; overflow: auto; border-bottom: 1px solid #444; }
 .sm-side.sm-nolist .sm-bands { max-height: none; flex: 1 1 auto; border-bottom: 0; }
-.sm-side[hidden], .sm-list[hidden], .sm-bands[hidden], .sm-grip[hidden] { display: none; }
+.sm-best { flex: 0 0 auto; border-bottom: 1px solid #444; }
+.sm-side[hidden], .sm-list[hidden], .sm-bands[hidden], .sm-best[hidden], .sm-grip[hidden] { display: none; }
+.sm-bestrow { display: grid; grid-template-columns: 5.6em 1fr auto auto; gap: 0 10px; align-items: baseline; width: 100%;
+  padding: 4px 8px; background: none; color: #eee; border: 0; border-bottom: 1px solid #23262b; font: inherit;
+  text-align: left; cursor: pointer; font-variant-numeric: tabular-nums; }
+.sm-bestrow:hover { background: #24303d; }
+.sm-bestrow:focus-visible { outline: 2px solid #3db4ff; outline-offset: -2px; }
+.sm-bestrow:disabled { cursor: default; background: none; }
+.sm-bestrow .sm-bcall { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-bestrow .sm-bkm { font-weight: 600; text-align: right; }
+.sm-bestrow .sm-muted { white-space: nowrap; }
+.sm-sun { color: #ffd23d; font-size: 22px; line-height: 22px; text-align: center; text-shadow: 0 0 6px #000; }
 .sm-bands-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 5px 8px;
   background: #22252b; border-bottom: 1px solid #444; font-weight: 600; }
 .sm-bands-head .sm-muted { font-weight: 400; flex: 1 1 auto; }
@@ -157,6 +173,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     root.innerHTML = `
       <div class="sm-bar">
         <h1 data-sm="title">Spot Map</h1>
+        <span class="sm-clock" data-sm="clock" title="Time now, UTC"></span>
         <span><span class="sm-dot" style="background:${COLOURS.heardMe}"></span>Heard me: <b data-sm="nheardMe">0</b></span>
         <span><span class="sm-dot" style="background:${COLOURS.iHeard}"></span>I heard: <b data-sm="niHeard">0</b></span>
         <label>Show <select data-sm="kinds" aria-label="Which spots to show">
@@ -166,6 +183,8 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
           ${WINDOWS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}
         </select></label>
         <label><select data-sm="units" aria-label="Distance units"><option value="km">km</option><option value="mi">miles</option></select></label>
+        <button type="button" data-sm="greyBtn" aria-pressed="true" title="Show or hide the grey line: the night side of the Earth, shaded">Grey line</button>
+        <button type="button" data-sm="bestBtn" aria-pressed="true" title="Show or hide the furthest station each way">Best DX</button>
         <button type="button" data-sm="bandsBtn" aria-pressed="true" title="Show or hide the stations per band">Bands</button>
         <button type="button" data-sm="listBtn" aria-pressed="true" title="Show or hide the spot list">List</button>
         <span class="sm-status sm-muted" data-sm="live">Live feed: connecting…</span>
@@ -178,6 +197,10 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         </div>
         <div class="sm-grip" data-sm="grip" role="separator" aria-orientation="vertical" aria-label="Drag to resize the side panel" tabindex="0"></div>
         <div class="sm-side" data-sm="side">
+        <div class="sm-best" data-sm="best" aria-label="Best DX">
+          <div class="sm-bands-head">Best DX <span class="sm-muted" data-sm="bestNote"></span></div>
+          <div data-sm="bestRows"></div>
+        </div>
         <div class="sm-bands" data-sm="bands" aria-label="Stations per band">
           <div class="sm-bands-head">Bands <span class="sm-muted" data-sm="bandsNote"></span>
             <button type="button" data-sm="allBands" hidden>All bands</button></div>
@@ -231,17 +254,27 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     let sort = load('sort', { key: 'time', desc: true });
     const list = $('list'), grip = $('grip'), listBtn = $('listBtn');
     const side = $('side'), bands = $('bands'), bandsBtn = $('bandsBtn');
+    const best = $('best'), bestBtn = $('bestBtn'), greyBtn = $('greyBtn');
     side.style.width = Math.max(200, Number(load('listWidth', 420)) || 420) + 'px';
-    // The side panel holds the band panel above the spot list; it goes only when both are hidden.
+    // The side panel holds the best DX and the band panel above the spot list; it goes only when all are hidden.
     const layoutSide = () => {
         list.hidden = listBtn.getAttribute('aria-pressed') !== 'true';
         bands.hidden = bandsBtn.getAttribute('aria-pressed') !== 'true';
-        side.hidden = grip.hidden = list.hidden && bands.hidden;
+        best.hidden = bestBtn.getAttribute('aria-pressed') !== 'true';
+        side.hidden = grip.hidden = list.hidden && bands.hidden && best.hidden;
         side.classList.toggle('sm-nolist', list.hidden);
         map?.invalidateSize();
     };
     const showList = on => { listBtn.setAttribute('aria-pressed', String(on)); save('listShown', on); layoutSide(); };
     const showBands = on => { bandsBtn.setAttribute('aria-pressed', String(on)); save('bandsShown', on); layoutSide(); };
+    const showBest = on => { bestBtn.setAttribute('aria-pressed', String(on)); save('bestShown', on); layoutSide(); };
+
+    // ---- UTC clock: runs from the start, even before there is a callsign ----
+    const clock = $('clock');
+    const tick = () => { clock.innerHTML = `${utcHhmmss(Date.now() / 1000)}<small>UTC</small>`; };
+    tick();
+    // Lined up on the second, so it turns over with the PC's clock.
+    setTimeout(() => { tick(); setInterval(tick, 1000); }, 1000 - Date.now() % 1000);
     // A band picked in the band panel: the map, the list and the counts show only it. Not remembered.
     let bandFilter = '';
 
@@ -312,6 +345,35 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         attribution: 'Tiles &copy; Esri | spots: PSK Reporter', maxZoom: 16,
     }).addTo(map);
     L.tileLayer(esri + 'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(map);
+    // The grey line goes in its own pane under the spots, so it never covers a marker.
+    map.createPane('smNight').style.zIndex = 350;
+    const night = L.layerGroup();
+    const sunIcon = L.divIcon({ className: 'sm-sun', html: '\u2600', iconSize: [22, 22] });
+    function drawGreyLine() {
+        night.clearLayers();
+        const now = Date.now();
+        const poly = nightPolygon(now, 2);
+        const line = poly.slice(0, -2);
+        const sun = subsolarPoint(now);
+        // Three copies side by side, so it is still there after panning past 180 degrees.
+        for (const shift of [-360, 0, 360]) {
+            const move = pts => pts.map(([la, lo]) => [la, lo + shift]);
+            L.polygon(move(poly), { pane: 'smNight', stroke: false, fillColor: '#000', fillOpacity: 0.55, interactive: false })
+                .addTo(night);
+            L.polyline(move(line), { pane: 'smNight', color: '#ffd23d', weight: 1.5, opacity: 0.6, interactive: false })
+                .addTo(night);
+            L.marker([sun[0], sun[1] + shift], { icon: sunIcon, pane: 'smNight', keyboard: false })
+                .bindTooltip(`Sun overhead at ${utcHhmm(now / 1000)} UTC`).addTo(night);
+        }
+    }
+    const showGrey = on => {
+        greyBtn.setAttribute('aria-pressed', String(on));
+        save('greyShown', on);
+        if (on) { drawGreyLine(); night.addTo(map); } else night.remove();
+    };
+    showGrey(load('greyShown', true) !== false);
+    greyBtn.addEventListener('click', () => showGrey(!map.hasLayer(night)));
+    setInterval(() => { if (map.hasLayer(night)) drawGreyLine(); }, GREY_LINE_MS);
     const layers = { heardMe: L.layerGroup().addTo(map), iHeard: L.layerGroup().addTo(map) };
     const markers = new Map();   // kind:call -> marker, for a click in the list
     const store = new SpotStore();
@@ -320,8 +382,10 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
 
     showList(load('listShown', true) !== false);
     showBands(load('bandsShown', true) !== false);
+    showBest(load('bestShown', true) !== false);
     listBtn.addEventListener('click', () => showList(list.hidden));
     bandsBtn.addEventListener('click', () => showBands(bands.hidden));
+    bestBtn.addEventListener('click', () => showBest(best.hidden));
 
     // ---- Grip between map and list ----
     grip.addEventListener('pointerdown', e => {
@@ -409,6 +473,30 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         }
         drawList(now, windowSecs, shown);
         drawBands(now, windowSecs, shown);
+        drawBest(now, windowSecs, shown);
+    }
+
+    function drawBest(now, windowSecs, shown) {
+        const top = bestDx(store.within(now, windowSecs, KINDS, bandFilter), home);
+        const miles = unitsSel.value === 'mi';
+        const windowText = WINDOWS.find(([v]) => v === windowSecs)?.[1] ?? '';
+        $('bestNote').textContent = (bandFilter ? `on ${bandFilter}, ` : '') + `last ${windowText}`;
+        $('bestRows').innerHTML = KINDS.map(kind => {
+            const s = top[kind];
+            const dot = `<span><span class="sm-dot" style="background:${COLOURS[kind]}"></span>${KIND_LABEL[kind]}</span>`;
+            const dim = shown.includes(kind) ? '' : ' sm-dim';
+            if (!s) {
+                const why = home ? 'none yet' : 'needs your grid square';
+                return `<button type="button" class="sm-bestrow${dim}" disabled>${dot}<span class="sm-muted">${why}</span></button>`;
+            }
+            const what = kind === 'heardMe' ? `${s.call} heard ${CALL}` : `${CALL} heard ${s.call}`;
+            const snr = s.snr !== null ? `, ${s.snr} dB` : '';
+            return `<button type="button" class="sm-bestrow${dim}" data-key="${esc(kind + ':' + s.call)}"`
+                + ` title="${esc(`${what} on ${s.band} ${s.mode}${snr}, ${s.grid}, ${ago(s.t)}. Click to find it on the map`)}">`
+                + `${dot}<span class="sm-bcall">${esc(s.call)}</span>`
+                + `<span class="sm-muted">${esc(s.band)} ${utcHhmm(s.t)}</span>`
+                + `<span class="sm-bkm">${formatDistance(s.km, miles)}</span></button>`;
+        }).join('');
     }
 
     function drawBands(now, windowSecs, shown) {
@@ -465,12 +553,14 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         save('sort', sort);
         draw();
     });
-    $('rows').addEventListener('click', e => {
-        const m = markers.get(e.target.closest('tr')?.dataset.key);
+    const findOnMap = key => {
+        const m = markers.get(key);
         if (!m) return;
         map.setView(m.getLatLng(), Math.max(map.getZoom(), 4));
         m.openTooltip();
-    });
+    };
+    $('rows').addEventListener('click', e => findOnMap(e.target.closest('tr')?.dataset.key));
+    $('bestRows').addEventListener('click', e => findOnMap(e.target.closest('button')?.dataset.key));
     const pickBand = band => { bandFilter = band === bandFilter ? '' : band; draw(); };
     $('bandRows').addEventListener('click', e => {
         const tr = e.target.closest('tr');

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
     gridToLatLon, distanceKm, bandOf, bandRank, topicCall, topicsFor, isCallsign,
     KINDS, classifyMqtt, fromReceptionReport, SpotStore, listRows, utcHhmm, formatDistance,
+    bestDx, utcHhmmss, subsolarPoint, nightPolygon,
 } from '../../js/spotmap/spot-data.js';
 
 const near = (a, b, tol) => assert.ok(Math.abs(a - b) <= tol, `${a} not within ${tol} of ${b}`);
@@ -163,4 +164,55 @@ test('time and distance formatting', () => {
     assert.equal(formatDistance(5070.4), '5,070 km');
     assert.equal(formatDistance(1609.344, true), '1,000 mi');
     assert.equal(formatDistance(null), '');
+});
+
+test('best DX: the furthest station each way, in the spots given', () => {
+    const home = gridToLatLon('IO85');
+    const spots = [
+        { kind: 'heardMe', call: 'W1AW', grid: 'FN31', t: 100, band: '20m' },
+        { kind: 'heardMe', call: 'VK2XX', grid: 'QF56', t: 90, band: '20m' },
+        { kind: 'iHeard', call: 'DL1AA', grid: 'JO62', t: 80, band: '40m' },
+        { kind: 'iHeard', call: 'JA1AA', grid: 'PM95', t: 70, band: '20m' },
+    ];
+    const best = bestDx(spots, home);
+    assert.equal(best.heardMe.call, 'VK2XX');
+    assert.ok(best.heardMe.km > 16000);
+    assert.equal(best.iHeard.call, 'JA1AA');
+    assert.deepEqual(bestDx([], home), { heardMe: null, iHeard: null });
+    // No home grid yet: no distances, so no best DX.
+    assert.deepEqual(bestDx(spots, null), { heardMe: null, iHeard: null });
+});
+
+test('clock: seconds to HH:MM:SS UTC', () => {
+    assert.equal(utcHhmmss(Date.UTC(2026, 10, 28, 9, 5, 7) / 1000), '09:05:07');
+});
+
+test('sun: overhead point at a solstice, an equinox and noon at Greenwich', () => {
+    // June solstice 2026-06-21 08:24 UTC: sun over the Tropic of Cancer.
+    near(subsolarPoint(Date.UTC(2026, 5, 21, 8, 24))[0], 23.44, 0.05);
+    // March equinox 2026-03-20 14:46 UTC: sun over the equator.
+    near(subsolarPoint(Date.UTC(2026, 2, 20, 14, 46))[0], 0, 0.05);
+    // December solstice: Tropic of Capricorn.
+    near(subsolarPoint(Date.UTC(2026, 11, 21, 20, 50))[0], -23.44, 0.05);
+    // 12:00 UTC: the sun is near Greenwich, off by the equation of time (under 17 minutes, 4.3 degrees).
+    for (const month of [0, 3, 6, 9, 10]) {
+        const lon = subsolarPoint(Date.UTC(2026, month, 15, 12, 0))[1];
+        assert.ok(Math.abs(lon) < 4.5, `month ${month}: ${lon}`);
+    }
+    // 2026-11-03 12:00 UTC: the equation of time is +16.4 min, so the sun has passed Greenwich and is 4.1 degrees west.
+    near(subsolarPoint(Date.UTC(2026, 10, 3, 12, 0))[1], -4.1, 0.15);
+});
+
+test('grey line: every point is 90 degrees from the sun, closed round the dark pole', () => {
+    for (const when of [Date.UTC(2026, 10, 28, 15, 0), Date.UTC(2026, 5, 21, 3, 0), Date.UTC(2026, 2, 20, 14, 46)]) {
+        const sun = subsolarPoint(when);
+        const poly = nightPolygon(when, 5);
+        const line = poly.slice(0, -2);
+        assert.equal(line.length, 73);
+        assert.equal(line[0][1], -180);
+        near(line.at(-1)[1], 180, 1e-9);
+        for (const p of line) near(distanceKm(sun, p) / (6371 * Math.PI / 180), 90, 0.01);
+        // The dark pole is the one away from the sun.
+        assert.equal(poly.at(-1)[0], sun[0] > 0 ? -90 : 90);
+    }
 });
