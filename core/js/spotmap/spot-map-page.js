@@ -735,7 +735,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         } catch (e) {
             done[kind] = `${label} not loaded (${e.message})`;
         }
-        historyEl.textContent = 'History 24 h: ' + Object.values(done).join(', ')
+        historyEl.textContent = 'Earlier spots from PSK Reporter history (24 h, live ones not counted): ' + Object.values(done).join(', ')
             + (done.iHeard ? '' : '; "I heard" loads in a few minutes');
         empty.asked++;
         showEmpty(Date.now() / 1000);
