@@ -38,14 +38,17 @@ namespace Yaesu_Web_Control.Services.N1mm
         private readonly ISettingsService _settings;
         private readonly RadioStateService _radio;
         private readonly ILogger<N1mmCatServer> _logger;
+        private readonly CatClientPresence? _presence;
 
         private (int Port, bool Network)? _running;
         private TcpListener? _listener;
         private CancellationTokenSource? _listenerCts;
         private int _clientCount;
 
-        public N1mmCatServer(CatMultiplexerService mux, ISettingsService settings, RadioStateService radio, ILogger<N1mmCatServer> logger)
+        public N1mmCatServer(CatMultiplexerService mux, ISettingsService settings, RadioStateService radio, ILogger<N1mmCatServer> logger,
+            CatClientPresence? presence = null)
         {
+            _presence = presence;
             _link = new MultiplexerPassThrough(mux);
             _settings = settings;
             _radio = radio;
@@ -151,6 +154,7 @@ namespace Yaesu_Web_Control.Services.N1mm
         {
             var who = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
             Interlocked.Increment(ref _clientCount);
+            _presence?.N1mmConnected();
             _logger.LogInformation("N1MM CAT client connected: {Who}", who);
             var session = new N1mmCatSession(_link);
             // The first few reads the radio didn't answer go in the log, so a
@@ -230,6 +234,7 @@ namespace Yaesu_Web_Control.Services.N1mm
                     await ForceReceiveAsync();
                 }
                 Interlocked.Decrement(ref _clientCount);
+                _presence?.N1mmDisconnected();
                 _logger.LogInformation("N1MM CAT client disconnected: {Who} ({Count} commands, {Sets} sets, {Unanswered} reads unanswered)",
                     who, session.Commands, session.Sets, session.Unanswered);
             }

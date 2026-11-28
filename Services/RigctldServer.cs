@@ -14,10 +14,30 @@ namespace Yaesu_Web_Control.Services
         private readonly RadioStateService _radioStateService;
         private readonly ILogger<RigctldServer> _logger;
         private readonly FrequencyRejectionNotifier _rejectionNotifier;
+        private readonly CatClientPresence _presence;
         private TcpListener? _listener;
         private readonly List<TcpClient> _clients = new();
         private readonly object _clientsLock = new();
-        private const int RigctldPort = 4532;
+        public const int RigctldPort = 4532;
+
+        // If the port is taken at start-up, try again this often. It used to
+        // try once: on 2026-11-27 (W2JAZ) the port was busy for two seconds as
+        // YWC started, the server gave up, and WSJT-X got "connection refused"
+        // until YWC was restarted.
+        private static readonly TimeSpan BindRetry = TimeSpan.FromSeconds(2);
+        private volatile bool _listening;
+        private volatile string? _notListeningWhy;
+
+        /// <summary>For the Settings page: listening, why not, and how many programs are connected.</summary>
+        public (bool Listening, string? Why, int Clients) Status
+        {
+            get
+            {
+                int clients;
+                lock (_clientsLock) clients = _clients.Count;
+                return (_listening, _notListeningWhy, clients);
+            }
+        }
 
         // State for advanced commands
         private bool _splitEnabled = false;
@@ -87,8 +107,10 @@ namespace Yaesu_Web_Control.Services
             CatMultiplexerService multiplexer,
             RadioStateService radioStateService,
             ILogger<RigctldServer> logger,
-            FrequencyRejectionNotifier rejectionNotifier)
+            FrequencyRejectionNotifier rejectionNotifier,
+            CatClientPresence presence)
         {
+            _presence = presence;
             _multiplexer = multiplexer;
             _radioStateService = radioStateService;
             _logger = logger;
@@ -99,8 +121,9 @@ namespace Yaesu_Web_Control.Services
         {
             try
             {
-                _listener = new TcpListener(IPAddress.Any, RigctldPort);
-                _listener.Start();
+                _listener = await StartListeningAsync(stoppingToken);
+                _listening = true;
+                _notListeningWhy = null;
                 _logger.LogInformation("✓ rigctld server listening on port {Port}", RigctldPort);
 
                 while (!stoppingToken.IsCancellationRequested)
@@ -113,6 +136,7 @@ namespace Yaesu_Web_Control.Services
                     {
                         _clients.Add(client);
                     }
+                    _presence.RigctldConnected();
 
                     _ = Task.Run(() => HandleClientAsync(client, stoppingToken), stoppingToken);
                 }
@@ -127,11 +151,56 @@ namespace Yaesu_Web_Control.Services
             }
             finally
             {
+                _listening = false;
                 _listener?.Stop();
                 _logger.LogInformation("rigctld server stopped");
                 _logger.LogWarning("RigctldServer ExecuteAsync has exited. Service should be stopped.");
             }
 
+        }
+
+        /// <summary>
+        /// Starts listening on the rigctld port, trying again every
+        /// <see cref="BindRetry"/> while another program has it. Logs once
+        /// when the port is taken (with the program holding it, if Windows
+        /// says), every minute while it stays taken, and when it comes free.
+        /// </summary>
+        private async Task<TcpListener> StartListeningAsync(CancellationToken stoppingToken)
+        {
+            var since = DateTime.UtcNow;
+            var nextReminder = since + TimeSpan.FromMinutes(1);
+            bool warned = false;
+            while (true)
+            {
+                var listener = new TcpListener(IPAddress.Any, RigctldPort);
+                try
+                {
+                    listener.Start();
+                    if (warned)
+                        _logger.LogInformation("rigctld port {Port} came free after {Seconds:0} s.",
+                            RigctldPort, (DateTime.UtcNow - since).TotalSeconds);
+                    return listener;
+                }
+                catch (SocketException ex) when (ex.SocketErrorCode is SocketError.AddressAlreadyInUse or SocketError.AccessDenied)
+                {
+                    listener.Stop();
+                    if (!warned || DateTime.UtcNow >= nextReminder)
+                    {
+                        string owner = await PortOwner.DescribeAsync(RigctldPort);
+                        _notListeningWhy = $"Port {RigctldPort} is in use{owner}. YWC tries again every {BindRetry.TotalSeconds:0} seconds.";
+                        if (!warned)
+                            _logger.LogWarning(
+                                "rigctld port {Port} is in use{Owner}, so WSJT-X and loggers can't connect yet. Trying again every {Seconds:0} s.",
+                                RigctldPort, owner, BindRetry.TotalSeconds);
+                        else
+                            _logger.LogWarning("rigctld port {Port} still in use after {Minutes:0} min{Owner}.",
+                                RigctldPort, (DateTime.UtcNow - since).TotalMinutes, owner);
+                        warned = true;
+                        nextReminder = DateTime.UtcNow + TimeSpan.FromMinutes(1);
+                    }
+                }
+                await Task.Delay(BindRetry, stoppingToken);
+            }
         }
 
         private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
@@ -202,6 +271,7 @@ namespace Yaesu_Web_Control.Services
                 {
                     _clients.Remove(client);
                 }
+                _presence.RigctldDisconnected();
 
                 // Safety net: never leave the radio keyed because a client that
                 // held PTT went away without releasing it.
