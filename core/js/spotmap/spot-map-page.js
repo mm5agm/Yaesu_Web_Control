@@ -5,7 +5,8 @@
 //
 // Who hears me, and who I hear, on a map and in a list, live from PSK Reporter.
 // Made for a second monitor: the page is one window, the map on the left and
-// the spot list on the right with a grip between them; the list can be hidden.
+// the band panel and the spot list on the right with a grip between them;
+// either can be hidden. Clicking a band shows only that band everywhere.
 //
 //   Live spots: the PSK Reporter MQTT feed (mqtt.pskreporter.info, run by
 //   Tom Fanning M0LTE), pushed within seconds of PSK Reporter getting them.
@@ -56,8 +57,30 @@ const CSS = `
 .sm-map { flex: 1 1 auto; min-width: 0; position: relative; background: #111; }
 .sm-grip { flex: 0 0 6px; cursor: col-resize; background: #2a2d33; touch-action: none; }
 .sm-grip:hover, .sm-grip.sm-dragging { background: #3db4ff; }
-.sm-list { flex: 0 0 auto; width: 420px; min-width: 200px; overflow: auto; background: #16181c; }
-.sm-list[hidden], .sm-grip[hidden] { display: none; }
+.sm-side { flex: 0 0 auto; width: 420px; min-width: 200px; display: flex; flex-direction: column; background: #16181c; }
+.sm-list { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.sm-bands { flex: 0 1 auto; max-height: 45%; overflow: auto; border-bottom: 1px solid #444; }
+.sm-side.sm-nolist .sm-bands { max-height: none; flex: 1 1 auto; border-bottom: 0; }
+.sm-side[hidden], .sm-list[hidden], .sm-bands[hidden], .sm-grip[hidden] { display: none; }
+.sm-bands-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  background: #22252b; border-bottom: 1px solid #444; font-weight: 600; }
+.sm-bands-head .sm-muted { font-weight: 400; flex: 1 1 auto; }
+.sm-bands-head button { background: #26292f; color: #eee; border: 1px solid #555; border-radius: 4px; font: inherit;
+  font-weight: 400; font-size: 12px; padding: 1px 6px; cursor: pointer; }
+.sm-bands-head button[hidden] { display: none; }
+.sm-bands table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.sm-bands th { text-align: left; font-weight: 400; color: #9aa; font-size: 12px; padding: 3px 8px 1px; }
+.sm-bands td { padding: 3px 8px; border-bottom: 1px solid #23262b; white-space: nowrap; }
+.sm-bands td:first-child { width: 4.5em; font-weight: 600; }
+.sm-bands tbody tr { cursor: pointer; }
+.sm-bands tbody tr:hover { background: #24303d; }
+.sm-bands tbody tr[aria-pressed="true"] { background: #2d4f6e; }
+.sm-bands tbody tr:focus-visible { outline: 2px solid #3db4ff; outline-offset: -2px; }
+.sm-bcell { display: flex; align-items: center; gap: 6px; }
+.sm-track { flex: 1 1 auto; height: 8px; }
+.sm-bfill { display: block; height: 100%; min-width: 2px; border-radius: 0 4px 4px 0; }
+.sm-count { flex: 0 0 2.6em; text-align: right; color: #eee; }
+.sm-dim { opacity: .35; }
 .sm-list table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .sm-list th { position: sticky; top: 0; background: #22252b; text-align: left; font-weight: 600; padding: 5px 8px;
   cursor: pointer; user-select: none; white-space: nowrap; border-bottom: 1px solid #444; }
@@ -87,7 +110,7 @@ const CSS = `
 @media (max-width: 760px) {
   .sm-body { flex-direction: column; }
   .sm-grip { display: none; }
-  .sm-list { width: auto !important; height: 40%; flex: 0 0 40%; }
+  .sm-side { width: auto !important; height: 40%; flex: 0 0 40%; }
 }`;
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -142,6 +165,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
           ${WINDOWS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}
         </select></label>
         <label><select data-sm="units" aria-label="Distance units"><option value="km">km</option><option value="mi">miles</option></select></label>
+        <button type="button" data-sm="bandsBtn" aria-pressed="true" title="Show or hide the stations per band">Bands</button>
         <button type="button" data-sm="listBtn" aria-pressed="true" title="Show or hide the spot list">List</button>
         <span class="sm-status sm-muted" data-sm="live">Live feed: connecting…</span>
         <span class="sm-muted" data-sm="history"></span>
@@ -151,7 +175,19 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         <div class="sm-map" data-sm="map">
           <div class="sm-credit">Data from PSK Reporter by Philip Gladstone. Live spots from mqtt.pskreporter.info by Tom Fanning M0LTE.</div>
         </div>
-        <div class="sm-grip" data-sm="grip" role="separator" aria-orientation="vertical" aria-label="Drag to resize the spot list" tabindex="0"></div>
+        <div class="sm-grip" data-sm="grip" role="separator" aria-orientation="vertical" aria-label="Drag to resize the side panel" tabindex="0"></div>
+        <div class="sm-side" data-sm="side">
+        <div class="sm-bands" data-sm="bands" aria-label="Stations per band">
+          <div class="sm-bands-head">Bands <span class="sm-muted" data-sm="bandsNote"></span>
+            <button type="button" data-sm="allBands" hidden>All bands</button></div>
+          <table>
+            <thead><tr><th scope="col">Band</th>
+              <th scope="col"><span class="sm-dot" style="background:${COLOURS.heardMe}"></span>Heard me</th>
+              <th scope="col"><span class="sm-dot" style="background:${COLOURS.iHeard}"></span>I heard</th></tr></thead>
+            <tbody data-sm="bandRows"></tbody>
+          </table>
+          <div class="sm-empty" data-sm="bandsEmpty">No spots yet.</div>
+        </div>
         <div class="sm-list" data-sm="list" aria-label="Spot list">
           <table>
             <thead><tr>
@@ -164,6 +200,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             <tbody data-sm="rows"></tbody>
           </table>
           <div class="sm-empty" data-sm="empty">No spots yet.</div>
+        </div>
         </div>
       </div>
       <div class="sm-setup" data-sm="setup" hidden>
@@ -192,14 +229,20 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     unitsSel.value = load('units', 'km') === 'mi' ? 'mi' : 'km';
     let sort = load('sort', { key: 'time', desc: true });
     const list = $('list'), grip = $('grip'), listBtn = $('listBtn');
-    list.style.width = Math.max(200, Number(load('listWidth', 420)) || 420) + 'px';
-    const showList = on => {
-        list.hidden = !on;
-        grip.hidden = !on;
-        listBtn.setAttribute('aria-pressed', String(on));
-        save('listShown', on);
+    const side = $('side'), bands = $('bands'), bandsBtn = $('bandsBtn');
+    side.style.width = Math.max(200, Number(load('listWidth', 420)) || 420) + 'px';
+    // The side panel holds the band panel above the spot list; it goes only when both are hidden.
+    const layoutSide = () => {
+        list.hidden = listBtn.getAttribute('aria-pressed') !== 'true';
+        bands.hidden = bandsBtn.getAttribute('aria-pressed') !== 'true';
+        side.hidden = grip.hidden = list.hidden && bands.hidden;
+        side.classList.toggle('sm-nolist', list.hidden);
         map?.invalidateSize();
     };
+    const showList = on => { listBtn.setAttribute('aria-pressed', String(on)); save('listShown', on); layoutSide(); };
+    const showBands = on => { bandsBtn.setAttribute('aria-pressed', String(on)); save('bandsShown', on); layoutSide(); };
+    // A band picked in the band panel: the map, the list and the counts show only it. Not remembered.
+    let bandFilter = '';
 
     // ---- Who the operator is ----
     const params = new URLSearchParams(location.search);
@@ -275,7 +318,9 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     let homeMarker = null, fitted = false;
 
     showList(load('listShown', true) !== false);
+    showBands(load('bandsShown', true) !== false);
     listBtn.addEventListener('click', () => showList(list.hidden));
+    bandsBtn.addEventListener('click', () => showBands(bands.hidden));
 
     // ---- Grip between map and list ----
     grip.addEventListener('pointerdown', e => {
@@ -286,7 +331,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         const move = ev => {
             const right = body.getBoundingClientRect().right;
             const w = Math.min(Math.max(200, right - ev.clientX), body.clientWidth * 0.8);
-            list.style.width = Math.round(w) + 'px';
+            side.style.width = Math.round(w) + 'px';
             map.invalidateSize();
         };
         const up = () => {
@@ -294,7 +339,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             grip.removeEventListener('pointermove', move);
             grip.removeEventListener('pointerup', up);
             grip.removeEventListener('pointercancel', up);
-            save('listWidth', parseInt(list.style.width, 10));
+            save('listWidth', parseInt(side.style.width, 10));
         };
         grip.addEventListener('pointermove', move);
         grip.addEventListener('pointerup', up);
@@ -303,9 +348,9 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     grip.addEventListener('keydown', e => {
         if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
         e.preventDefault();
-        const w = parseInt(list.style.width, 10) + (e.key === 'ArrowLeft' ? 30 : -30);
-        list.style.width = Math.max(200, w) + 'px';
-        save('listWidth', parseInt(list.style.width, 10));
+        const w = parseInt(side.style.width, 10) + (e.key === 'ArrowLeft' ? 30 : -30);
+        side.style.width = Math.max(200, w) + 'px';
+        save('listWidth', parseInt(side.style.width, 10));
         map.invalidateSize();
     });
     new ResizeObserver(() => map.invalidateSize()).observe($('map'));
@@ -332,7 +377,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         markers.clear();
         for (const kind of KINDS) {
             layers[kind].clearLayers();
-            const spots = store.within(now, windowSecs, [kind]);
+            const spots = store.within(now, windowSecs, [kind], bandFilter);
             $('n' + kind).textContent = spots.length;
             if (!shown.includes(kind)) continue;
             for (const s of spots) {
@@ -362,10 +407,37 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             }
         }
         drawList(now, windowSecs, shown);
+        drawBands(now, windowSecs, shown);
+    }
+
+    function drawBands(now, windowSecs, shown) {
+        const rows = store.bandCounts(now, windowSecs);
+        // A picked band with nothing left in the window keeps its row, so it can be seen and cleared.
+        if (bandFilter && !rows.some(r => r.band === bandFilter)) rows.push({ band: bandFilter, heardMe: 0, iHeard: 0 });
+        const max = Math.max(1, ...rows.map(r => Math.max(r.heardMe, r.iHeard)));
+        const windowText = WINDOWS.find(([v]) => v === windowSecs)?.[1] ?? '';
+        const cell = (r, kind) => {
+            const n = r[kind];
+            const what = kind === 'heardMe' ? `${n} station${n === 1 ? '' : 's'} heard ${CALL} on ${r.band}`
+                                            : `${CALL} heard ${n} station${n === 1 ? '' : 's'} on ${r.band}`;
+            const fill = n ? `<span class="sm-bfill" style="width:${(100 * n / max).toFixed(1)}%;background:${COLOURS[kind]}"></span>` : '';
+            return `<td class="${shown.includes(kind) ? '' : 'sm-dim'}" title="${esc(what + ', last ' + windowText)}">`
+                + `<div class="sm-bcell"><span class="sm-track">${fill}</span><span class="sm-count">${n}</span></div></td>`;
+        };
+        $('bandRows').innerHTML = rows.map(r => {
+            const on = r.band === bandFilter;
+            return `<tr role="button" tabindex="0" aria-pressed="${on}" data-band="${esc(r.band)}"`
+                + ` aria-label="${esc(r.band)}: heard me ${r.heardMe}, I heard ${r.iHeard}. ${on ? 'Click to show all bands' : 'Click to show only this band'}">`
+                + `<td>${esc(r.band)}</td>${cell(r, 'heardMe')}${cell(r, 'iHeard')}</tr>`;
+        }).join('');
+        $('bandsEmpty').hidden = rows.length > 0;
+        $('bandsNote').textContent = bandFilter ? `showing ${bandFilter} only` : `stations, last ${windowText}`;
+        $('allBands').hidden = !bandFilter;
+        $('title').textContent = `${CALL} spots` + (bandFilter ? ` on ${bandFilter}` : '');
     }
 
     function drawList(now, windowSecs, shown) {
-        const rows = listRows(store.within(now, windowSecs, shown), home, sort.key, sort.desc);
+        const rows = listRows(store.within(now, windowSecs, shown, bandFilter), home, sort.key, sort.desc);
         const miles = unitsSel.value === 'mi';
         $('rows').innerHTML = rows.map(r => {
             const age = now - r.t;
@@ -398,6 +470,22 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         map.setView(m.getLatLng(), Math.max(map.getZoom(), 4));
         m.openTooltip();
     });
+    const pickBand = band => { bandFilter = band === bandFilter ? '' : band; draw(); };
+    $('bandRows').addEventListener('click', e => {
+        const tr = e.target.closest('tr');
+        if (tr) pickBand(tr.dataset.band);
+    });
+    $('bandRows').addEventListener('keydown', e => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        e.preventDefault();
+        const band = tr.dataset.band;
+        pickBand(band);
+        // The rows are redrawn: keep the keyboard on the same band.
+        [...$('bandRows').rows].find(r => r.dataset.band === band)?.focus();
+    });
+    $('allBands').addEventListener('click', () => { bandFilter = ''; draw(); });
     windowSel.addEventListener('change', () => { save('window', Number(windowSel.value)); draw(); });
     kindsSel.addEventListener('change', () => { save('kinds', kindsSel.value); draw(); });
     unitsSel.addEventListener('change', () => { save('units', unitsSel.value); draw(); });
