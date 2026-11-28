@@ -28,11 +28,26 @@
 // app's page from its own wwwroot/lib, and an empty element to draw into.
 
 import {
-    KINDS, SpotStore, gridToLatLon, spotLatLon, countryFor, isCallsign, topicsFor, topicCall, classifyMqtt,
+    KINDS, STATES, STATE_LABEL, spotState, SpotStore, gridToLatLon, spotLatLon, countryFor, isCallsign, topicsFor, topicCall, classifyMqtt,
     fromReceptionReport, listRows, utcHhmm, formatDistance, bestDx, utcHhmmss, nightPolygon, subsolarPoint,
 } from './spot-data.js';
 
-const COLOURS = { heardMe: '#ff6b3d', iHeard: '#3db4ff' };
+// Spot colours, changeable on the page (Colours). The standard set stays apart
+// for normal sight and for red-green and blue-yellow colour blindness: the
+// closest pair is 11 (OKLab x100) under protan, deutan and tritan simulation,
+// against 8 wanted. Each spot's state is in its tooltip and the list as words
+// too, so nothing depends on colour alone.
+const DEFAULT_COLOURS = {
+    heardMe: '#ff6b3d', iHeard: '#2f80ff',
+    cq: '#ffe14d', you: '#ffffff', qso: '#6f747c', fin: '#5ee6d0',
+};
+const COLOURS = { ...DEFAULT_COLOURS };
+const STATE_HELP = {
+    cq: 'calling CQ or QRZ: free to call',
+    you: 'calling you',
+    qso: 'in a QSO with someone else: wait for its 73',
+    fin: 'has just sent RR73, RRR or 73: free to call',
+};
 const KIND_LABEL = { heardMe: 'Heard me', iHeard: 'I heard' };
 const WINDOWS = [[300, '5 minutes'], [600, '10 minutes'], [900, '15 minutes'], [1800, '30 minutes'],
                  [3600, '1 hour'], [10800, '3 hours'], [21600, '6 hours'], [86400, '24 hours']];
@@ -122,6 +137,21 @@ const CSS = `
   width: max-content; max-width: min(760px, calc(100% - 120px)); padding: 10px 14px; border: 1px solid #555;
   border-radius: 6px; background: rgba(22, 24, 28, .93); color: #eee; font-size: 14px; line-height: 1.45; }
 .sm-nospots[hidden] { display: none; }
+.sm-colours { position: absolute; top: 12px; right: 12px; z-index: 700; background: #1d1f23; color: #eee;
+  border: 1px solid #555; border-radius: 6px; padding: 10px 12px; font-size: 13px; max-width: 290px; }
+.sm-colours[hidden], .sm-colours [hidden] { display: none; }
+.sm-colours h2 { font-size: 14px; margin: 0 0 6px; }
+.sm-colours label { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.sm-colours input[type=color] { width: 34px; height: 22px; padding: 0; border: 1px solid #555; background: none; cursor: pointer; }
+.sm-colours button { background: #26292f; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 3px 8px; cursor: pointer; margin-top: 6px; }
+.sm-colours p { margin: 6px 0 0; color: #aaa; font-size: 12px; }
+.sm-states { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
+.sm-states[hidden] { display: none; }
+.sm-state { font-size: 11px; color: #aaa; margin-left: 5px; }
+.sm-pop p { margin: 4px 0; }
+.sm-pop button { background: #2d4f6e; color: #fff; border: 1px solid #3db4ff; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+.sm-pop button:disabled { opacity: 0.6; cursor: default; }
+.sm-pop .sm-popnote { color: #666; font-size: 11px; max-width: 240px; }
 .sm-credit { position: absolute; bottom: 18px; left: 10px; z-index: 500; color: #889; font-size: 12px;
   background: rgba(17,17,17,.6); padding: 1px 4px; border-radius: 3px; pointer-events: none; }
 .sm-setup { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.75); display: flex;
@@ -179,8 +209,11 @@ async function fetchStation(url) {
  *                     "I heard" appears straight away instead of waiting for
  *                     PSK Reporter, which gets WSJT-X's reports in batches.
  */
-export async function startSpotMap(root, { app = 'rwc', stationUrl = '', programName = 'WSJT-X', heardUrl = '' } = {}) {
+export async function startSpotMap(root, { app = 'rwc', stationUrl = '', programName = 'WSJT-X', heardUrl = '', callUrl = '' } = {}) {
     const L = window.L, mqtt = window.mqtt;
+    for (const [k, v] of Object.entries(load('colours', {}) || {})) {
+        if (k in DEFAULT_COLOURS && /^#[0-9a-f]{6}$/i.test(String(v))) COLOURS[k] = v;
+    }
     const style = document.createElement('style');
     style.textContent = CSS;
     document.head.append(style);
@@ -190,8 +223,11 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
       <div class="sm-bar">
         <h1 data-sm="title">Spot Map</h1>
         <span class="sm-clock" data-sm="clock" title="Time now, UTC"></span>
-        <span><span class="sm-dot" style="background:${COLOURS.heardMe}"></span>Heard me: <b data-sm="nheardMe">0</b></span>
-        <span><span class="sm-dot" style="background:${COLOURS.iHeard}"></span>I heard: <b data-sm="niHeard">0</b></span>
+        <span><span class="sm-dot" data-col="heardMe"></span>Heard me: <b data-sm="nheardMe">0</b></span>
+        <span><span class="sm-dot" data-col="iHeard"></span>I heard: <b data-sm="niHeard">0</b></span>
+        <span class="sm-states" data-sm="states" hidden title="What each station you decoded was doing in its last message, for 2 minutes after it">
+          ${STATES.map(st => `<span title="${esc(STATE_LABEL[st])}: ${esc(STATE_HELP[st])}"><span class="sm-dot" data-col="${st}"></span>${esc(STATE_LABEL[st])}</span>`).join('')}
+        </span>
         <label>Show <select data-sm="kinds" aria-label="Which spots to show">
           <option value="both">Both</option><option value="heardMe">Heard me</option><option value="iHeard">I heard</option>
         </select></label>
@@ -204,6 +240,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         <button type="button" data-sm="bestBtn" aria-pressed="true" title="Show or hide the furthest station each way">Best DX</button>
         <button type="button" data-sm="bandsBtn" aria-pressed="true" title="Show or hide the stations per band">Bands</button>
         <button type="button" data-sm="listBtn" aria-pressed="true" title="Show or hide the spot list">List</button>
+        <button type="button" data-sm="coloursBtn" aria-pressed="false" aria-controls="sm-colours" title="Change the spot colours">Colours</button>
         <span class="sm-status sm-muted" data-sm="live">Live feed: connecting…</span>
         <span class="sm-muted" data-sm="history"></span>
         <span class="sm-muted"><span data-sm="source"></span> <a href="#" data-sm="change">Change callsign</a></span>
@@ -211,6 +248,17 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
       <div class="sm-body">
         <div class="sm-map" data-sm="map">
           <div class="sm-nospots" data-sm="nospots" role="status" hidden></div>
+          <div class="sm-colours" data-sm="colours" id="sm-colours" role="dialog" aria-label="Spot colours" hidden>
+            <h2>Spot colours</h2>
+            <label><input type="color" data-colour="heardMe"> Heard me</label>
+            <label><input type="color" data-colour="iHeard"> I heard</label>
+            <div data-sm="stateColours">
+              ${STATES.map(st => `<label><input type="color" data-colour="${st}"> ${esc(STATE_LABEL[st])}</label>`).join('')}
+            </div>
+            <button type="button" data-sm="coloursReset">Standard colours</button>
+            <button type="button" data-sm="coloursClose">Close</button>
+            <p>The standard colours stay apart for red-green and blue-yellow colour blindness. Saved in this browser.</p>
+          </div>
           <div class="sm-credit">Data from PSK Reporter by Philip Gladstone. Live spots from mqtt.pskreporter.info by Tom Fanning M0LTE.</div>
         </div>
         <div class="sm-grip" data-sm="grip" role="separator" aria-orientation="vertical" aria-label="Drag to resize the side panel" tabindex="0"></div>
@@ -224,8 +272,8 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             <button type="button" data-sm="allBands" hidden>All bands</button></div>
           <table>
             <thead><tr><th scope="col">Band</th>
-              <th scope="col"><span class="sm-dot" style="background:${COLOURS.heardMe}"></span>Heard me</th>
-              <th scope="col"><span class="sm-dot" style="background:${COLOURS.iHeard}"></span>I heard</th></tr></thead>
+              <th scope="col"><span class="sm-dot" data-col="heardMe"></span>Heard me</th>
+              <th scope="col"><span class="sm-dot" data-col="iHeard"></span>I heard</th></tr></thead>
             <tbody data-sm="bandRows"></tbody>
           </table>
           <div class="sm-empty" data-sm="bandsEmpty">No spots yet.</div>
@@ -259,6 +307,30 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         </form>
       </div>`;
     const $ = name => root.querySelector(`[data-sm="${name}"]`);
+    // ---- Colours ----
+    const paintColours = () => {
+        for (const el of root.querySelectorAll('[data-col]')) el.style.background = COLOURS[el.dataset.col];
+        for (const el of root.querySelectorAll('[data-colour]')) el.value = COLOURS[el.dataset.colour];
+    };
+    paintColours();
+    let redraw = () => {};   // draw() once the map is up
+    const showColours = on => { $('colours').hidden = !on; $('coloursBtn').setAttribute('aria-pressed', String(on)); };
+    $('coloursBtn').addEventListener('click', () => showColours($('colours').hidden));
+    $('coloursClose').addEventListener('click', () => showColours(false));
+    $('colours').addEventListener('input', e => {
+        const k = e.target.dataset?.colour;
+        if (!k) return;
+        COLOURS[k] = e.target.value;
+        save('colours', Object.fromEntries(Object.entries(COLOURS).filter(([c, v]) => v !== DEFAULT_COLOURS[c])));
+        paintColours();
+        redraw();
+    });
+    $('coloursReset').addEventListener('click', () => {
+        Object.assign(COLOURS, DEFAULT_COLOURS);
+        save('colours', {});
+        paintColours();
+        redraw();
+    });
 
     // ---- Settings remembered in this browser ----
     const windowSel = $('window');
@@ -355,6 +427,10 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     // the callsign came from WSJT-X: then its decodes are this station's.
     const useHeard = !!heardUrl && source === `from ${programName}`;
     let heardSeq = 0, heardCount = 0, heardUp = false;
+    // The Call button: asks WSJT-X to answer a station it decoded.
+    const useCall = useHeard && !!callUrl;
+    $('states').hidden = !useHeard;
+    $('stateColours').hidden = !useHeard;
     $('title').textContent = `${CALL} spots`;
     document.title = `${CALL} Spot Map`;
     $('source').textContent = `Callsign ${source}.`;
@@ -493,6 +569,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         drawPending = true;
         setTimeout(() => { drawPending = false; draw(); }, 300);
     };
+    redraw = scheduleDraw;
 
     // ---- "No spots yet" notice ----
     // Shown once the history has been asked for and nothing at all is on the
@@ -540,26 +617,31 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
                 const ll = spotLatLon(s);
                 const fresh = now - s.t < FRESH_SECS;
                 const approx = s.approx !== undefined;
+                const st = spotState(s, now);
+                const col = COLOURS[st || kind];
                 const line = kind === 'heardMe' ? `${s.call} heard ${CALL}` : `${CALL} heard ${s.call}`;
                 const snr = s.snr !== null ? ` · ${s.snr} dB` : '';
                 const where = approx ? `${esc(s.approx)}, approximate position (from the callsign)` : esc(s.grid);
-                const tip = `<b>${esc(line)}</b><br>${esc(s.band)} ${esc(s.mode)}${snr}<br>${where} · ${ago(s.t)}`;
+                const doing = st ? `<br>${esc(stateText(s, st))}` : '';
+                const tip = `<b>${esc(line)}</b><br>${esc(s.band)} ${esc(s.mode)}${snr}<br>${where} · ${ago(s.t)}${doing}`
+                    + (useCall && s.ws ? '<br><i>Click for the Call button</i>' : '');
                 for (const shift of COPIES) {
                     const at = [ll[0], ll[1] + shift];
                     if (home) {
                         L.polyline([[home[0], home[1] + shift], at], {
-                            color: COLOURS[kind], weight: fresh ? 2 : 1, opacity: fresh ? 0.8 : 0.3,
+                            color: col, weight: fresh ? 2 : 1, opacity: fresh ? 0.8 : 0.3,
                             dashArray: approx ? '4 6' : null,
                         }).addTo(layers[kind]);
                     }
                     // An approximate position (country centre) is a hollow, dashed ring.
                     const m = L.circleMarker(at, approx ? {
-                        radius: fresh ? 11 : 7, color: COLOURS[kind], weight: 2, dashArray: '3 3',
-                        fillColor: COLOURS[kind], fillOpacity: 0.12,
+                        radius: fresh ? 11 : 7, color: col, weight: 2, dashArray: '3 3',
+                        fillColor: col, fillOpacity: 0.12,
                     } : {
                         radius: fresh ? 11 : 7, color: fresh ? '#fff' : '#111', weight: fresh ? 2 : 1,
-                        fillColor: COLOURS[kind], fillOpacity: 0.9,
+                        fillColor: col, fillOpacity: 0.9,
                     }).bindTooltip(tip).addTo(layers[kind]);
+                    if (useCall && s.ws) m.bindPopup(() => callPopup(s), { maxWidth: 280 });
                     if (shift === 0) markers.set(kind + ':' + s.call, m);
                 }
             }
@@ -626,13 +708,16 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             const cls = age < FRESH_SECS ? 'sm-fresh' : age > 3600 ? 'sm-old' : '';
             const approx = r.approx !== undefined;
             const where = approx ? `${r.approx}, approximate position from the callsign` : r.grid;
-            const tip = `${KIND_LABEL[r.kind]} · ${r.mode} · ${where} · ${ago(r.t)}`;
+            const tip = `${KIND_LABEL[r.kind]} · ${r.mode} · ${where} · ${ago(r.t)}${st ? ' · ' + stateText(r, st) : ''}`;
+            const st = spotState(r, now);
+            const col = COLOURS[st || r.kind];
             const dot = approx
-                ? `<span class="sm-dot sm-approx" style="color:${COLOURS[r.kind]}" aria-label="${KIND_LABEL[r.kind]}, approximate position"></span>`
-                : `<span class="sm-dot" style="background:${COLOURS[r.kind]}" aria-label="${KIND_LABEL[r.kind]}"></span>`;
+                ? `<span class="sm-dot sm-approx" style="color:${col}" aria-label="${KIND_LABEL[r.kind]}, approximate position"></span>`
+                : `<span class="sm-dot" style="background:${col}" aria-label="${KIND_LABEL[r.kind]}"></span>`;
+            const tag = st ? `<span class="sm-state">${esc(STATE_LABEL[st])}</span>` : '';
             const km = formatDistance(r.km, miles);
             return `<tr class="${cls}" data-key="${esc(r.kind + ':' + r.call)}" title="${esc(tip)}">`
-                + `<td>${dot}${esc(r.call)}</td>`
+                + `<td>${dot}${esc(r.call)}${tag}</td>`
                 + `<td>${esc(r.band)}</td>`
                 + `<td class="sm-num">${r.snr === null ? '' : esc(r.snr)}</td>`
                 + `<td class="sm-num">${approx && km ? '~' + km : km}</td>`
@@ -656,7 +741,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         const m = markers.get(key);
         if (!m) return;
         map.setView(m.getLatLng(), Math.max(map.getZoom(), 4));
-        m.openTooltip();
+        if (m.getPopup()) m.openPopup(); else m.openTooltip();
     };
     $('rows').addEventListener('click', e => findOnMap(e.target.closest('tr')?.dataset.key));
     $('bestRows').addEventListener('click', e => findOnMap(e.target.closest('button')?.dataset.key));
@@ -741,11 +826,54 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     function addHeard(i, grid, country = null) {
         const added = store.add('iHeard', {
             sc: i.call, sl: grid, rc: CALL, rl: station.grid || '',
-            f: i.f, md: i.md, rp: i.rp, t: i.t, sq: country ? `ws${i.seq}~` : `ws${i.seq}`,
+            f: i.f, md: i.md, rp: i.rp, t: i.t, st: i.st, to: i.to, sq: country ? `ws${i.seq}~` : `ws${i.seq}`,
             ...(country ? { ll: [country.lat, country.lon], approx: country.name } : {}),
         });
         if (added) { if (country || !i.approxShown) heardCount++; scheduleDraw(); }
     }
+    function stateText(s, st) {
+        if (st === 'qso') return s.to ? `In QSO with ${s.to}` : 'In QSO';
+        if (st === 'fin') return s.to ? `73 sent to ${s.to}` : '73 sent';
+        if (st === 'you') return `Calling you (${CALL})`;
+        return 'Calling CQ';
+    }
+    // The popup a station from the decodes gets on a click, with its Call button.
+    function callPopup(spot) {
+        const s = store.byKind.iHeard.get(spot.call) ?? spot;
+        const st = spotState(s, Date.now() / 1000);
+        const call = esc(s.call);
+        let body;
+        if (st === 'qso') {
+            body = `<p>${esc(stateText(s, st))}. Wait for its 73, then call.</p>`
+                + `<button type="button" data-call="${call}">Call ${call} anyway</button>`;
+        } else {
+            const doing = st ? `<p>${esc(stateText(s, st))}.</p>` : `<p class="sm-popnote">Last decoded ${ago(s.t)}.</p>`;
+            body = `${doing}<button type="button" data-call="${call}">Call ${call}</button>`;
+        }
+        return `<div class="sm-pop"><p><b>${call}</b> · ${esc(s.band)} ${esc(s.mode)}${s.snr !== null ? ` · ${esc(s.snr)} dB` : ''}</p>${body}`
+            + `<p class="sm-popnote" data-callmsg>Like double-clicking its last decode in ${esc(programName)}: `
+            + `${esc(programName)} then transmits if Enable Tx is on, or if its settings turn it on.</p></div>`;
+    }
+    // Popups stop clicks bubbling, so this listens on the way down.
+    root.addEventListener('click', async e => {
+        const btn = e.target.closest?.('button[data-call]');
+        if (!btn || !useCall) return;
+        const msg = btn.closest('.sm-pop')?.querySelector('[data-callmsg]');
+        btn.disabled = true;
+        try {
+            const r = await fetch(callUrl, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ call: btn.dataset.call }),
+            });
+            const d = await r.json().catch(() => ({}));
+            if (msg) msg.textContent = r.ok
+                ? `Sent to ${programName}. If it doesn't start calling ${btn.dataset.call}, its Band Activity may no longer have that decode: double-click it there instead.`
+                : `Not sent: ${d.error || r.status}`;
+        } catch {
+            if (msg) msg.textContent = 'Not sent: no answer from YWC.';
+        }
+        setTimeout(() => { btn.disabled = false; }, 3000);
+    }, true);
     async function pollHeard() {
         try {
             const r = await fetch(`${heardUrl}?since=${heardSeq}`, { cache: 'no-store' });

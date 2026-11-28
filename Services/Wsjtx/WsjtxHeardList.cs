@@ -11,7 +11,9 @@ namespace Yaesu_Web_Control.Services.Wsjtx
         long FrequencyHz,
         string Mode,
         int Snr,
-        double DeltaTime);
+        double DeltaTime,
+        string State = "",
+        string To = "");
 
     /// <summary>
     /// Every station WSJT-X/WS decodes, kept for the Spot Map so "I heard" shows
@@ -20,7 +22,12 @@ namespace Yaesu_Web_Control.Services.Wsjtx
     /// A station needs a grid to go on the map. Its own message gives one only
     /// in a CQ or a first reply ("K1ABC W9XYZ EN52"), so grids are remembered
     /// for the session. A station whose grid isn't known yet is passed on with
-    /// an empty grid: the map may know it from a PSK Reporter spot. Thread-safe.
+    /// an empty grid: the map may know it from a PSK Reporter spot.
+    /// Each item also says what the station was doing (State): "cq" for CQ or
+    /// QRZ, "you" when calling the operator, "qso" when in a QSO with someone
+    /// else (To), "fin" when it has just sent RR73, RRR or 73.
+    /// The latest decode of each station is kept, so the Spot Map can ask
+    /// WSJT-X to answer it (a Reply has to echo the decode exactly). Thread-safe.
     /// </summary>
     public sealed class WsjtxHeardList
     {
@@ -32,6 +39,7 @@ namespace Yaesu_Web_Control.Services.Wsjtx
         private readonly object _lock = new();
         private readonly List<HeardStation> _items = new();
         private readonly Dictionary<string, string> _grids = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, (WsjtxDecode Decode, DateTime Utc)> _latest = new(StringComparer.OrdinalIgnoreCase);
         private long _seq;
 
         /// <summary>
@@ -45,6 +53,7 @@ namespace Yaesu_Web_Control.Services.Wsjtx
             var sender = Sender(decode.Message, myCall);
             if (sender is null) return;
             var (call, grid) = sender.Value;
+            var (state, to) = StateOf(decode.Message, myCall);
             long unix = (long)(nowUtc - DateTime.UnixEpoch).TotalSeconds;
             long hz = dialHz > 0 ? dialHz + decode.DeltaFrequency : 0;
             string mode = WsjtxUdpService.DecodeModeName(decode.Mode, statusMode);
@@ -57,7 +66,9 @@ namespace Yaesu_Web_Control.Services.Wsjtx
                 }
                 else _grids.TryGetValue(call, out grid!);
                 grid ??= "";
-                Publish(new HeardStation(0, call, grid, unix, hz, mode, decode.Snr, decode.DeltaTime));
+                if (_latest.Count >= MaxGrids) _latest.Clear();
+                _latest[call] = (decode, nowUtc);
+                Publish(new HeardStation(0, call, grid, unix, hz, mode, decode.Snr, decode.DeltaTime, state, to));
                 Trim(nowUtc);
             }
         }
@@ -82,9 +93,42 @@ namespace Yaesu_Web_Control.Services.Wsjtx
                 return (_seq, _items.Where(i => i.Seq > seq).ToList());
         }
 
+        /// <summary>A station's latest decode and when it came, if it was heard this session.</summary>
+        public bool TryGetLatest(string call, out WsjtxDecode? decode, out DateTime receivedUtc)
+        {
+            lock (_lock)
+            {
+                if (_latest.TryGetValue(call.Trim(), out var hit)) { decode = hit.Decode; receivedUtc = hit.Utc; return true; }
+                decode = null;
+                receivedUtc = default;
+                return false;
+            }
+        }
+
         public void Clear()
         {
-            lock (_lock) _items.Clear();
+            lock (_lock) { _items.Clear(); _latest.Clear(); }
+        }
+
+        /// <summary>
+        /// What the sender of a message was doing: ("cq", ""), ("you", ""),
+        /// ("qso", the other station), ("fin", the other station), or ("", "").
+        /// </summary>
+        internal static (string State, string To) StateOf(string message, string myCall)
+        {
+            var parsed = WsjtxCallList.Classify(message, myCall ?? "");
+            if (parsed is null) return ("", "");
+            var (_, kind, _, busy) = parsed.Value;
+            var first = message.ToUpperInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+            var to = WsjtxCallList.Unhash(first);
+            if (busy) return ("qso", to);
+            return kind switch
+            {
+                CallKind.Cq => ("cq", ""),
+                CallKind.CallingYou => ("you", ""),
+                CallKind.Finished => ("fin", to),
+                _ => ("", ""),
+            };
         }
 
         /// <summary>

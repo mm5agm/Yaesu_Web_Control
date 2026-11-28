@@ -215,8 +215,23 @@ namespace Yaesu_Web_Control.Controllers
                     md = i.Mode,
                     rp = i.Snr,
                     dt = i.DeltaTime,
+                    st = i.State,
+                    to = i.To,
                 }),
             });
+        }
+
+        // POST api/wsjtx/call: the Spot Map's Call button. Asks WSJT-X/WS to
+        // answer a station it decoded, as a double-click on that decode would.
+        // Like a double-click, this can make WSJT-X transmit if Enable Tx is
+        // on or WSJT-X turns it on: it is the operator's own click. Unlike
+        // api/wsjtx/reply it doesn't need the FT8 Tiles page turned on.
+        [HttpPost("call")]
+        public async Task<IActionResult> CallStation([FromBody] CallRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.Call)) return BadRequest(new { error = "No callsign" });
+            var (ok, error) = await _udpService.SendHeardReplyAsync(request.Call.Trim());
+            return ok ? Ok(new { sent = true }) : Conflict(new { error });
         }
 
         // --- The big-tile page (issue #332) ---

@@ -2874,7 +2874,7 @@ The Spot Map shows who hears you, and who you hear, on a world map and in a list
 
 **The map:**
 
-- **Orange**: stations that heard you. **Blue**: stations you heard. **Yellow**: you.
+- **Orange**: stations that heard you. **Blue**: stations you heard. **Yellow**: you. Stations you decoded can also take a colour for what they are doing (below). **Colours** at the top changes any of them.
 - Each station shows once, at its latest spot, with a line from you. Spots from the last 3 minutes are drawn bigger.
 - Hold the mouse over a dot for the callsign, band, mode, SNR and how long ago.
 - **The grey line** (*new in v2.5.6-pre49*): the night side of the Earth is shaded, with a thin yellow line where the sun is rising or setting. Grey-line paths often open up along it. The ☀ marks where the sun is overhead. It moves with the time, and **Grey line** at the top hides or shows it.
@@ -2899,10 +2899,25 @@ Drag the bar between the map and the right-hand side to resize them.
 - **Only the WSJT modes are instant.** The instant "I heard" comes from WSJT-X's decodes: FT8, FT4 and the other WSJT modes. CW, RTTY and PSK31 spots reach the map only through PSK Reporter, from programs such as fldigi and CW skimmers that report to it, with the same batch delay. YWC's own CW and RTTY decoders don't add anything to the map, because a CW or RTTY signal doesn't say where the station is.
 - With **Last** set to 5 minutes, the map thins out just before each burst. 15 minutes gives a steadier picture.
 
+**What each station is doing** (*new in v2.5.6-pre52*): a station you decoded takes a colour for its last message, for 2 minutes after it. Then it goes back to blue.
+
+| Colour | Shown as | Its last message |
+|---|---|---|
+| Yellow | **CQ** | CQ or QRZ: free to call |
+| White | **Calling you** | your callsign is in it |
+| Grey | **In QSO** | a QSO with someone else: wait for its 73 |
+| Turquoise | **73 sent** | RR73, RRR or 73: free to call |
+
+The list shows the same words after the callsign, and the tooltip says who it is working, for example "In QSO with DL1ABC", so nothing depends on the colour alone. This needs WSJT-X (or WS, JTDX) connected over the UDP link; PSK Reporter doesn't say what a station was doing.
+
+**Colours** (*new in v2.5.6-pre52*): click **Colours** at the top to change the colour of any kind of spot. Your colours are kept in that browser. **Standard colours** puts them back. The standard colours were picked to stay apart for people with red-green or blue-yellow colour blindness, as well as for normal sight.
+
+**Calling a station** (*new in v2.5.6-pre52*): click a station you decoded, on the map or in the list, for its **Call** button. Clicking **Call** does the same as double-clicking that station's last decode in WSJT-X's Band Activity: WSJT-X sets up the QSO and, if **Enable Tx** is on (or its settings turn it on), **starts transmitting** on the next period. If the station is **In QSO**, the button says "Call anyway": it's better manners to wait for its 73. WSJT-X can answer only a decode still in its Band Activity window, and YWC won't send a call for a decode older than 30 minutes. If WSJT-X doesn't start calling, double-click the station in WSJT-X instead. Stations seen only through PSK Reporter have no Call button.
+
 **Notes:**
 
 - **History:** when the page opens it loads the last 24 hours. PSK Reporter allows one query about every 5 minutes, so "heard me" loads at once and "I heard" about 5½ minutes later.
-- The page needs the internet for the map and the spots. It never touches the radio.
+- The page needs the internet for the map and the spots. It never touches the radio itself. The **Call** button asks WSJT-X to answer a station, and WSJT-X may then transmit.
 - Data from PSK Reporter by Philip Gladstone. Live spots come from mqtt.pskreporter.info, run by Tom Fanning M0LTE.
 
 ---

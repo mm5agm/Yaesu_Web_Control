@@ -19,6 +19,22 @@ import { CTY } from './cty-data.js';
 
 export const KINDS = ['heardMe', 'iHeard'];
 
+/**
+ * What a station decoded by the app's own WSJT-X was doing, from its last
+ * message: CQ or QRZ, calling the operator, in a QSO with someone else, or
+ * just finished one (RR73, RRR, 73). Only "I heard" spots from WSJT-X carry it.
+ */
+export const STATES = ['cq', 'you', 'qso', 'fin'];
+export const STATE_LABEL = { cq: 'CQ', you: 'Calling you', qso: 'In QSO', fin: '73 sent' };
+/** A state older than this says little about now, so the spot goes back to plain "I heard". */
+export const STATE_SECS = 120;
+
+/** A spot's state ('cq', 'you', 'qso', 'fin') if it is recent enough to mean something, else ''. */
+export function spotState(s, nowSecs) {
+    if (!s || s.kind !== 'iHeard' || !STATES.includes(s.st)) return '';
+    return nowSecs - s.t <= STATE_SECS ? s.st : '';
+}
+
 /** A Maidenhead locator (4 or 6 characters) to [lat, lon] at the square's centre, or null. */
 export function gridToLatLon(grid) {
     const g = String(grid ?? '').trim().toUpperCase();
@@ -220,6 +236,9 @@ export class SpotStore {
             mode: raw.md || '',
             snr: toNumberOrNull(raw.rp),
         };
+        if (raw.st) { spot.st = String(raw.st); spot.to = String(raw.to ?? ''); }
+        // From the app's own WSJT-X decodes, so its Call button can answer it.
+        if (String(raw.sq ?? '').startsWith('ws')) spot.ws = true;
         if (approx !== null) { spot.grid = ''; spot.ll = [Number(raw.ll[0]), Number(raw.ll[1])]; spot.approx = approx; }
         // A real grid beats an approximate position, whichever is newer.
         const beats = held => {

@@ -5,6 +5,7 @@ import {
     gridToLatLon, distanceKm, bandOf, bandRank, topicCall, topicsFor, isCallsign,
     KINDS, classifyMqtt, fromReceptionReport, SpotStore, listRows, utcHhmm, formatDistance,
     bestDx, utcHhmmss, subsolarPoint, nightPolygon, countryFor, spotLatLon,
+    STATES, spotState,
 } from '../../js/spotmap/spot-data.js';
 
 const near = (a, b, tol) => assert.ok(Math.abs(a - b) <= tol, `${a} not within ${tol} of ${b}`);
@@ -268,4 +269,28 @@ test('best DX leaves out approximate spots', () => {
     ];
     assert.equal(bestDx(spots, home).iHeard.call, 'JY4CH');
     assert.ok(listRows(spots, home).find(r => r.call === 'VK2X').km > 10000);   // the list still shows a distance
+});
+
+test('state: what a decoded station was doing, for 2 minutes', () => {
+    const store = new SpotStore();
+    const s = store.add('iHeard', { sc: 'JY4CH', sl: 'KM71', rc: 'MM5AGM', t: 1000, f: 14075000, md: 'FT8', rp: -5, sq: 'ws1', st: 'qso', to: 'DL1ABC' });
+    assert.equal(s.st, 'qso');
+    assert.equal(s.to, 'DL1ABC');
+    assert.equal(s.ws, true);
+    assert.equal(spotState(s, 1060), 'qso');
+    assert.equal(spotState(s, 1120), 'qso');
+    assert.equal(spotState(s, 1121), '');
+    assert.deepEqual(STATES, ['cq', 'you', 'qso', 'fin']);
+});
+
+test('state: only from the decodes, and only known states', () => {
+    const store = new SpotStore();
+    const mqtt = store.add('iHeard', { sc: 'K1ABC', sl: 'FN42', rc: 'MM5AGM', t: 1000, f: 14075000, md: 'FT8', rp: -5, sq: 'p1' });
+    assert.equal(mqtt.ws, undefined);
+    assert.equal(spotState(mqtt, 1000), '');
+    const odd = store.add('iHeard', { sc: 'K2ABC', sl: 'FN31', rc: 'MM5AGM', t: 1000, f: 14075000, md: 'FT8', rp: -5, sq: 'ws2', st: 'tx' });
+    assert.equal(spotState(odd, 1000), '');
+    const heardMe = store.add('heardMe', { sc: 'MM5AGM', sl: 'IO85', rc: 'K3ABC', rl: 'FN20', t: 1000, f: 14075000, md: 'FT8', rp: -5, sq: 'p2', st: 'cq' });
+    assert.equal(spotState(heardMe, 1000), '');
+    assert.equal(spotState(null, 1000), '');
 });
