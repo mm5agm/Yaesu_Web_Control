@@ -192,7 +192,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
           ${WINDOWS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}
         </select></label>
         <label><select data-sm="units" aria-label="Distance units"><option value="km">km</option><option value="mi">miles</option></select></label>
-        <button type="button" data-sm="worldBtn" title="Fit one whole world across the window, centred on you">World</button>
+        <button type="button" data-sm="worldBtn" aria-pressed="false" title="Fit one whole world across the window, centred on you. Lit while the whole world is showing; pan or zoom and it goes out.">World</button>
         <button type="button" data-sm="greyBtn" aria-pressed="true" title="Show or hide the grey line: the night side of the Earth, shaded">Grey line</button>
         <button type="button" data-sm="bestBtn" aria-pressed="true" title="Show or hide the furthest station each way">Best DX</button>
         <button type="button" data-sm="bandsBtn" aria-pressed="true" title="Show or hide the stations per band">Bands</button>
@@ -395,12 +395,14 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
 
     // ---- The view: the whole world, or where you left it ----
     let worldMode = false, worldLon = null, settingView = false;
+    // World lights up while the whole world is showing, like the other buttons.
+    const setWorldMode = on => { worldMode = on; $('worldBtn').setAttribute('aria-pressed', String(on)); };
     const setViewQuietly = (centre, zoom) => {
         settingView = true;
         try { map.setView(centre, zoom, { animate: false }); } finally { settingView = false; }
     };
     function fitWorld() {
-        worldMode = true;
+        setWorldMode(true);
         save('view', { world: true });
         const size = map.getSize();
         if (!size.x || !size.y) return;          // not laid out yet: the resize watcher calls again
@@ -424,7 +426,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         fitWorld();
     }
     // Pan or zoom by hand and the page remembers that view instead.
-    map.on('dragstart zoomstart', () => { if (!settingView) worldMode = false; });
+    map.on('dragstart zoomstart', () => { if (!settingView) setWorldMode(false); });
     map.on('moveend', () => {
         if (settingView || worldMode) return;
         const c = map.getCenter();
