@@ -12,6 +12,25 @@ a different and much older format.
 
 ---
 
+## 2026-11-28 - v2.5.6-pre47 (pre-release)
+
+> **Testers urgently needed: FT-710 and FT-991A owners.** This pre-release adds the radio menu file and front panel save to the FT-710 and FT-991A. It was built from Yaesu's CAT manuals and has not been tried on either radio, because I don't have one. If you have an FT-710 or FT-991A, please save a file, check that the values match your radio's menu, and tell us how it went in [GitHub Discussions](https://github.com/mm5agm/Yaesu_Web_Control/discussions). Even "it worked" helps. FTDX10 owners are still wanted for v2.5.6-pre45 too.
+
+*The FT-710 and FT-991A can now save their menu and front panel settings to a file and load them back, as the FTdx101 and FTDX10 can. Everything in v2.5.6-pre46 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**Radio menu file: FT-710 and FT-991A** ([#469](https://github.com/mm5agm/Yaesu_Web_Control/pull/469), [manual](USER_MANUAL.md#radio-menu))
+
+- **Save radio menu to file** (Settings) now works on the FT-710 and FT-991A. It saves every menu item and the front panel settings (RF GAIN, AGC, ATT, IPO, NB, MIC GAIN, PROC, power and the rest).
+- **FT-710:** all 296 menu items, including the five PRESET groups. The front panel settings are the same as the FTdx101's. RF POWER and MAX POWER go up to 100 W.
+- **FT-991A:** all 152 menu items. Its menu is numbered 001 to 153, so the file shows three-digit menu numbers. ATT is OFF/ON, WIDTH is step 0 to 21, and there is no PSK mode. BREAK-IN DELAY, VOX DELAY and VOX GAIN are menu items on this radio, so they are saved with the menu. 2m and 70cm are bands of their own.
+- Each radio's menu is its own, so menu items only load into the same model. Front panel settings still load.
+- **Testers, please check:**
+  - that **Save** finishes and the file's values match your radio's menu;
+  - that **Load** of a file with one changed setting changes only that setting;
+  - that front panel settings such as WIDTH, NB and AGC come back on the right band and mode.
+
+---
+
 ## 2026-11-28 - v2.5.6-pre46 (pre-release)
 
 *Fixes WSJT-X losing its link to the radio ("Rig failure") after YWC restarts, and YWC closing while WSJT-X or N1MM is still using it. Everything in v2.5.6-pre45 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
