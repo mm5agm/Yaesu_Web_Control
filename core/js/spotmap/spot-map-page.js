@@ -115,6 +115,10 @@ const CSS = `
 .sm-list tbody tr.sm-fresh td { font-weight: 600; color: #fff; }
 .sm-list tbody tr.sm-old td { color: #aab; }
 .sm-empty { padding: 14px; color: #9aa; }
+.sm-empty { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 600;
+  width: max-content; max-width: min(760px, calc(100% - 120px)); padding: 10px 14px; border: 1px solid #555;
+  border-radius: 6px; background: rgba(22, 24, 28, .93); color: #eee; font-size: 14px; line-height: 1.45; }
+.sm-empty[hidden] { display: none; }
 .sm-credit { position: absolute; bottom: 18px; left: 10px; z-index: 500; color: #889; font-size: 12px;
   background: rgba(17,17,17,.6); padding: 1px 4px; border-radius: 3px; pointer-events: none; }
 .sm-setup { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.75); display: flex;
@@ -199,6 +203,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
       </div>
       <div class="sm-body">
         <div class="sm-map" data-sm="map">
+          <div class="sm-empty" data-sm="empty" role="status" hidden></div>
           <div class="sm-credit">Data from PSK Reporter by Philip Gladstone. Live spots from mqtt.pskreporter.info by Tom Fanning M0LTE.</div>
         </div>
         <div class="sm-grip" data-sm="grip" role="separator" aria-orientation="vertical" aria-label="Drag to resize the side panel" tabindex="0"></div>
@@ -476,6 +481,27 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         setTimeout(() => { drawPending = false; draw(); }, 300);
     };
 
+    // ---- "No spots yet" notice ----
+    // Shown once the history has been asked for and nothing at all is on the
+    // map, so an empty map is explained instead of looking broken. PSK Reporter
+    // can know a callsign was heard (its search answer) yet send no reports.
+    const empty = { asked: 0, heardAt: {} };
+    function showEmpty(now) {
+        const el = $('empty');
+        if (!empty.asked || store.within(now, 86400, KINDS).length) { el.hidden = true; return; }
+        const hhmm = s => new Date(s * 1000).toISOString().slice(11, 16);
+        const known = KINDS.map(k => empty.heardAt[k]).filter(t => t && now - t < 86400);
+        let html = `<b>No spots yet for ${esc(CALL)}.</b> `;
+        html += known.length
+            ? `PSK Reporter says ${esc(CALL)} was last spotted at ${hhmm(Math.max(...known))} UTC, but it sent no reports for the last 24 hours. Its history service is probably running behind. `
+            : 'PSK Reporter has nothing for the last 24 hours. ';
+        html += `New spots appear here as soon as they arrive: <b>Heard me</b> when someone hears you transmit, `
+            + `and <b>I heard</b> when ${esc(programName)} reports what you decode to PSK Reporter `
+            + `(${esc(programName)} Settings, Reporting tab: tick Enable PSK Reporter Spotting).`;
+        el.innerHTML = html;
+        el.hidden = false;
+    }
+
     function draw() {
         const now = Date.now() / 1000;
         const windowSecs = Number(windowSel.value);
@@ -487,6 +513,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         }
         // Home found after the start: centre the whole-world view on it.
         if (worldMode && home && worldLon !== home[1]) fitWorld();
+        showEmpty(now);
         const shown = kindsShown();
         markers.clear();
         for (const kind of KINDS) {
@@ -694,6 +721,12 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             if (data?.message && !data.receptionReport) {
                 done[kind] = `${label} not loaded (PSK Reporter: ${data.message})`;
             } else {
+                // The search part says when PSK Reporter last saw the callsign, even
+                // when it sends no reports: used by the "No spots yet" notice.
+                let search = data?.[kind === 'heardMe' ? 'senderSearch' : 'receiverSearch'];
+                if (search && !Array.isArray(search)) search = [search];
+                const seen = Number(search?.[0]?.recentFlowStartSeconds);
+                if (seen) empty.heardAt[kind] = seen;
                 let reports = data?.receptionReport ?? [];
                 if (!Array.isArray(reports)) reports = [reports];
                 for (const r of reports) addSpot(kind, fromReceptionReport(r));
@@ -704,6 +737,8 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         }
         historyEl.textContent = 'History 24 h: ' + Object.values(done).join(', ')
             + (done.iHeard ? '' : '; "I heard" loads in a few minutes');
+        empty.asked++;
+        showEmpty(Date.now() / 1000);
         historyEl.title = 'PSK Reporter allows about one history query every 5 minutes, so the two halves load 5.5 minutes apart.';
     }
     historyEl.textContent = 'History: loading…';
