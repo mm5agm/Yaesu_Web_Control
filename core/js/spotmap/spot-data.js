@@ -165,6 +165,15 @@ export class SpotStore {
         return spot;
     }
 
+    /** A station's grid from any spot held for it, or ''. */
+    gridFor(call) {
+        for (const kind of KINDS) {
+            const s = this.byKind[kind].get(call);
+            if (s?.grid) return s.grid;
+        }
+        return '';
+    }
+
     /**
      * Spots heard in the last windowSecs seconds, for the kinds asked for:
      * each station's latest spot, or with band given, its latest spot on that band.

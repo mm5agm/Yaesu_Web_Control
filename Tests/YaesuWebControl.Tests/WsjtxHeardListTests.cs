@@ -55,14 +55,14 @@ public sealed class WsjtxHeardListTests
     }
 
     [Fact]
-    public void Add_HoldsAStationBackUntilItsGridIsKnown()
+    public void Add_PassesOnAStationWithNoKnownGrid()
     {
+        // The map fills the grid in from a PSK Reporter spot if it has one.
         var list = new WsjtxHeardList();
         list.Add(D("W9XYZ K1ABC -10"), 14_074_000, "FT8", "MM5AGM", T0);
-        Assert.Empty(list.Since(0).Items);
+        Assert.Equal("", Assert.Single(list.Since(0).Items).Grid);
         list.Add(D("W9XYZ K1ABC FN42"), 14_074_000, "FT8", "MM5AGM", T0.AddSeconds(15));
-        var h = Assert.Single(list.Since(0).Items);
-        Assert.Equal("FN42", h.Grid);
+        Assert.Equal("FN42", Assert.Single(list.Since(1).Items).Grid);
     }
 
     [Fact]

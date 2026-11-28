@@ -19,8 +19,8 @@ namespace Yaesu_Web_Control.Services.Wsjtx
     /// WSJT-X uploads to PSK Reporter in batches a few minutes apart.
     /// A station needs a grid to go on the map. Its own message gives one only
     /// in a CQ or a first reply ("K1ABC W9XYZ EN52"), so grids are remembered
-    /// for the session, and a station heard before its grid is known is held
-    /// back until a later message gives it. Thread-safe.
+    /// for the session. A station whose grid isn't known yet is passed on with
+    /// an empty grid: the map may know it from a PSK Reporter spot. Thread-safe.
     /// </summary>
     public sealed class WsjtxHeardList
     {
@@ -32,7 +32,6 @@ namespace Yaesu_Web_Control.Services.Wsjtx
         private readonly object _lock = new();
         private readonly List<HeardStation> _items = new();
         private readonly Dictionary<string, string> _grids = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, HeardStation> _waiting = new(StringComparer.OrdinalIgnoreCase);
         private long _seq;
 
         /// <summary>
@@ -58,14 +57,7 @@ namespace Yaesu_Web_Control.Services.Wsjtx
                 }
                 else _grids.TryGetValue(call, out grid!);
                 grid ??= "";
-                var heard = new HeardStation(0, call, grid, unix, hz, mode, decode.Snr, decode.DeltaTime);
-                if (grid.Length == 0)
-                {
-                    _waiting[call] = heard;
-                    return;
-                }
-                _waiting.Remove(call);   // this newer decode stands in for it
-                Publish(heard);
+                Publish(new HeardStation(0, call, grid, unix, hz, mode, decode.Snr, decode.DeltaTime));
                 Trim(nowUtc);
             }
         }
@@ -81,8 +73,6 @@ namespace Yaesu_Web_Control.Services.Wsjtx
             int drop = 0;
             while (drop < _items.Count && (_items[drop].UnixSeconds < oldest || _items.Count - drop > MaxItems)) drop++;
             if (drop > 0) _items.RemoveRange(0, drop);
-            foreach (var key in _waiting.Where(w => w.Value.UnixSeconds < oldest).Select(w => w.Key).ToList())
-                _waiting.Remove(key);
         }
 
         /// <summary>Stations added after the given sequence number, oldest first.</summary>
@@ -94,7 +84,7 @@ namespace Yaesu_Web_Control.Services.Wsjtx
 
         public void Clear()
         {
-            lock (_lock) { _items.Clear(); _waiting.Clear(); }
+            lock (_lock) _items.Clear();
         }
 
         /// <summary>

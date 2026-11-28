@@ -719,6 +719,14 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         if (!useHeard) return '';
         return heardUp ? ` · ${esc(programName)} decodes: ${heardCount}` : ` · ${esc(programName)} decodes: not running`;
     }
+    const heardWaiting = new Map();
+    function addHeard(i, grid) {
+        const added = store.add('iHeard', {
+            sc: i.call, sl: grid, rc: CALL, rl: station.grid || '',
+            f: i.f, md: i.md, rp: i.rp, t: i.t, sq: `ws${i.seq}`,
+        });
+        if (added) { heardCount++; scheduleDraw(); }
+    }
     async function pollHeard() {
         try {
             const r = await fetch(`${heardUrl}?since=${heardSeq}`, { cache: 'no-store' });
@@ -726,13 +734,18 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
             const d = await r.json();
             heardUp = !!d.connected;
             if (d.seq < heardSeq) { heardSeq = 0; return; }   // the app restarted: start again
-            const myGrid = station.grid || '';
+            // A station whose grid WSJT-X hasn't heard yet waits here until a
+            // spot from PSK Reporter (either kind) shows where it is.
             for (const i of d.items ?? []) {
-                const added = store.add('iHeard', {
-                    sc: i.call, sl: i.grid, rc: CALL, rl: myGrid,
-                    f: i.f, md: i.md, rp: i.rp, t: i.t, sq: `ws${i.seq}`,
-                });
-                if (added) { heardCount++; scheduleDraw(); }
+                if (i.grid) heardWaiting.delete(i.call);
+                else heardWaiting.set(i.call, i);
+                if (i.grid) addHeard(i, i.grid);
+            }
+            const now = Date.now() / 1000;
+            for (const [call, i] of heardWaiting) {
+                const grid = store.gridFor(call);
+                if (grid) { heardWaiting.delete(call); addHeard(i, grid); }
+                else if (now - i.t > 3600) heardWaiting.delete(call);
             }
             heardSeq = d.seq;
         } catch {
