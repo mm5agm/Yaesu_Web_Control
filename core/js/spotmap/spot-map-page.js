@@ -115,10 +115,10 @@ const CSS = `
 .sm-list tbody tr.sm-fresh td { font-weight: 600; color: #fff; }
 .sm-list tbody tr.sm-old td { color: #aab; }
 .sm-empty { padding: 14px; color: #9aa; }
-.sm-empty { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 600;
+.sm-nospots { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 600;
   width: max-content; max-width: min(760px, calc(100% - 120px)); padding: 10px 14px; border: 1px solid #555;
   border-radius: 6px; background: rgba(22, 24, 28, .93); color: #eee; font-size: 14px; line-height: 1.45; }
-.sm-empty[hidden] { display: none; }
+.sm-nospots[hidden] { display: none; }
 .sm-credit { position: absolute; bottom: 18px; left: 10px; z-index: 500; color: #889; font-size: 12px;
   background: rgba(17,17,17,.6); padding: 1px 4px; border-radius: 3px; pointer-events: none; }
 .sm-setup { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.75); display: flex;
@@ -192,7 +192,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
           ${WINDOWS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}
         </select></label>
         <label><select data-sm="units" aria-label="Distance units"><option value="km">km</option><option value="mi">miles</option></select></label>
-        <button type="button" data-sm="worldBtn" title="Fit one whole world across the window, centred on you">World</button>
+        <button type="button" data-sm="worldBtn" aria-pressed="false" title="Fit one whole world across the window, centred on you. Lit while the whole world is showing; pan or zoom and it goes out.">World</button>
         <button type="button" data-sm="greyBtn" aria-pressed="true" title="Show or hide the grey line: the night side of the Earth, shaded">Grey line</button>
         <button type="button" data-sm="bestBtn" aria-pressed="true" title="Show or hide the furthest station each way">Best DX</button>
         <button type="button" data-sm="bandsBtn" aria-pressed="true" title="Show or hide the stations per band">Bands</button>
@@ -203,7 +203,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
       </div>
       <div class="sm-body">
         <div class="sm-map" data-sm="map">
-          <div class="sm-empty" data-sm="empty" role="status" hidden></div>
+          <div class="sm-nospots" data-sm="nospots" role="status" hidden></div>
           <div class="sm-credit">Data from PSK Reporter by Philip Gladstone. Live spots from mqtt.pskreporter.info by Tom Fanning M0LTE.</div>
         </div>
         <div class="sm-grip" data-sm="grip" role="separator" aria-orientation="vertical" aria-label="Drag to resize the side panel" tabindex="0"></div>
@@ -395,12 +395,14 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
 
     // ---- The view: the whole world, or where you left it ----
     let worldMode = false, worldLon = null, settingView = false;
+    // World lights up while the whole world is showing, like the other buttons.
+    const setWorldMode = on => { worldMode = on; $('worldBtn').setAttribute('aria-pressed', String(on)); };
     const setViewQuietly = (centre, zoom) => {
         settingView = true;
         try { map.setView(centre, zoom, { animate: false }); } finally { settingView = false; }
     };
     function fitWorld() {
-        worldMode = true;
+        setWorldMode(true);
         save('view', { world: true });
         const size = map.getSize();
         if (!size.x || !size.y) return;          // not laid out yet: the resize watcher calls again
@@ -424,7 +426,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         fitWorld();
     }
     // Pan or zoom by hand and the page remembers that view instead.
-    map.on('dragstart zoomstart', () => { if (!settingView) worldMode = false; });
+    map.on('dragstart zoomstart', () => { if (!settingView) setWorldMode(false); });
     map.on('moveend', () => {
         if (settingView || worldMode) return;
         const c = map.getCenter();
@@ -487,7 +489,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
     // can know a callsign was heard (its search answer) yet send no reports.
     const empty = { asked: 0, heardAt: {} };
     function showEmpty(now) {
-        const el = $('empty');
+        const el = $('nospots');
         if (!empty.asked || store.within(now, 86400, KINDS).length) { el.hidden = true; return; }
         const hhmm = s => new Date(s * 1000).toISOString().slice(11, 16);
         const known = KINDS.map(k => empty.heardAt[k]).filter(t => t && now - t < 86400);
@@ -735,7 +737,7 @@ export async function startSpotMap(root, { app = 'rwc', stationUrl = '', program
         } catch (e) {
             done[kind] = `${label} not loaded (${e.message})`;
         }
-        historyEl.textContent = 'History 24 h: ' + Object.values(done).join(', ')
+        historyEl.textContent = 'Earlier spots from PSK Reporter history (24 h, live ones not counted): ' + Object.values(done).join(', ')
             + (done.iHeard ? '' : '; "I heard" loads in a few minutes');
         empty.asked++;
         showEmpty(Date.now() / 1000);
