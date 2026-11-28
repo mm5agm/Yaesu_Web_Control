@@ -59,7 +59,8 @@ const CSS = `
 .sm-grip:hover, .sm-grip.sm-dragging { background: #3db4ff; }
 .sm-side { flex: 0 0 auto; width: 420px; min-width: 200px; display: flex; flex-direction: column; background: #16181c; }
 .sm-list { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.sm-bands { flex: 0 1 auto; max-height: 45%; overflow: auto; border-bottom: 1px solid #444; }
+/* No shrinking: a long spot list would squeeze the band panel to nothing. */
+.sm-bands { flex: 0 0 auto; max-height: 45%; overflow: auto; border-bottom: 1px solid #444; }
 .sm-side.sm-nolist .sm-bands { max-height: none; flex: 1 1 auto; border-bottom: 0; }
 .sm-side[hidden], .sm-list[hidden], .sm-bands[hidden], .sm-grip[hidden] { display: none; }
 .sm-bands-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 5px 8px;
