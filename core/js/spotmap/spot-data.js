@@ -110,10 +110,16 @@ function toNumberOrNull(v) {
  * Who heard whom: for each kind, the latest spot of each other station. A
  * station heard again replaces its older spot, so the map and the list show
  * one entry per station, as PSK Reporter's own map does.
+ *
+ * It also keeps the latest spot of each station on each band, so the band
+ * panel counts a station on every band it was heard on, and picking a band
+ * shows everyone heard there, even if they have since moved band.
  */
 export class SpotStore {
     constructor() {
         this.byKind = { heardMe: new Map(), iHeard: new Map() };
+        /** kind -> Map('CALL|band' -> latest spot of that station on that band). */
+        this.byBand = { heardMe: new Map(), iHeard: new Map() };
         this.seen = new Set();
         /** The operator's grid as the spots give it, when the app doesn't know it. */
         this.gridFromSpots = '';
@@ -121,7 +127,8 @@ export class SpotStore {
 
     /**
      * Adds one spot in MQTT field names. Returns the stored spot, or null if
-     * it was a repeat, had no other station or grid, or was older than the one held.
+     * it was a repeat, had no other station or grid, or was older than both
+     * the station's latest spot and its latest spot on that band.
      */
     add(kind, raw) {
         if (!this.byKind[kind]) return null;
@@ -147,25 +154,53 @@ export class SpotStore {
             mode: raw.md || '',
             snr: toNumberOrNull(raw.rp),
         };
+        const bandKey = other + '|' + spot.band;
+        const heldOnBand = this.byBand[kind].get(bandKey);
+        // A spot with no frequency has no band, so it isn't counted on one.
+        const newOnBand = !!spot.band && (!heldOnBand || heldOnBand.t <= t);
+        if (newOnBand) this.byBand[kind].set(bandKey, spot);
         const held = this.byKind[kind].get(other);
-        if (held && held.t > t) return null;
+        if (held && held.t > t) return newOnBand ? spot : null;
         this.byKind[kind].set(other, spot);
         return spot;
     }
 
-    /** Spots heard in the last windowSecs seconds, for the kinds asked for. */
-    within(nowSecs, windowSecs, kinds = KINDS) {
+    /**
+     * Spots heard in the last windowSecs seconds, for the kinds asked for:
+     * each station's latest spot, or with band given, its latest spot on that band.
+     */
+    within(nowSecs, windowSecs, kinds = KINDS, band = '') {
         const out = [];
         for (const kind of kinds) {
-            for (const s of this.byKind[kind]?.values() ?? []) {
-                if (nowSecs - s.t <= windowSecs) out.push(s);
+            const spots = band ? this.byBand[kind]?.values() : this.byKind[kind]?.values();
+            for (const s of spots ?? []) {
+                if (nowSecs - s.t <= windowSecs && (!band || s.band === band)) out.push(s);
             }
         }
         return out;
     }
 
+    /**
+     * Stations per band in the last windowSecs seconds, both ways: one row per
+     * band with a spot, in frequency order, as { band, heardMe, iHeard }. A
+     * station heard on two bands counts on both.
+     */
+    bandCounts(nowSecs, windowSecs) {
+        const rows = new Map();
+        for (const kind of KINDS) {
+            for (const s of this.byBand[kind].values()) {
+                if (nowSecs - s.t > windowSecs) continue;
+                const row = rows.get(s.band) ?? { band: s.band, heardMe: 0, iHeard: 0 };
+                row[kind]++;
+                rows.set(s.band, row);
+            }
+        }
+        return [...rows.values()].sort((a, b) =>
+            (bandRank(a.band) - bandRank(b.band)) || ((parseFloat(a.band) || 0) - (parseFloat(b.band) || 0)));
+    }
+
     clear() {
-        for (const k of KINDS) this.byKind[k].clear();
+        for (const k of KINDS) { this.byKind[k].clear(); this.byBand[k].clear(); }
         this.seen.clear();
         this.gridFromSpots = '';
     }

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     gridToLatLon, distanceKm, bandOf, bandRank, topicCall, topicsFor, isCallsign,
-    classifyMqtt, fromReceptionReport, SpotStore, listRows, utcHhmm, formatDistance,
+    KINDS, classifyMqtt, fromReceptionReport, SpotStore, listRows, utcHhmm, formatDistance,
 } from '../../js/spotmap/spot-data.js';
 
 const near = (a, b, tol) => assert.ok(Math.abs(a - b) <= tol, `${a} not within ${tol} of ${b}`);
@@ -103,6 +103,41 @@ test('store: within() honours the window and the kinds', () => {
     assert.equal(st.within(1600, 600, ['iHeard'])[0].call, 'W1AW');
     st.clear();
     assert.equal(st.within(1600, 9999).length, 0);
+});
+
+test('band counts: stations per band both ways, a station on two bands counts on both', () => {
+    const st = new SpotStore();
+    const me = 'MM5AGM';
+    st.add('heardMe', { sc: me, rc: 'K1ABC', rl: 'FN42', t: 100, f: 14074000 });
+    st.add('heardMe', { sc: me, rc: 'K1ABC', rl: 'FN42', t: 200, f: 7074000 });   // moved to 40m
+    st.add('heardMe', { sc: me, rc: 'K1ABC', rl: 'FN42', t: 150, f: 14075000 });  // older 20m spot still updates 20m
+    st.add('heardMe', { sc: me, rc: 'W1AW', rl: 'FN31', t: 210, f: 14074000 });
+    st.add('iHeard', { sc: 'JA1XYZ', sl: 'PM95', rc: me, t: 220, f: 14074000 });
+    st.add('iHeard', { sc: 'VK2RT', sl: 'QF56', rc: me, t: 230, f: 3573000 });
+    st.add('iHeard', { sc: 'G4OLD', sl: 'IO91', rc: me, t: 10, f: 28074000 });     // outside the window
+    st.add('iHeard', { sc: 'NOFREQ', sl: 'IO91', rc: me, t: 230 });                // no band: not counted
+    const rows = st.bandCounts(250, 200);
+    assert.deepEqual(rows, [
+        { band: '80m', heardMe: 0, iHeard: 1 },
+        { band: '40m', heardMe: 1, iHeard: 0 },
+        { band: '20m', heardMe: 2, iHeard: 1 },
+    ]);
+    assert.equal(st.byBand.heardMe.get('K1ABC|20m').t, 150);
+    assert.equal(st.byKind.heardMe.get('K1ABC').band, '40m', 'the map still shows the latest spot');
+    // Picking a band lists everyone heard there, even if they have moved on.
+    assert.deepEqual(st.within(250, 200, ['heardMe'], '20m').map(s => s.call).sort(), ['K1ABC', 'W1AW']);
+    assert.deepEqual(st.within(250, 200, ['heardMe']).map(s => s.call).sort(), ['K1ABC', 'W1AW']);
+    assert.deepEqual(st.within(250, 1000, KINDS, '10m').map(s => s.call), ['G4OLD']);
+    st.clear();
+    assert.deepEqual(st.bandCounts(250, 200), []);
+});
+
+test('band counts: out-of-band frequencies sort after the bands, by frequency', () => {
+    const st = new SpotStore();
+    st.add('iHeard', { sc: 'A1A', sl: 'IO91', rc: 'MM5AGM', t: 1, f: 4625000 });
+    st.add('iHeard', { sc: 'B1B', sl: 'IO91', rc: 'MM5AGM', t: 1, f: 474200 });
+    st.add('iHeard', { sc: 'C1C', sl: 'IO91', rc: 'MM5AGM', t: 1, f: 14074000 });
+    assert.deepEqual(st.bandCounts(2, 10).map(r => r.band), ['20m', '0.474 MHz', '4.625 MHz']);
 });
 
 test('list rows: distance filled in and every sort order', () => {
