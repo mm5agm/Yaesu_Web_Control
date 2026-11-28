@@ -12,6 +12,19 @@ a different and much older format.
 
 ---
 
+## 2026-11-28 - v2.5.6-pre46 (pre-release)
+
+*Fixes WSJT-X losing its link to the radio ("Rig failure") after YWC restarts, and YWC closing while WSJT-X or N1MM is still using it. Everything in v2.5.6-pre45 is included. Install it over v2.5.5 or any pre-release; your settings are kept.*
+
+**WSJT-X and loggers: rigctld link** ([#467](https://github.com/mm5agm/Yaesu_Web_Control/pull/467), [manual](USER_MANUAL.md#91-wsjt-x))
+
+- If another program has port 4532 when YWC starts, even for a second, YWC now tries again every 2 seconds. Before, it tried once and gave up, and WSJT-X said **Rig failure** or "connection refused" until YWC was restarted. Thanks to the tester whose log found it.
+- The log names the program holding the port, and says when the port comes free.
+- **Settings → WSJT-X and loggers (rigctld)** is a new section. It shows whether YWC is listening on port 4532 and how many programs are connected.
+- YWC no longer closes itself while WSJT-X, a logger or N1MM is connected, even when the last browser tab has gone. It closes about 30 seconds after they disconnect, if **Automatically exit when no browser is connected** is on.
+
+---
+
 ## 2026-11-27 - v2.5.6-pre45 (pre-release)
 
 > **Testers urgently needed: FTDX10 owners.** This pre-release adds the radio menu file and front panel save to the FTDX10. It was built from Yaesu's manuals and has not been tried on a real FTDX10, because I don't have one. If you have an FTDX10, please save a file, check that the values match your radio's menu, and tell us how it went in [GitHub Discussions](https://github.com/mm5agm/Yaesu_Web_Control/discussions). Even "it worked" helps. v2.5.5 has been downloaded 377 times, but only two or three people have sent feedback.
