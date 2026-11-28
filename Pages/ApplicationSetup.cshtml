@@ -177,6 +177,19 @@
                 </div>
             </div>
 
+            <div class="mb-3" style="max-width: 32rem;">
+                <label class="form-label" for="ft8TilesCqLimit"><strong>Call CQ stops after</strong></label>
+                <div class="input-group" style="max-width: 14rem;">
+                    <input class="form-control" type="number" min="0" max="99" step="1" asp-for="Ft8TilesCqLimit" id="ft8TilesCqLimit" />
+                    <span class="input-group-text">CQs</span>
+                </div>
+                <div class="form-text">
+                    The FT8 Tiles <strong>Call CQ</strong> tile stops by itself after this many CQs in a row that nobody
+                    answered. When a station answers, WSJT-Z works them and the count starts again. 0 keeps calling
+                    until you click <strong>Stop transmit</strong>.
+                </div>
+            </div>
+
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label">UDP Address:</label>

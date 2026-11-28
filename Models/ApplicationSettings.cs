@@ -142,6 +142,11 @@
         // are refused.
         public bool Ft8TilesEnabled { get; set; } = false;
 
+        // FT8 Tiles Call CQ stops by itself after this many CQs in a row with
+        // no answer (Mike 2E0UMF, 2026-11-28). An answer starts the count
+        // again. 0 = call until Stop transmit.
+        public int Ft8TilesCqLimit { get; set; } = 6;
+
         // Last Radio State (persisted between sessions)
         public RadioState LastRadioState { get; set; } = new();
 

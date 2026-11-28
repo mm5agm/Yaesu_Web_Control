@@ -43,10 +43,12 @@ namespace Yaesu_Web_Control.Controllers
         private readonly ProcessStatusCacheService _processStatusCache;
         private readonly ICatClient _catClient;
         private readonly RadioStateService _radioState;
+        private readonly TxAlertService _txAlerts;
 
         public WsjtxController(ISettingsService settingsService, ILogger<WsjtxController> logger, WsjtxUdpService udpService, ProcessStatusCacheService processStatusCache,
-            ICatClient catClient, RadioStateService radioState)
+            ICatClient catClient, RadioStateService radioState, TxAlertService txAlerts)
         {
+            _txAlerts = txAlerts;
             _catClient = catClient;
             _radioState = radioState;
             _settingsService = settingsService;
@@ -239,6 +241,26 @@ namespace Yaesu_Web_Control.Controllers
                 txMessage = _udpService.TxMessage,
                 periodSeconds = period,
                 cqStartsIn = _udpService.CqStartsInSeconds,
+                // Call CQ's count (Settings, Call CQ stops after): CQs in a
+                // row with no answer, and when a run last stopped at its limit.
+                cqRun = new
+                {
+                    active = _udpService.CqRun.Active,
+                    sent = _udpService.CqRun.Sent,
+                    limit = _udpService.CqRun.Active ? _udpService.CqRun.Limit : _settingsService.GetCachedSettings().Ft8TilesCqLimit,
+                    stoppedSecondsAgo = _udpService.CqAutoStoppedUtc == DateTime.MinValue
+                        ? (double?)null
+                        : Math.Round((now - _udpService.CqAutoStoppedUtc).TotalSeconds, 1),
+                },
+                // ALC and SWR peaks of the transmission now and the last one,
+                // so the operator can check the TX audio level from another room.
+                txPeaks = new
+                {
+                    alcLimit = _settingsService.GetCachedSettings().TxAlertAlcPercent,
+                    swrLimit = _settingsService.GetCachedSettings().TxAlertSwrLimit,
+                    current = PeaksJson(_txAlerts.Peaks.Current, now),
+                    last = PeaksJson(_txAlerts.Peaks.Last, now),
+                },
                 logged = loggedQso,
                 stations = stations.Select(e => new
                 {
@@ -253,6 +275,13 @@ namespace Yaesu_Web_Control.Controllers
                     .Select(b => new { name = b.Name, current = b == current }),
             });
         }
+
+        private static object? PeaksJson(TxPeakTracker.Peaks? p, DateTime now) => p is null ? null : new
+        {
+            alc = Math.Round(p.AlcPercent),
+            swr = Math.Round(p.Swr, 1),
+            ageSeconds = p.EndedUtc is { } e ? Math.Round((now - e).TotalSeconds, 1) : 0,
+        };
 
         public record CallRequest(string Call);
         public record AutoCallRequest(bool On);

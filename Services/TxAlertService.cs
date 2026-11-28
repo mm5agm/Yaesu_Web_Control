@@ -44,6 +44,9 @@ namespace Yaesu_Web_Control.Services
 
         public TxAlertSnapshot Snapshot => _monitor.Snapshot;
 
+        /// <summary>ALC and SWR peaks per transmission, for the FT8 Tiles status line.</summary>
+        public TxPeakTracker Peaks { get; } = new();
+
         // The shipped FTdx101 table, for when the calibration file can't be read.
         internal static readonly (double Raw, double Value)[] DefaultSwrTable =
             { (0, 1.0), (51, 1.5), (77, 2.0), (128, 3.0), (173, 5.0), (242, 9.9) };
@@ -79,6 +82,7 @@ namespace Yaesu_Web_Control.Services
             string? mode = _state.TxVfo == 1 ? _state.ModeB : _state.ModeA;
 
             var reading = new TxAlertReading(tx, Interpolate(_swrTable, swrRaw), alcRaw / 255.0 * 100.0, mode);
+            Peaks.Update(tx, reading.AlcPercent ?? 0, reading.Swr ?? 1, DateTime.UtcNow);
             Log(_monitor.Update(reading, limits));
         }
 
